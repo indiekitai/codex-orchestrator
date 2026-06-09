@@ -2,7 +2,7 @@
 
 # codex-orchestrator
 
-**Sleep while AI codes.** A multi-session orchestrator skill for [OpenAI Codex CLI](https://github.com/openai/codex) that splits large features into parallel worktree sessions, babysits them with 5-minute heartbeats, reviews and merges completed work, and rescues stuck sessions — so you can walk away (or sleep) and come back to merged branches.
+**Sleep while AI codes.** A multi-session orchestrator skill for [OpenAI Codex App](https://chatgpt.com/codex) that splits large features into parallel worktree sessions, babysits them with 5-minute heartbeats, reviews and merges completed work, and rescues stuck sessions — so you can walk away (or sleep) and come back to merged branches.
 
 ## 🔥 The Problem
 

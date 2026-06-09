@@ -2,7 +2,7 @@
 
 # codex-orchestrator
 
-**睡一觉，代码写好了。** 这是一个 [OpenAI Codex CLI](https://github.com/openai/codex) 的多会话编排 skill，能把大特性拆成多个并行的 worktree 会话，每 5 分钟巡检一次，跑完的自动验收合并，卡住的直接取 commit 不等——你可以安心去睡觉，醒来看到的是合并好的分支。
+**睡一觉，代码写好了。** 这是一个 [OpenAI Codex App](https://chatgpt.com/codex) 的多会话编排 skill，能把大特性拆成多个并行的 worktree 会话，每 5 分钟巡检一次，跑完的自动验收合并，卡住的直接取 commit 不等——你可以安心去睡觉，醒来看到的是合并好的分支。
 
 ## 🔥 痛点
 
