@@ -2,7 +2,11 @@
 
 # codex-orchestrator
 
-**Sleep while AI codes.** A multi-session orchestrator skill for [OpenAI Codex App](https://chatgpt.com/codex) that continuously builds features from your roadmap — splitting each into parallel worktree sessions, babysitting them with 5-minute heartbeats, reviewing and merging completed work, rescuing stuck sessions, then picking the next feature and repeating. Walk away, sleep, come back to multiple features merged.
+**Loop engineering for OpenAI Codex App.** A multi-session orchestrator skill
+that turns a single coding assistant into a supervised engineering loop:
+splitting roadmap work into isolated worktree sessions, checking them with
+heartbeats, reviewing and merging clean branches, rescuing stuck sessions, and
+dispatching the next batch when it is safe to do so.
 
 ## 🔥 The Problem
 
@@ -75,6 +79,17 @@ and stop before pretending that monitoring, merge, push, or cleanup happened.
 For open-source use, start with a dry run on a disposable repository or feature
 branch. Keep automatic push disabled until you trust the review gates and your
 project's branch protection policy.
+
+## 🚫 What This Is Not
+
+This is not a replacement for engineering judgment, code review, or production
+verification. It is a way to make AI-assisted development more structured:
+bounded tasks, isolated worktrees, explicit evidence labels, and review before
+merge.
+
+The goal is not to let agents write unattended forever. The goal is to keep the
+human in the loop at the right leverage point: designing the loop, reviewing the
+evidence, and deciding what should ship.
 
 ## 🚀 Quick Start
 

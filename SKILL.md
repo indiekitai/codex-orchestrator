@@ -364,8 +364,7 @@ task IDs or skill names.
 
 Default to two sessions. Allow up to three only for low-risk post-contract
 fan-out where the default branch is clean and the write sets are plainly
-disjoint. Use one
-when:
+disjoint. Use one when:
 
 - a shared contract is being edited,
 - hardware/production/payment ownership is involved,
