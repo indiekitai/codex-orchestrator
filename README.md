@@ -56,6 +56,26 @@ Running one Codex session at a time is fine for small tasks. But for anything la
 | **Feature-package planning** | When a domain has multiple partial closures, promotes work to a coherent milestone instead of more tiny slices |
 | **Continuous operation** | Doesn't stop after one feature — reads roadmap, picks the next buildable feature, dispatches, repeats. Designed for overnight/unattended multi-feature runs |
 
+## ✅ Prerequisites And Safety
+
+This repository is a Codex skill/runbook, not a standalone background daemon.
+The fully autonomous loop depends on the host environment exposing compatible
+capabilities, especially:
+
+- creating or continuing isolated Codex sessions,
+- creating separate git worktrees or equivalent isolated worker environments,
+- checking thread status and worktree git state,
+- creating/updating recurring automations or heartbeat reminders,
+- merging and pushing through normal project git policy.
+
+If those tools are unavailable, the skill should degrade into a manual
+orchestration checklist: dispatch fewer sessions, inspect git state directly,
+and stop before pretending that monitoring, merge, push, or cleanup happened.
+
+For open-source use, start with a dry run on a disposable repository or feature
+branch. Keep automatic push disabled until you trust the review gates and your
+project's branch protection policy.
+
 ## 🚀 Quick Start
 
 ### 1. Install the skill
@@ -164,6 +184,7 @@ These parameters are tunable in the skill or per-dispatch:
 | Stale threshold | 15 min | Time without progress before a session is flagged for inspection |
 | Heartbeat interval | 5 min | How often the orchestrator checks all sessions |
 | Branch prefix | `codex/` | Namespace for task branches |
+| Push policy | Project-specific | Push only when normal for the repository or explicitly requested |
 | Evidence labels | `direct`, `proxy`, `blocked` | Required classification for hardware/deploy/payment proof |
 | Anti-shallow-slice | Enforced | Tasks must be classified before dispatch |
 
