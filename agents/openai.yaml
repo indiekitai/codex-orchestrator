@@ -1,0 +1,4 @@
+interface:
+  display_name: "Delegated Session Orchestrator"
+  short_description: "Coordinate multi-session build loops"
+  default_prompt: "Use $delegated-session-orchestrator to read the current repo docs, split this large feature into bounded worktree sessions, require self-review and honest evidence labels, review/merge clean branches, and dispatch the next batch."
