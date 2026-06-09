@@ -5,6 +5,25 @@ description: Coordinate multiple Codex sessions or worktrees for large early-sta
 
 # Delegated Session Orchestrator
 
+## Assumptions And Configuration
+
+This skill is workflow-oriented rather than project-specific. At the start of
+each orchestration run, discover and record the local equivalents of these
+values instead of assuming them:
+
+- repository root and default branch (`main`, `master`, or project-specific),
+- remote/push policy (`push <remote> <default-branch>` only when normal for the
+  project or explicitly requested),
+- available delegation surface (Codex App worktree sessions, another supported
+  worker/subagent path, or no delegation available),
+- available automation/checkback mechanism,
+- human notification mechanism, if any,
+- user's preferred language for human-action notifications.
+
+If a project has no saved Codex App project/worktree support, do not pretend the
+Codex App-specific setup steps are available. Use the supported delegation
+surface for that environment, or report the tooling blocker before dispatching.
+
 ## Core Idea
 
 Use this skill when the best move is not one big implementation in the current thread, but a controlled pipeline of small independent sessions. The orchestrator owns decomposition, dispatch, monitoring, review, merge, push, and cleanup.
@@ -50,8 +69,9 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
    disjoint:
    - one hardware or long-running task if needed
    - one non-hardware task with a disjoint write set
-   - a third non-hardware task only when main is clean, no contract/migration/API
-     branch is active, and each task has an independent module/write set
+   - a third non-hardware task only when the default branch is clean, no
+     contract/migration/API branch is active, and each task has an independent
+     module/write set
    - never two tasks editing the same proto, migration, core aggregate, review file, or artifact root
 5. Give each session a bounded task contract.
 6. Monitor dynamically instead of by fixed task IDs.
@@ -62,7 +82,8 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
    - docs/progress/reviews/artifacts synchronized
    - gates run and credible
    - no evidence exaggeration
-8. If accepted, merge to main, push if requested or normal for this project, clean the worktree, and delete the local branch.
+8. If accepted, merge to the default integration branch, push if requested or
+   normal for this project, clean the worktree, and delete the local branch.
 9. If rejected, report blocking findings and leave the branch/worktree for targeted fix or cleanup.
 
 ## Orchestrator State Ledger
@@ -111,8 +132,8 @@ When stale is detected:
 1. Inspect before acting:
    - `git status --short --branch`
    - `git log --oneline -3`
-   - `git diff --name-status main..HEAD`
-   - `git diff --check main..HEAD`
+   - `git diff --name-status <default-branch>..HEAD`
+   - `git diff --check <default-branch>..HEAD`
    - recent thread messages and any review/self-review document
 2. If the worktree is clean and contains a task commit, treat it as
    `completed-unreviewed` even if the thread status is still `active`. Review
@@ -132,7 +153,15 @@ watchdog, not proof that a child thread is making progress.
 
 ## Session And Worktree Setup
 
-For implementation, proof, or documentation tasks that may create commits, launch each delegated session in a separate Codex App project worktree by default. Use the main/local checkout only for quick read-only inspection, orchestrator review, merge, push, and cleanup.
+For implementation, proof, or documentation tasks that may create commits,
+launch each delegated session in a separate Codex App project worktree by
+default. Use the integration/local checkout only for quick read-only inspection,
+orchestrator review, merge, push, and cleanup.
+
+When Codex App worktree sessions are not available, replace "Codex App
+worktree" in the task contract with the environment's supported isolated worker
+mechanism. The invariant is isolation plus verifiable repo truth, not a specific
+product surface.
 
 The orchestrator should not implement a fresh delegated task just because
 session/worktree dispatch failed. If a new task has not actually started, stay
@@ -190,7 +219,8 @@ a first closure, the orchestrator must classify the task as one of these:
   end-to-end flow, such as UI action -> command/API -> persistence/projection ->
   readback/audit.
 - `runtime-proof`: proves an existing local/proxy path in a real browser,
-  device, LAN, hardware, or production-like runtime, with evidence labels kept honest.
+  device, LAN, hardware, or production-like runtime, with evidence labels kept
+  honest.
 - `blocked-removal`: removes a named blocker that prevents the next complete
   flow, such as a stale device path, missing write API, missing auth seam, or
   missing readback guard.
@@ -252,13 +282,13 @@ Each delegated session prompt should include:
 Always include:
 
 ```text
-Use a separate Codex App worktree for this task unless the orchestrator explicitly says otherwise.
+Use a separate isolated worktree/session for this task unless the orchestrator explicitly says otherwise.
 Start by running git status --short --branch. If you are not on the task branch, create or switch to codex/<task-slug>.
 Do not start subagents, do not use another orchestrator, and do not create second-level delegation.
 You are not alone in the codebase. Do not revert unrelated work; adapt to current changes.
-If the run needs a human physical/device/payment action, proactively notify the user. Pause at the checkpoint, say the exact action, device/resource, what not to do, and what the user should reply; continue only after confirmation and record it in artifacts.
+If the run needs a human physical/device/payment/deploy action, proactively notify the user in their preferred language using the project's available notification mechanism; do not require the user to remember any skill name or command. Pause at the checkpoint, say the exact action, device/resource, what not to do, and what the user should reply; continue only after confirmation and record it in artifacts.
 Before handoff, review your own diff as a reviewer: check boundaries, forbidden paths, shared contracts, docs drift, evidence strength, gates, anti-shallow-slice classification, and residual risks. Fix scoped issues you find before committing.
-Commit to the task branch, but do not merge, push main, delete the worktree, or delete the branch unless the orchestrator explicitly asks you to.
+Commit to the task branch, but do not merge, push the integration branch, delete the worktree, or delete the branch unless the orchestrator explicitly asks you to.
 ```
 
 Prefer prompts that close one feature path more fully over prompts that create
@@ -305,9 +335,9 @@ unrelated improvements.
 Do not hard-code old task IDs into a long-lived automation. Use dynamic discovery:
 
 ```text
-Check the orchestrator thread, recent delegated sessions, pending worktree setup, git worktree list, and main repo status. Identify tasks created by this thread that are active, pending, completed but unmerged, blocked, or stale.
+Check the orchestrator thread, recent delegated sessions, pending worktree setup, git worktree list, and integration-branch repo status. Identify tasks created by this thread that are active, pending, completed but unmerged, blocked, or stale.
 
-If a task completed with a commit, validate diff, self-review, boundaries, docs/reviews/artifacts, and gates. If it passes, merge to main, push, remove the task worktree, and delete the local branch. If it fails, report blocking findings and do not merge.
+If a task completed with a commit, validate diff, self-review, boundaries, docs/reviews/artifacts, and gates. If it passes, merge to the default integration branch, push when normal for this project or explicitly requested, remove the task worktree, and delete the local branch. If it fails, report blocking findings and do not merge.
 
 If tasks are still running, reconcile thread status with git state. A thread
 that is `active` but has a clean task commit is not "still running" for
@@ -317,7 +347,7 @@ reason to wait forever. Do not edit code or touch shared hardware unless taking
 over a stale same-task worktree under the stale-session policy. Notify only on
 material progress, stale takeover, blocker, completion, cleanup, or conflict.
 
-If no active/pending/unreviewed tasks remain and main is clean, choose the next batch from the current roadmap. Default max concurrency is 2; allow 3 only after shared contracts are merged, no hardware/production/payment task is active, and all write sets are plainly disjoint. Serialize shared contracts and hardware. Require self-review in every new prompt.
+If no active/pending/unreviewed tasks remain and the default branch is clean, choose the next batch from the current roadmap. Default max concurrency is 2; allow 3 only after shared contracts are merged, no hardware/production/payment task is active, and all write sets are plainly disjoint. Serialize shared contracts and hardware. Require self-review in every new prompt.
 ```
 
 Keep task IDs in the conversation/session records, not in the persistent automation prompt. If a temporary watchlist is useful, treat it as disposable and update it immediately after completion.
@@ -333,7 +363,8 @@ task IDs or skill names.
 ## Concurrency Rules
 
 Default to two sessions. Allow up to three only for low-risk post-contract
-fan-out where main is clean and the write sets are plainly disjoint. Use one
+fan-out where the default branch is clean and the write sets are plainly
+disjoint. Use one
 when:
 
 - a shared contract is being edited,
@@ -352,15 +383,20 @@ Use two when write sets are disjoint, for example:
 Use three only when all of these are true:
 
 - no shared contract, migration, Cloud API, hardware/production/payment, or long-running proof is active,
-- the base contract branch has already been accepted and merged to main,
-- main is clean and pushed or intentionally local-only for this project,
+- the base contract branch has already been accepted and merged to the default
+  integration branch,
+- the default branch is clean and pushed or intentionally local-only for this
+  project,
 - each task has a separate module/write set and separate review/artifact path,
 - the orchestrator can realistically review and merge the resulting branches
   without batching unresolved conflicts.
 
 Do not open more sessions just because idle capacity exists. Parallelism should reduce calendar time without increasing merge risk.
 
-Before dispatching more work, check whether existing active sessions have uncommitted changes or occupy hardware. Do not start a new task just because the main checkout is clean if an active worktree is still producing evidence or holding a device/resource.
+Before dispatching more work, check whether existing active sessions have
+uncommitted changes or occupy hardware. Do not start a new task just because the
+integration checkout is clean if an active worktree is still producing evidence
+or holding a device/resource.
 
 For proto/envelope tasks, "serial" means no parallel consumers until the
 contract branch is accepted, not necessarily "contract files only." If the
@@ -375,10 +411,15 @@ For hardware, payment, deploy, and environment work:
 - Record owner, start/end time, device/env facts, install/clear-data/reboot/config changes.
 - Label proof as `direct`, `proxy`, or `blocked`.
 - Do not upgrade `SENT`, local unit tests, TCP reachability, screenshots, or proxy services into direct proof.
-- If human action is needed, pause at a safe checkpoint and send a local notification/voice prompt. The prompt must state the exact action, device/resource, what not to do, and what the user should reply. Continue only after user confirmation, and record the prompt, confirmation, and observed device/env evidence in the artifact.
+- If human action is needed, pause at a safe checkpoint and use the available
+  notification/voice mechanism for the environment. The prompt must state the
+  exact action, device/resource, what not to do, and what the user should reply.
+  Continue only after user confirmation, and record the prompt, confirmation,
+  and observed device/env evidence in the artifact. If no reliable notifier is
+  available, report that limitation before starting the human-dependent proof.
 - Avoid starting a session that cannot finish defensibly because the required human action, payment backend, physical device, or deploy owner is unavailable.
 - Do not track raw runtime dumps, secrets, credentials, unnecessary database snapshots, or oversized logs. Keep artifacts minimal, redacted, and useful for review.
-- When re-running gates during orchestrator review, use a temporary artifact directory where possible so verification does not dirty the submitted proof artifacts. If a stronger post-merge gate passes because the main environment has extra dependencies, report it as additional evidence without rewriting the original session's claimed evidence.
+- When re-running gates during orchestrator review, use a temporary artifact directory where possible so verification does not dirty the submitted proof artifacts. If a stronger post-merge gate passes because the review environment has extra dependencies, report it as additional evidence without rewriting the original session's claimed evidence.
 
 ## Review And Merge Checklist
 
@@ -387,8 +428,8 @@ For every completed session:
 ```text
 git status --short --branch
 git log --oneline -3
-git diff --name-status main..HEAD
-git diff --check main..HEAD
+git diff --name-status <default-branch>..HEAD
+git diff --check <default-branch>..HEAD
 ```
 
 Then inspect:
@@ -402,9 +443,10 @@ Then inspect:
 
 Also check:
 
-- main is clean before merging,
+- the default branch is clean before merging,
 - the task worktree is clean after its commit,
-- `git diff --name-status main..HEAD` does not include another task's files,
+- `git diff --name-status <default-branch>..HEAD` does not include another
+  task's files,
 - the final message or review doc includes a real self-review,
 - progress/roadmap updates are factual and do not mark partial work as done,
 - direct/proxy/blocked labels match the artifacts.
@@ -414,7 +456,7 @@ If clean:
 ```text
 git merge --no-ff <task-branch> -m "merge: <scope>"
 <run post-merge gates>
-git push origin main
+git push <remote> <default-branch>  # when normal for the project or requested
 git worktree remove <task-worktree>
 git branch -d <task-branch>
 ```
