@@ -34,7 +34,8 @@ Running one Codex session at a time is fine for small tasks. But for anything la
      │            5-min heartbeat loop              │
      │  ┌─ check git state ──────────────────────┐  │
      │  │  committed? → review → merge → cleanup │  │
-     │  │  stuck?     → rescue commit → review   │  │
+     │  │  stuck + commit? → review → merge       │  │
+     │  │  stuck + diff?   → nudge to continue   │  │
      │  │  active?    → let it cook              │  │
      │  └────────────────────────────────────────┘  │
      │  All done? → dispatch next batch             │
@@ -48,7 +49,7 @@ Running one Codex session at a time is fine for small tasks. But for anything la
 | **Bounded task contracts** | Each session gets a precise scope: allowed paths, forbidden paths, base commit, acceptance gates, evidence labels |
 | **Automatic concurrency control** | Default 2 sessions, up to 3 when write sets are disjoint. Serializes shared contracts (protos, migrations, APIs) |
 | **5-minute heartbeat** | Periodic check reconciles thread status with actual git state — no silent overnight stalls |
-| **Stuck session recovery** | If a session is idle >15 min with a useful commit, the orchestrator reviews and merges it directly |
+| **Stuck session recovery** | If a session is idle >15 min: has a clean commit → review and merge directly; has uncommitted useful changes → send a targeted nudge to continue; no useful diff → mark abandoned |
 | **Anti-shallow-slice gate** | Rejects "another placeholder page" tasks. Forces vertical completion, runtime proof, or blocker removal |
 | **Evidence discipline** | Labels proof as `direct`, `proxy`, or `blocked`. No upgrading unit tests into production proof |
 | **Self-review enforcement** | Every session must review its own diff before handoff. The orchestrator re-reviews before merging |
