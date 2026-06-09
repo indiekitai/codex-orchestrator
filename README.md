@@ -2,7 +2,7 @@
 
 # codex-orchestrator
 
-**Sleep while AI codes.** A multi-session orchestrator skill for [OpenAI Codex App](https://chatgpt.com/codex) that splits large features into parallel worktree sessions, babysits them with 5-minute heartbeats, reviews and merges completed work, and rescues stuck sessions — so you can walk away (or sleep) and come back to merged branches.
+**Sleep while AI codes.** A multi-session orchestrator skill for [OpenAI Codex App](https://chatgpt.com/codex) that continuously builds features from your roadmap — splitting each into parallel worktree sessions, babysitting them with 5-minute heartbeats, reviewing and merging completed work, rescuing stuck sessions, then picking the next feature and repeating. Walk away, sleep, come back to multiple features merged.
 
 ## 🔥 The Problem
 
@@ -53,6 +53,7 @@ Running one Codex session at a time is fine for small tasks. But for anything la
 | **Evidence discipline** | Labels proof as `direct`, `proxy`, or `blocked`. No upgrading unit tests into production proof |
 | **Self-review enforcement** | Every session must review its own diff before handoff. The orchestrator re-reviews before merging |
 | **Feature-package planning** | When a domain has multiple partial closures, promotes work to a coherent milestone instead of more tiny slices |
+| **Continuous operation** | Doesn't stop after one feature — reads roadmap, picks the next buildable feature, dispatches, repeats. Designed for overnight/unattended multi-feature runs |
 
 ## 🚀 Quick Start
 
