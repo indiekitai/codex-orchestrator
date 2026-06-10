@@ -118,6 +118,17 @@ escalation rules, and the output shape expected by the orchestrator. It does not
 create Codex App sessions, merge, push, clean worktrees, or upgrade
 local/proxy evidence into direct proof.
 
+After a routine is actually run, record the outcome so future orchestrator
+sessions can resume from ledger truth:
+
+```bash
+codex-orchestrator record-routine-run --routine pr-reviewer --task-id TASK --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge task branch"
+```
+
+For blocked routine runs, include `--blocked-reason` and at least one
+`--evidence-blocked` item. Keep `direct`, `proxy`, `local`, and `blocked`
+evidence separate.
+
 Record:
 
 - task ID and short outcome,

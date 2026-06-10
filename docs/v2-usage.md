@@ -194,6 +194,22 @@ The validator checks that every routine declares inputs, allowed and forbidden
 actions, gates, strict evidence labels, escalation rules, and a common output
 shape. It does not execute the routine or create Codex App sessions.
 
+After a routine runs, record its outcome in the ledger:
+
+```bash
+codex-orchestrator record-routine-run \
+  --routine pr-reviewer \
+  --task-id API-AUTH-LOCAL \
+  --status passed \
+  --evidence-local "go test ./..." \
+  --action "reviewed diff and forbidden paths" \
+  --next "merge task branch"
+```
+
+For blocked runs, include `--blocked-reason` and put the missing proof under
+`--evidence-blocked`. The command records both `routineRuns[]` in the ledger and
+a `routine-run` event in `events.jsonl`.
+
 ## Recovery From A Fresh Session
 
 When a long orchestrator thread gets stale or compressed:

@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "browser-runtime-proof",
+  "title": "Browser Runtime Proof",
+  "purpose": "Verify a browser-visible workflow by running the app, interacting with the UI, and recording direct or blocked evidence.",
+  "trigger": "Run when a task claims user-visible web behavior or local browser regression coverage.",
+  "inputs": [
+    "target URL",
+    "expected user-visible outcome",
+    "app start command",
+    "test credentials or fixture data",
+    "changed frontend routes and components"
+  ],
+  "allowedActions": [
+    "start a local dev server",
+    "open the target URL in a browser harness",
+    "perform the documented user flow",
+    "capture screenshots or DOM assertions",
+    "record console/network errors when relevant"
+  ],
+  "forbiddenActions": [
+    "use production credentials without explicit approval",
+    "claim direct browser proof from static code inspection only",
+    "ignore visible UI overlap, blank screens, or broken assets",
+    "mutate live production data",
+    "start nested subagents"
+  ],
+  "gates": [
+    "local app starts successfully",
+    "target URL loads without fatal console errors",
+    "documented user-visible assertion passes",
+    "git diff --check"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Browser harness loaded and interacted with the target workflow.",
+      "proxy": "Screenshot or log evidence from another run was inspected.",
+      "local": "Static or unit-level frontend checks only.",
+      "blocked": "App would not start, auth unavailable, fixture unavailable, or browser harness unavailable."
+    }
+  },
+  "escalation": [
+    "Ask the human before using live credentials or mutating production data.",
+    "Stop if the browser proof needs external auth that is not available.",
+    "Report visual/runtime failures directly instead of downgrading them to warnings."
+  ],
+  "maxRuntimeMinutes": 30
+}

@@ -361,6 +361,85 @@ func TestValidateRoutineSpecRejectsWeakContract(t *testing.T) {
 	}
 }
 
+func TestRecordRoutineRun(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "TASK-1",
+		"--worktree", filepath.Join(root, "missing"),
+		"--branch", "codex/task-1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordRoutineRun([]string{
+		"--ledger", ledger,
+		"--routine", "pr-reviewer",
+		"--task-id", "TASK-1",
+		"--status", "passed",
+		"--evidence-local", "go test ./...",
+		"--action", "reviewed diff",
+		"--next", "merge task branch",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.RoutineRuns) != 1 {
+		t.Fatalf("expected one routine run, got %d", len(updated.RoutineRuns))
+	}
+	run := updated.RoutineRuns[0]
+	if run.RoutineID != "pr-reviewer" || run.TaskID != "TASK-1" || run.Status != "passed" {
+		t.Fatalf("unexpected routine run: %#v", run)
+	}
+	if got := run.Evidence["local"]; len(got) != 1 || got[0] != "go test ./..." {
+		t.Fatalf("expected local evidence, got %#v", run.Evidence)
+	}
+	events, err := os.ReadFile(filepath.Join(project, ".codex-orchestrator", "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(events), `"type":"routine-run"`) {
+		t.Fatalf("expected routine-run event, got %s", string(events))
+	}
+}
+
+func TestRecordRoutineRunValidation(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordRoutineRun([]string{
+		"--ledger", ledger,
+		"--routine", "ci-fixer",
+		"--status", "blocked",
+		"--evidence-blocked", "CI logs unavailable",
+		"--action", "checked workflow run",
+		"--next", "ask human for CI access",
+	}); err == nil {
+		t.Fatal("expected blocked routine run to require blocked reason")
+	}
+	if err := cmdRecordRoutineRun([]string{
+		"--ledger", ledger,
+		"--routine", "ci-fixer",
+		"--task-id", "UNKNOWN",
+		"--status", "passed",
+		"--evidence-local", "go test ./...",
+		"--action", "ran tests",
+		"--next", "continue",
+	}); err == nil {
+		t.Fatal("expected unknown task error")
+	}
+}
+
 func createRepo(t *testing.T, path string) string {
 	t.Helper()
 	if err := os.MkdirAll(path, 0o755); err != nil {

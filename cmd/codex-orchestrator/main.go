@@ -20,15 +20,16 @@ const (
 )
 
 type Ledger struct {
-	Version        int    `json:"version"`
-	ProjectRoot    string `json:"projectRoot"`
-	DefaultBranch  string `json:"defaultBranch"`
-	Remote         string `json:"remote"`
-	PushPolicy     string `json:"pushPolicy"`
-	MaxConcurrency int    `json:"maxConcurrency"`
-	CreatedAt      string `json:"createdAt"`
-	UpdatedAt      string `json:"updatedAt"`
-	Tasks          []Task `json:"tasks"`
+	Version        int          `json:"version"`
+	ProjectRoot    string       `json:"projectRoot"`
+	DefaultBranch  string       `json:"defaultBranch"`
+	Remote         string       `json:"remote"`
+	PushPolicy     string       `json:"pushPolicy"`
+	MaxConcurrency int          `json:"maxConcurrency"`
+	CreatedAt      string       `json:"createdAt"`
+	UpdatedAt      string       `json:"updatedAt"`
+	Tasks          []Task       `json:"tasks"`
+	RoutineRuns    []RoutineRun `json:"routineRuns,omitempty"`
 }
 
 type Task struct {
@@ -135,6 +136,18 @@ type RoutineValidationResult struct {
 	Errors []string `json:"errors,omitempty"`
 }
 
+type RoutineRun struct {
+	At                  string              `json:"at"`
+	RoutineID           string              `json:"routineId"`
+	TaskID              string              `json:"taskId,omitempty"`
+	Status              string              `json:"status"`
+	Evidence            map[string][]string `json:"evidence"`
+	ActionsTaken        []string            `json:"actionsTaken"`
+	NeedsHuman          bool                `json:"needsHuman"`
+	BlockedReason       string              `json:"blockedReason,omitempty"`
+	NextSuggestedAction string              `json:"nextSuggestedAction"`
+}
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -162,6 +175,8 @@ func run(args []string) error {
 		return cmdStatus(args[1:])
 	case "validate-routines":
 		return cmdValidateRoutines(args[1:])
+	case "record-routine-run":
+		return cmdRecordRoutineRun(args[1:])
 	case "help", "-h", "--help":
 		usage()
 		return nil
@@ -181,6 +196,7 @@ Usage:
   codex-orchestrator heartbeat [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
   codex-orchestrator status [--ledger PATH] [--json]
   codex-orchestrator validate-routines [--dir routines] [--json]
+  codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
 
 This helper is conservative: it does not create Codex sessions, merge, push,
 delete branches, or clean worktrees.`)
@@ -560,6 +576,95 @@ func cmdValidateRoutines(args []string) error {
 	if !report.Valid {
 		return errors.New("routine validation failed")
 	}
+	return nil
+}
+
+func cmdRecordRoutineRun(args []string) error {
+	fs := flag.NewFlagSet("record-routine-run", flag.ExitOnError)
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	eventsPath := fs.String("events", "", "events path")
+	routineID := fs.String("routine", "", "routine id")
+	taskID := fs.String("task-id", "", "optional task id")
+	status := fs.String("status", "", "routine status: passed, failed, or blocked")
+	needsHuman := fs.Bool("needs-human", false, "whether human input is needed")
+	blockedReason := fs.String("blocked-reason", "", "blocked reason")
+	nextSuggestedAction := fs.String("next", "", "next suggested action")
+	var directEvidence stringList
+	var proxyEvidence stringList
+	var localEvidence stringList
+	var blockedEvidence stringList
+	var actionsTaken stringList
+	fs.Var(&directEvidence, "evidence-direct", "direct evidence item, repeatable")
+	fs.Var(&proxyEvidence, "evidence-proxy", "proxy evidence item, repeatable")
+	fs.Var(&localEvidence, "evidence-local", "local evidence item, repeatable")
+	fs.Var(&blockedEvidence, "evidence-blocked", "blocked evidence item, repeatable")
+	fs.Var(&actionsTaken, "action", "action taken, repeatable")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*routineID) == "" {
+		return errors.New("record-routine-run requires --routine")
+	}
+	if !containsString([]string{"passed", "failed", "blocked"}, *status) {
+		return errors.New("record-routine-run --status must be passed, failed, or blocked")
+	}
+	if len(directEvidence)+len(proxyEvidence)+len(localEvidence)+len(blockedEvidence) == 0 {
+		return errors.New("record-routine-run requires at least one evidence item")
+	}
+	if len(actionsTaken) == 0 {
+		return errors.New("record-routine-run requires at least one --action")
+	}
+	if strings.TrimSpace(*nextSuggestedAction) == "" {
+		return errors.New("record-routine-run requires --next")
+	}
+	if *status == "blocked" && strings.TrimSpace(*blockedReason) == "" {
+		return errors.New("blocked routine run requires --blocked-reason")
+	}
+	ledger, err := loadLedger(*ledgerPath)
+	if err != nil {
+		return err
+	}
+	if *taskID != "" && findTaskIndex(ledger.Tasks, *taskID) < 0 {
+		return fmt.Errorf("task not found: %s", *taskID)
+	}
+	now := nowISO()
+	run := RoutineRun{
+		At:        now,
+		RoutineID: *routineID,
+		TaskID:    *taskID,
+		Status:    *status,
+		Evidence: map[string][]string{
+			"direct":  []string(directEvidence),
+			"proxy":   []string(proxyEvidence),
+			"local":   []string(localEvidence),
+			"blocked": []string(blockedEvidence),
+		},
+		ActionsTaken:        []string(actionsTaken),
+		NeedsHuman:          *needsHuman,
+		BlockedReason:       *blockedReason,
+		NextSuggestedAction: *nextSuggestedAction,
+	}
+	ledger.RoutineRuns = append(ledger.RoutineRuns, run)
+	if err := saveLedger(*ledgerPath, &ledger); err != nil {
+		return err
+	}
+	resolvedEvents := *eventsPath
+	if resolvedEvents == "" {
+		resolvedEvents = eventsPathForLedger(*ledgerPath)
+	}
+	if err := appendEvent(resolvedEvents, map[string]any{
+		"at":                  now,
+		"type":                "routine-run",
+		"routineId":           *routineID,
+		"taskId":              emptyToNil(*taskID),
+		"status":              *status,
+		"needsHuman":          *needsHuman,
+		"blockedReason":       emptyToNil(*blockedReason),
+		"nextSuggestedAction": *nextSuggestedAction,
+	}); err != nil {
+		return err
+	}
+	fmt.Printf("Recorded routine run: %s %s\n", *routineID, *status)
 	return nil
 }
 

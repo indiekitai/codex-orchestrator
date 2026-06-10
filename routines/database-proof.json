@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "database-proof",
+  "title": "Database Proof",
+  "purpose": "Verify persisted state through database reads or fixtures without confusing local, proxy, and direct evidence.",
+  "trigger": "Run when a task claims persistence, projection, migration, sync cursor, or readback behavior.",
+  "inputs": [
+    "database connection or fixture path",
+    "expected table or collection",
+    "expected rows or projection fields",
+    "migration or schema version",
+    "safe read-only query"
+  ],
+  "allowedActions": [
+    "run read-only queries against approved databases",
+    "inspect local fixture databases",
+    "compare schema and projection fields",
+    "record row counts or selected redacted fields",
+    "label fixture-only proof as local"
+  ],
+  "forbiddenActions": [
+    "write or mutate production data",
+    "dump private customer data into artifacts",
+    "claim pre/prod direct proof from a local fixture",
+    "bypass migrations or edit generated database state manually",
+    "start nested subagents"
+  ],
+  "gates": [
+    "query is read-only",
+    "schema version or migration state is recorded",
+    "expected persisted field is observed or blocked",
+    "private data is redacted"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Approved target database was queried read-only for the target persisted state.",
+      "proxy": "Projection, export, or API readback implies database state but direct query was unavailable.",
+      "local": "Local fixture, unit database, or migration test only.",
+      "blocked": "Database access unavailable, query unsafe, schema ambiguous, or privacy constraints block inspection."
+    }
+  },
+  "escalation": [
+    "Ask before touching production or customer data.",
+    "Stop if proof requires writes to a database.",
+    "Escalate when privacy rules prevent enough evidence from being recorded."
+  ],
+  "maxRuntimeMinutes": 25
+}

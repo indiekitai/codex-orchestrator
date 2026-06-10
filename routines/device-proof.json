@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "device-proof",
+  "title": "Device Proof",
+  "purpose": "Verify behavior on a physical device or emulator while recording model, OS, command, duration, and direct/proxy/blocked evidence.",
+  "trigger": "Run when a task claims mobile, printer, payment-terminal, kiosk, or other device behavior.",
+  "inputs": [
+    "device identifier",
+    "device model and OS",
+    "app build or install command",
+    "expected device-visible outcome",
+    "human action checklist when needed"
+  ],
+  "allowedActions": [
+    "inspect connected device state",
+    "install or launch approved local builds",
+    "capture device logs, screenshots, or command output",
+    "ask the human in Chinese before physical actions",
+    "record direct, proxy, local, and blocked evidence separately"
+  ],
+  "forbiddenActions": [
+    "start hardware actions without a clear human checkpoint",
+    "claim direct physical proof from emulator-only evidence",
+    "touch payment, printer, or production devices outside the approved task",
+    "hide weak acknowledgements as successful device proof",
+    "start nested subagents"
+  ],
+  "gates": [
+    "device identity and OS recorded",
+    "build/install or connection command recorded",
+    "expected visible outcome captured or blocked",
+    "human action checkpoint used when physical manipulation is required"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Target physical device or emulator was observed for the claimed behavior.",
+      "proxy": "Adjacent logs or host visibility imply but do not prove device behavior.",
+      "local": "Unit, JVM, or fixture-only validation.",
+      "blocked": "Device unavailable, human action unavailable, unsafe hardware state, or missing credentials."
+    }
+  },
+  "escalation": [
+    "Use a Chinese voice/notification checkpoint before human physical action.",
+    "Ask before operating payment, printer, or production hardware.",
+    "Stop if device proof would require unsafe or unauthorized manipulation."
+  ],
+  "maxRuntimeMinutes": 45
+}

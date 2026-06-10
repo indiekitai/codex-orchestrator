@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "api-proof",
+  "title": "API Proof",
+  "purpose": "Verify an API contract through an actual request/response, fixture, or documented blocker with honest evidence labels.",
+  "trigger": "Run when a task claims endpoint behavior, integration contract, webhook handling, or readback API behavior.",
+  "inputs": [
+    "endpoint URL or local route",
+    "request method and payload",
+    "auth or fixture token policy",
+    "expected status and response fields",
+    "server start command or target environment"
+  ],
+  "allowedActions": [
+    "start local server or use approved target environment",
+    "send safe test requests",
+    "record status code and redacted response fields",
+    "verify negative cases when in scope",
+    "label fixture-only requests as local"
+  ],
+  "forbiddenActions": [
+    "send real provider/SMS/payment requests without explicit approval",
+    "record secrets or private tokens",
+    "claim production direct proof from localhost",
+    "mutate production data unless explicitly allowed",
+    "start nested subagents"
+  ],
+  "gates": [
+    "request command or test name recorded",
+    "response status and key fields recorded",
+    "auth/secrets redaction checked",
+    "negative or error path checked when relevant"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Approved target API was called and returned the expected behavior.",
+      "proxy": "Generated client, contract test, or logs support the behavior without a live request.",
+      "local": "Local server, fixture, or unit-level API proof only.",
+      "blocked": "Auth unavailable, endpoint unavailable, unsafe side effect, or provider access missing."
+    }
+  },
+  "escalation": [
+    "Ask before calling third-party providers or production endpoints.",
+    "Stop if proof requires secrets that are not available.",
+    "Escalate when the endpoint has side effects that need product approval."
+  ],
+  "maxRuntimeMinutes": 30
+}

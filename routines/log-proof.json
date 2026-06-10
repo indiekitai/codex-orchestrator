@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "log-proof",
+  "title": "Log Proof",
+  "purpose": "Verify behavior through current runtime logs while preserving direct, proxy, local, and blocked evidence boundaries.",
+  "trigger": "Run when a task claims backend, worker, mobile, or device behavior that should emit logs.",
+  "inputs": [
+    "log source path or command",
+    "expected log markers",
+    "time window",
+    "task branch or runtime build",
+    "related request or correlation id"
+  ],
+  "allowedActions": [
+    "collect logs for the requested time window",
+    "search for expected markers and errors",
+    "record correlation ids and timestamps",
+    "summarize missing or ambiguous markers",
+    "redact secrets before writing artifacts"
+  ],
+  "forbiddenActions": [
+    "paste secrets or private tokens into reports",
+    "treat old unrelated logs as direct proof",
+    "claim success when only startup logs exist",
+    "modify production logging without approval",
+    "start nested subagents"
+  ],
+  "gates": [
+    "log source is current and timestamped",
+    "expected success marker or error marker is present",
+    "secret scan or manual redaction check completed",
+    "git diff --check when files changed"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Current runtime logs for the target action were collected and inspected.",
+      "proxy": "Historical or adjacent logs support but do not prove the exact action.",
+      "local": "Local fixture or unit logs only.",
+      "blocked": "Logs unavailable, timestamps ambiguous, correlation id missing, or secrets cannot be safely redacted."
+    }
+  },
+  "escalation": [
+    "Ask before collecting production logs.",
+    "Stop if logs contain secrets that cannot be safely redacted.",
+    "Escalate when the expected marker is absent but the product behavior is ambiguous."
+  ],
+  "maxRuntimeMinutes": 20
+}

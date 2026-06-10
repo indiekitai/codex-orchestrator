@@ -48,6 +48,14 @@ Do not turn `local` or `proxy` evidence into `direct` proof in the final report.
   same-task takeover, blocked, or abandon.
 - `pr-reviewer`: review a completed task branch before merge.
 - `ci-fixer`: diagnose and fix a failing CI or local gate.
+- `browser-runtime-proof`: verify browser-visible behavior through a browser
+  harness.
+- `log-proof`: verify behavior through current runtime logs.
+- `database-proof`: verify persisted state through read-only queries or
+  fixtures.
+- `device-proof`: verify device-visible behavior while preserving hardware
+  evidence labels.
+- `api-proof`: verify endpoint behavior through request/response proof.
 
 ## Boundary
 
