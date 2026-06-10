@@ -160,6 +160,9 @@ A 和 B 并行运行（写入集不相交）。两者合并后，编排器派发
 
 它不宣称一个 Codex skill 已经等于完整 loop runtime。它要先把第一个有用的 loop 做具体：有界任务、隔离执行、心跳巡检、诚实证据标签，以及合并前审查。
 
+第一步 v2 seed 见
+[docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)：持久 ledger 格式和只读 heartbeat checker。
+
 ## 🧱 架构
 
 编排器作为一个**状态机**管理所有委派会话：
@@ -210,6 +213,12 @@ codex-orchestrator/
 ├── SKILL.md              # 编排器 skill（复制到 ~/.codex/skills/）
 ├── agents/
 │   └── openai.yaml       # Agent 接口定义
+├── docs/
+│   └── v2-persistent-ledger-and-heartbeat.md
+├── examples/
+│   └── ledger.example.json
+├── scripts/
+│   └── ledger_heartbeat.py
 ├── README.md             # 英文说明
 ├── README.zh-CN.md       # 本文件
 └── LICENSE               # MIT

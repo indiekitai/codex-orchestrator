@@ -185,6 +185,9 @@ runtime. The ambition is to make the first useful loop concrete: bounded work,
 isolated execution, heartbeat inspection, honest proof labels, and review before
 merge.
 
+See [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)
+for the first v2 seed: a durable ledger format and read-only heartbeat checker.
+
 ## 🧱 Architecture
 
 The orchestrator operates as a **state machine** over delegated sessions:
@@ -235,6 +238,12 @@ codex-orchestrator/
 ├── SKILL.md              # The orchestrator skill (copy to ~/.codex/skills/)
 ├── agents/
 │   └── openai.yaml       # Agent interface definition
+├── docs/
+│   └── v2-persistent-ledger-and-heartbeat.md
+├── examples/
+│   └── ledger.example.json
+├── scripts/
+│   └── ledger_heartbeat.py
 ├── README.md             # This file
 ├── README.zh-CN.md       # Chinese README
 └── LICENSE               # MIT

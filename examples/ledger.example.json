@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "projectRoot": "/absolute/path/to/your/repo",
+  "defaultBranch": "main",
+  "remote": "origin",
+  "pushPolicy": "manual",
+  "maxConcurrency": 2,
+  "createdAt": "2026-06-10T09:00:00+08:00",
+  "updatedAt": "2026-06-10T09:00:00+08:00",
+  "tasks": [
+    {
+      "id": "API-AUTH-LOCAL",
+      "title": "Auth endpoint implementation",
+      "threadId": "optional-codex-thread-id",
+      "worktree": "/absolute/path/to/worktrees/api-auth",
+      "branch": "codex/api-auth",
+      "baseCommit": "0000000000000000000000000000000000000000",
+      "status": "active",
+      "writeSet": {
+        "allowed": [
+          "src/auth/**",
+          "tests/auth/**"
+        ],
+        "forbidden": [
+          "src/db/migrations/**",
+          "src/api/products/**"
+        ]
+      },
+      "gates": [
+        "npm test -- --grep auth",
+        "git diff --check"
+      ],
+      "evidence": {
+        "expected": "local",
+        "labels": [
+          "direct",
+          "proxy",
+          "blocked"
+        ],
+        "notes": "Local unit tests are not production proof."
+      },
+      "lastObservation": {
+        "at": "2026-06-10T09:00:00+08:00",
+        "result": "active",
+        "note": "Initial dispatch recorded."
+      },
+      "history": [
+        {
+          "at": "2026-06-10T09:00:00+08:00",
+          "type": "dispatch",
+          "status": "active",
+          "note": "Worker session started in isolated worktree."
+        }
+      ]
+    }
+  ]
+}
+
