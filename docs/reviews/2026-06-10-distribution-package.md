@@ -9,7 +9,7 @@ The distribution package now has concrete beta source/tag artifacts beyond the
 App-first README prompt:
 
 - shell completion generation for bash, zsh, and fish,
-- a Homebrew formula draft that builds from the `v0.3.0-beta.2` tag,
+- an optional Homebrew formula draft that builds from the `v0.3.0-beta.2` tag,
 - a distribution guide covering release assets, source install, completions,
   formula usage, release notes, and evidence boundaries,
 - release workflow wiring to use `docs/beta-release-notes-draft.md` as the
@@ -17,8 +17,9 @@ App-first README prompt:
 
 This is still a beta distribution package, not a full package ecosystem.
 `v0.3.0-beta.2` now has a git tag, GitHub prerelease, release assets, source
-install proof, and release-asset download smoke. There is no dedicated Homebrew
-tap repository, npm wrapper, or daemon.
+install proof, release-asset download smoke, and a real Codex App demo proof.
+There is no dedicated Homebrew tap repository, npm wrapper, or daemon. The
+missing tap is not a beta blocker because the product is Codex App-first.
 
 ## Evidence
 
@@ -78,7 +79,8 @@ tap repository, npm wrapper, or daemon.
 - Direct delete/upload API calls also intermittently returned `401` during
   same-release asset replacement; retrying the authenticated call succeeded.
 - `v0.3.0-beta.1` release assets do not include the new `completion` command.
-- A dedicated Homebrew tap repository was not created.
+- A dedicated Homebrew tap repository was not created. This is an optional
+  package-manager convenience, not a blocker for the Codex App-first beta.
 - Homebrew 5 rejects direct local formula installs outside a tap:
   `Homebrew requires formulae to be in a tap`.
 - The package was not tested on Linux or Windows machines in this pass.
@@ -91,6 +93,7 @@ hardware, deployed runtime, or Codex App session-launch proof is claimed.
 
 ## Verdict
 
-Accepted as a beta distribution package with GitHub prerelease assets and source
-install proof. The next packaging step should be a real tap repository or a
-larger App-first demo proof, not more internal routine-count expansion.
+Accepted as a beta distribution package with GitHub prerelease assets, source
+install proof, and real App-first demo proof. The next packaging step should be
+clearer App-first install UX, not a Homebrew tap unless users explicitly ask for
+package-manager-managed helper binaries.

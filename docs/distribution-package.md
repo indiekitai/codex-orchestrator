@@ -2,9 +2,10 @@
 
 This document is the beta distribution path for external users. It keeps the
 human-facing setup simple: Codex App remains the primary entrypoint, while the
-Go helper can be installed from source today. Release assets and Homebrew tap
-installation are tracked separately because they depend on GitHub Release and
-tap publishing permissions.
+Go helper can be installed from source or release assets when Codex App wants
+durable ledger/routine support. Homebrew is intentionally treated as an
+optional later convenience because this project is Codex App-first, not
+CLI-first.
 
 ## Status
 
@@ -18,8 +19,8 @@ Implemented:
 - `scripts/install.sh` source install path for users with Go.
 - Release asset download smoke for `darwin_arm64`.
 - Shell completion generation for bash, zsh, and fish.
-- Homebrew formula draft at `Formula/codex-orchestrator.rb` that builds from
-  the release tag.
+- Optional Homebrew formula draft at `Formula/codex-orchestrator.rb` that
+  builds from the release tag.
 - Release verifier routine for local tag and proxy GitHub release metadata.
 - Release publishing helper that creates/releases assets through `gh api`.
 
@@ -34,6 +35,9 @@ Blocked or not yet implemented:
 New users should still start by pasting the README bootstrap prompt into Codex
 App. Codex App should explain which installation path it wants to use and why.
 The human should not need to learn the helper CLI before the dry run.
+
+Release binaries are useful when Codex App decides durable helper state is
+worth installing. They are not the product's primary entrypoint.
 
 ## Install From Release Asset
 
@@ -96,7 +100,7 @@ codex-orchestrator completion fish > ~/.config/fish/completions/codex-orchestrat
 
 For zsh, ensure `~/.zsh/completions` is in `fpath` before `compinit`.
 
-## Homebrew Formula Draft
+## Optional Homebrew Formula Draft
 
 This repository includes a formula draft:
 
@@ -104,8 +108,12 @@ This repository includes a formula draft:
 Formula/codex-orchestrator.rb
 ```
 
-Homebrew 5 rejects arbitrary local formula files outside a tap. Use the formula
-as a tap-ready draft, not as a one-command local install:
+Homebrew is not required for normal use because the user still starts from
+Codex App. The formula exists as a tap-ready draft for users who explicitly
+prefer Homebrew-managed helper binaries.
+
+Homebrew 5 rejects arbitrary local formula files outside a tap. If a tap is
+ever worth publishing, use the draft like this:
 
 ```bash
 brew tap-new indiekitai/codex-orchestrator-tap
@@ -114,9 +122,8 @@ brew install indiekitai/codex-orchestrator-tap/codex-orchestrator
 ```
 
 The formula builds from the release tag and installs completions from the built
-helper. This is not yet a dedicated Homebrew tap. Publishing a tap should be a
-separate repository operation so updates, bottle policy, and release cadence
-are clear.
+helper. This is not yet a dedicated Homebrew tap, and publishing one is not a
+near-term blocker for the Codex App-first beta.
 
 ## Release Notes
 
@@ -179,8 +186,9 @@ Evidence labels:
   asset download smoke from GitHub.
 - `failed`: local tag exists but the GitHub Release is missing or missing
   expected assets.
-- `blocked`: unavailable Homebrew tap, GitHub Release API auth/network failures,
-  or metadata that cannot be inspected.
+- `blocked`: GitHub Release API auth/network failures or metadata that cannot
+  be inspected. A missing Homebrew tap is an optional packaging gap, not a
+  blocker for the App-first beta.
 
 Do not claim direct production, daemon, deployed runtime, payment, hardware, or
 Codex App session-launch proof from this distribution package.

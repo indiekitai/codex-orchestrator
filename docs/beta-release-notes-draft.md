@@ -36,8 +36,8 @@ runners behind a clear quickstart.
   helper layer.
 - The roadmap explicitly avoids claiming this is a daemon or full agent OS.
 - The distribution package now documents release-asset install, source/tag
-  install, shell completions, and a tap-ready Homebrew formula draft that builds
-  from the release tag.
+  install, shell completions, and the App-first boundary that keeps package
+  manager installs optional.
 
 ## Install
 
@@ -59,7 +59,8 @@ destructive changes unless I explicitly approve.
 
 The CLI can still be installed manually from source/tag or release assets, but
 it is meant to be a tool the Codex App orchestrator uses, not a prerequisite the
-human must learn before trying the workflow.
+human must learn before trying the workflow. Homebrew is not required for the
+beta path.
 
 ## Helper Smoke
 

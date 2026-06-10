@@ -6,7 +6,9 @@
 
 ## 🚀 最快试用方式
 
-在你想编排的项目里打开 Codex App，把下面这段 prompt 粘贴进去，让 Codex 自己读取、安装和接入需要的部分：
+你不需要先安装 CLI，也不需要先装 Homebrew tap。
+
+在你想编排的项目里打开 Codex App，把下面这段 prompt 粘贴进去，让 Codex 自己读取这个 GitHub 仓库、按需安装 skill，并在做任何会修改项目的动作前先解释 dry run 计划：
 
 ```text
 我想在这个仓库里试用 codex-orchestrator。
@@ -31,6 +33,8 @@ codex-orchestrator 在 Codex App 里的组件名。
 ```
 
 预期用法不是“人先学完所有命令”，而是“把 codex-orchestrator 仓库交给 Codex App，让它读文档、安装 Codex App skill、判断是否需要 helper，并在做任何会修改项目的动作前先解释编排计划”。
+
+可下载的 `codex-orchestrator` 二进制是可选辅助工具。它给 Codex App 提供持久 ledger、`observe`、heartbeat report 和 routine 检查，不是普通用户的主入口。
 
 命名说明：**codex-orchestrator** 是产品名和仓库名；
 **delegated-session-orchestrator** 是安装后给 Codex App 调用的内部 skill 名。
@@ -123,11 +127,11 @@ scripts/install.sh
 codex-orchestrator init
 ```
 
-发布第一个 GitHub release 后，也可以直接下载预构建的
-`codex-orchestrator_<os>_<arch>` 二进制文件并放到 `PATH` 里。
+也可以直接下载预构建的 `codex-orchestrator_<os>_<arch>` 二进制文件并放到
+`PATH` 里，但这是高级/辅助路径。多数用户应该先让 Codex App 读取这个仓库。
 
-Release assets、shell completion 和 Homebrew formula 草案见
-[docs/distribution-package.md](docs/distribution-package.md)。
+Release assets 和 shell completion 见
+[docs/distribution-package.md](docs/distribution-package.md)。Homebrew 只是后续可选便利路径，不是主安装方式。
 
 接入后，直接让 Codex App 使用 codex-orchestrator；Codex 会在需要时调用已安装的内部 skill：
 

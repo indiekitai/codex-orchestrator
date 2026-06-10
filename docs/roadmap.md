@@ -133,9 +133,11 @@ Future daemon/UI
 
 下一步建议：
 
-1. 发布第一个 tag，验证 GitHub release artifacts。
+1. 发布第一个 tag，验证 GitHub release artifacts。已完成到
+   `v0.3.0-beta.2`。
 
-2. 视用户反馈补 Homebrew tap 或 npm wrapper。
+2. 继续打磨 Codex App-first install UX。Homebrew tap 或 npm wrapper 只有在
+   用户明确想用包管理器维护 helper binary 时才值得做。
 
 3. 继续扩展 heartbeat policy：
 
@@ -327,8 +329,8 @@ codex-orchestrator rules propose
 
 ## 近期优先级
 
-最现实的短期路线已经从“继续补小 routine”切换为 **beta usability
-package**：
+最现实的短期路线已经从“继续补小 routine”切换为 **Codex App-first beta
+usability package**：
 
 1. 保持 v1 skill 简洁可安装。
 2. 把外部用户从安装到安全本地 demo 的路径集中到
@@ -336,13 +338,15 @@ package**：
 3. 准备 `v0.3.0-beta.1` release notes 草稿：
    `docs/beta-release-notes-draft.md`。
 4. 跑一次真实 Codex App demo proof，补齐 helper-only smoke 没覆盖的 App
-   dispatch / review / merge / push / cleanup 证据。
+   dispatch / review / merge / push / cleanup 证据。已记录在
+   `docs/reviews/2026-06-10-real-codex-app-demo-proof.md`。
 5. 只有当某个 routine 能移除 beta blocker 或证明常见真实工作流时，才继续补
    routine；不要为了数量继续堆小切片。
 
 之后再选择：
 
-- distribution package：Homebrew tap、shell completion、release assets、release notes；
+- App-first install UX：继续让 GitHub repo + bootstrap prompt 成为主入口，
+  release binary 只是 helper 安装路径；
 - daemon prototype：只读 watcher，运行 `observe` 并写报告，不创建 session 或改 git；
 - deeper policy/eval：把真实失败案例沉淀为 eval fixture。
 

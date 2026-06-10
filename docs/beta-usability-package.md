@@ -19,6 +19,10 @@ trust, not new orchestration features.
 The beta is not a claim of a fully autonomous agent runtime. It is a packaged
 Codex App orchestration workflow with a conservative local helper.
 
+It is also not a CLI-first install flow. Users should not need to install
+Homebrew, learn the helper CLI, or download a binary before asking Codex App to
+inspect the repository and produce a dry run.
+
 ## Quickstart For A New User
 
 The main entrypoint is a prompt, not a command sequence for the human.
@@ -162,7 +166,10 @@ clear.
 
 ## Real App Demo Checklist
 
-Before calling a beta release credible, run one real Codex App demo:
+Completed for `v0.3.0-beta.2` and recorded in
+`docs/reviews/2026-06-10-real-codex-app-demo-proof.md`.
+
+The checklist for future releases remains:
 
 1. Create a fresh Codex App orchestrator session in a disposable repository.
 2. Ask it to use codex-orchestrator.
@@ -194,6 +201,8 @@ Use this checklist before `v0.3.0-beta.2`:
 - GitHub Actions build matrix passes for the supported OS/arch matrix.
 - GitHub Release assets exist for darwin/linux/windows.
 - Release asset download smoke passes for at least one local platform.
+- Real Codex App demo proof exists for dispatch, review, merge, push, and
+  cleanup at local workflow level.
 - Known limitations are visible before users try the tool.
 
 ## Known Beta Limitations
@@ -201,7 +210,8 @@ Use this checklist before `v0.3.0-beta.2`:
 - Codex App session creation is still App-provided, not helper-provided.
 - The helper does not run as a daemon.
 - There are GitHub prerelease assets and a Homebrew formula draft, but no
-  dedicated Homebrew tap yet.
+  dedicated Homebrew tap yet. This is not a beta blocker because normal use
+  starts from Codex App.
 - There is no npm wrapper yet.
 - Routine runners are conservative local/proxy checkers.
 - The release verifier uses GitHub metadata as proxy evidence.
@@ -214,12 +224,13 @@ Use this checklist before `v0.3.0-beta.2`:
 
 After the beta usability package, the next large package should be one of:
 
-1. **Real Codex App demo proof**: record the missing App dispatch/merge/cleanup
-   evidence from the checklist above.
-2. **Distribution package**: Homebrew tap, shell completions, release assets,
-   and release notes.
-3. **Daemon prototype**: an opt-in read-only watcher that runs `observe` and
+1. **App-first install UX**: keep README and setup docs focused on "paste the
+   prompt into Codex App first"; make release binaries clearly optional helper
+   installation.
+2. **Daemon prototype**: an opt-in read-only watcher that runs `observe` and
    writes reports, without creating sessions or mutating git.
+3. **Optional package-manager convenience**: only add a Homebrew tap if users
+   explicitly want helper binaries managed that way.
 
 Do not add more tiny routines just to increase the count. Add a routine only
 when it removes a named beta blocker or proves a common real workflow.
