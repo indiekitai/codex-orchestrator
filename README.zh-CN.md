@@ -191,7 +191,7 @@ Loop Engineering 对齐调研见
 ```bash
 go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
-./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task
+./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
@@ -208,8 +208,10 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
 
-JSON heartbeat report 会包含 `overallStatus`、按状态聚合的 `counts`，以及
-`reviewPressure`，让统领在 review / stale / blocked / cleanup 队列堆积时暂停派发。
+JSON heartbeat report 会包含 `overallStatus`、按状态聚合的 `counts`、
+`reviewPressure`，以及存在任务预算元数据时的只读 `budgetSummary`。通过
+`record-task` 记录的 runtime/review budget 会在 `observe` 和 heartbeat summary
+中展示；helper 不会 kill 进程、调度 session 或强制执行预算。
 
 Codex App worktree 派发是 App-first。要用 project worktree session 前，先确认
 这个仓库已经保存为 Codex App project。如果因为 unknown project、没有 saved

@@ -42,11 +42,18 @@ type Task struct {
 	Branch          string              `json:"branch"`
 	BaseCommit      string              `json:"baseCommit,omitempty"`
 	Status          string              `json:"status"`
+	Budget          *BudgetMetadata     `json:"budget,omitempty"`
 	WriteSet        map[string][]string `json:"writeSet,omitempty"`
 	Gates           []string            `json:"gates,omitempty"`
 	Evidence        map[string]any      `json:"evidence,omitempty"`
 	LastObservation map[string]string   `json:"lastObservation,omitempty"`
 	History         []map[string]string `json:"history,omitempty"`
+}
+
+type BudgetMetadata struct {
+	MaxRuntimeMinutes   int    `json:"maxRuntimeMinutes,omitempty"`
+	ReviewBudgetMinutes int    `json:"reviewBudgetMinutes,omitempty"`
+	Note                string `json:"note,omitempty"`
 }
 
 type stringList []string
@@ -61,11 +68,12 @@ func (s *stringList) Set(value string) error {
 }
 
 type Observation struct {
-	ID        string `json:"id,omitempty"`
-	Status    string `json:"status"`
-	Action    string `json:"action"`
-	Note      string `json:"note"`
-	GitStatus string `json:"gitStatus,omitempty"`
+	ID        string          `json:"id,omitempty"`
+	Status    string          `json:"status"`
+	Action    string          `json:"action"`
+	Note      string          `json:"note"`
+	GitStatus string          `json:"gitStatus,omitempty"`
+	Budget    *BudgetMetadata `json:"budget,omitempty"`
 }
 
 type IntegrationState struct {
@@ -87,6 +95,13 @@ type ReviewPressure struct {
 	ReviewQueueLimit int `json:"reviewQueueLimit"`
 }
 
+type BudgetSummary struct {
+	TasksWithBudget          int `json:"tasksWithBudget"`
+	TasksMissingBudget       int `json:"tasksMissingBudget"`
+	TotalMaxRuntimeMinutes   int `json:"totalMaxRuntimeMinutes,omitempty"`
+	TotalReviewBudgetMinutes int `json:"totalReviewBudgetMinutes,omitempty"`
+}
+
 type ObserveSummary struct {
 	Ledger             string           `json:"ledger"`
 	Version            int              `json:"version"`
@@ -97,25 +112,27 @@ type ObserveSummary struct {
 	RecommendedActions []string         `json:"recommendedActions"`
 	Counts             map[string]int   `json:"counts"`
 	ReviewPressure     ReviewPressure   `json:"reviewPressure"`
+	BudgetSummary      BudgetSummary    `json:"budgetSummary"`
 	Integration        IntegrationState `json:"integration"`
 	Observations       []Observation    `json:"observations"`
 	RecentRoutineRuns  []RoutineRun     `json:"recentRoutineRuns,omitempty"`
 }
 
 type RoutineSpec struct {
-	SchemaVersion     int               `json:"schemaVersion"`
-	ID                string            `json:"id"`
-	Title             string            `json:"title"`
-	Purpose           string            `json:"purpose"`
-	Trigger           string            `json:"trigger"`
-	Inputs            []string          `json:"inputs"`
-	AllowedActions    []string          `json:"allowedActions"`
-	ForbiddenActions  []string          `json:"forbiddenActions"`
-	Gates             []string          `json:"gates"`
-	EvidenceLabels    []string          `json:"evidenceLabels"`
-	OutputSchema      RoutineOutputSpec `json:"outputSchema"`
-	Escalation        []string          `json:"escalation"`
-	MaxRuntimeMinutes int               `json:"maxRuntimeMinutes,omitempty"`
+	SchemaVersion       int               `json:"schemaVersion"`
+	ID                  string            `json:"id"`
+	Title               string            `json:"title"`
+	Purpose             string            `json:"purpose"`
+	Trigger             string            `json:"trigger"`
+	Inputs              []string          `json:"inputs"`
+	AllowedActions      []string          `json:"allowedActions"`
+	ForbiddenActions    []string          `json:"forbiddenActions"`
+	Gates               []string          `json:"gates"`
+	EvidenceLabels      []string          `json:"evidenceLabels"`
+	OutputSchema        RoutineOutputSpec `json:"outputSchema"`
+	Escalation          []string          `json:"escalation"`
+	MaxRuntimeMinutes   int               `json:"maxRuntimeMinutes,omitempty"`
+	ReviewBudgetMinutes int               `json:"reviewBudgetMinutes,omitempty"`
 }
 
 type RoutineOutputSpec struct {
@@ -219,7 +236,7 @@ func usage() {
 
 Usage:
   codex-orchestrator init [--ledger PATH] [--project-root PATH]
-  codex-orchestrator record-task --id ID --worktree PATH --branch BRANCH [--allowed PATH] [--forbidden PATH] [--gate CMD]
+  codex-orchestrator record-task --id ID --worktree PATH --branch BRANCH [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N]
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--note TEXT]
   codex-orchestrator observe [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
@@ -308,6 +325,9 @@ func cmdRecordTask(args []string) error {
 	status := fs.String("status", "active", "task status")
 	evidence := fs.String("evidence", "local", "expected evidence type")
 	evidenceNote := fs.String("evidence-note", "", "evidence note")
+	maxRuntimeMinutes := fs.Int("max-runtime-minutes", 0, "optional task runtime budget in minutes")
+	reviewBudgetMinutes := fs.Int("review-budget-minutes", 0, "optional task review budget in minutes")
+	budgetNote := fs.String("budget-note", "", "optional budget note")
 	note := fs.String("note", "", "history note")
 	var allowed stringList
 	var forbidden stringList
@@ -326,6 +346,12 @@ func cmdRecordTask(args []string) error {
 	}
 	if *branch == "" {
 		return errors.New("record-task requires --branch")
+	}
+	if *maxRuntimeMinutes < 0 {
+		return errors.New("record-task --max-runtime-minutes cannot be negative")
+	}
+	if *reviewBudgetMinutes < 0 {
+		return errors.New("record-task --review-budget-minutes cannot be negative")
 	}
 	ledger, err := loadLedger(*ledgerPath)
 	if err != nil {
@@ -355,6 +381,7 @@ func cmdRecordTask(args []string) error {
 		Branch:     *branch,
 		BaseCommit: base,
 		Status:     *status,
+		Budget:     taskBudgetFromFlags(*maxRuntimeMinutes, *reviewBudgetMinutes, *budgetNote),
 		WriteSet: map[string][]string{
 			"allowed":   []string(allowed),
 			"forbidden": []string(forbidden),
@@ -385,12 +412,16 @@ func cmdRecordTask(args []string) error {
 	if resolvedEvents == "" {
 		resolvedEvents = eventsPathForLedger(*ledgerPath)
 	}
-	if err := appendEvent(resolvedEvents, map[string]any{
+	event := map[string]any{
 		"at":     nowISO(),
 		"type":   "record-task",
 		"taskId": *id,
 		"status": *status,
-	}); err != nil {
+	}
+	if task.Budget != nil {
+		event["budget"] = task.Budget
+	}
+	if err := appendEvent(resolvedEvents, event); err != nil {
 		return err
 	}
 	fmt.Printf("Recorded task: %s\n", *id)
@@ -1868,6 +1899,7 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	integration := inspectIntegration(ledger.ProjectRoot)
 	counts := countObservationStatuses(observations)
 	pressure := calculateReviewPressure(counts, ledger.MaxConcurrency)
+	budget := summarizeTaskBudgets(ledger.Tasks)
 	overall, actions := summarizeObservations(integration, counts, pressure)
 	return ObserveSummary{
 		Ledger:             ledgerPath,
@@ -1879,10 +1911,48 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		RecommendedActions: actions,
 		Counts:             counts,
 		ReviewPressure:     pressure,
+		BudgetSummary:      budget,
 		Integration:        integration,
 		Observations:       observations,
 		RecentRoutineRuns:  recentRoutineRuns(ledger.RoutineRuns, 5),
 	}, nil
+}
+
+func taskBudgetFromFlags(maxRuntimeMinutes int, reviewBudgetMinutes int, note string) *BudgetMetadata {
+	note = strings.TrimSpace(note)
+	if maxRuntimeMinutes == 0 && reviewBudgetMinutes == 0 && note == "" {
+		return nil
+	}
+	return &BudgetMetadata{
+		MaxRuntimeMinutes:   maxRuntimeMinutes,
+		ReviewBudgetMinutes: reviewBudgetMinutes,
+		Note:                note,
+	}
+}
+
+func summarizeTaskBudgets(tasks []Task) BudgetSummary {
+	var summary BudgetSummary
+	for _, task := range tasks {
+		if task.Budget == nil {
+			summary.TasksMissingBudget++
+			continue
+		}
+		summary.TasksWithBudget++
+		summary.TotalMaxRuntimeMinutes += task.Budget.MaxRuntimeMinutes
+		summary.TotalReviewBudgetMinutes += task.Budget.ReviewBudgetMinutes
+	}
+	return summary
+}
+
+func taskObservation(task Task, status string, action string, note string, gitStatus string) Observation {
+	return Observation{
+		ID:        task.ID,
+		Status:    status,
+		Action:    action,
+		Note:      note,
+		GitStatus: gitStatus,
+		Budget:    task.Budget,
+	}
 }
 
 func inspectTask(task Task, staleAfter time.Duration) Observation {
@@ -1890,28 +1960,13 @@ func inspectTask(task Task, staleAfter time.Duration) Observation {
 		if task.Worktree != "" {
 			worktree := expandPath(task.Worktree)
 			if _, err := os.Stat(worktree); err == nil && task.Status != "rejected" {
-				return Observation{
-					ID:     task.ID,
-					Status: "cleanup-needed",
-					Action: "remove accepted task worktree and delete local task branch if safe",
-					Note:   fmt.Sprintf("Task is %s but worktree still exists: %s", task.Status, worktree),
-				}
+				return taskObservation(task, "cleanup-needed", "remove accepted task worktree and delete local task branch if safe", fmt.Sprintf("Task is %s but worktree still exists: %s", task.Status, worktree), "")
 			}
 		}
-		return Observation{
-			ID:     task.ID,
-			Status: task.Status,
-			Action: "quiet",
-			Note:   fmt.Sprintf("Task is recorded as %s.", task.Status),
-		}
+		return taskObservation(task, task.Status, "quiet", fmt.Sprintf("Task is recorded as %s.", task.Status), "")
 	}
 	if task.Worktree == "" {
-		return Observation{
-			ID:     task.ID,
-			Status: "blocked",
-			Action: "record missing worktree path",
-			Note:   "Task has no worktree path in ledger.",
-		}
+		return taskObservation(task, "blocked", "record missing worktree path", "Task has no worktree path in ledger.", "")
 	}
 	worktree := expandPath(task.Worktree)
 	if _, err := os.Stat(worktree); err != nil {
@@ -1923,50 +1978,22 @@ func inspectTask(task Task, staleAfter time.Duration) Observation {
 			action = "inspect pending setup and decide whether to re-dispatch or abandon"
 			note = fmt.Sprintf("Worktree does not exist and the last observation is older than %s: %s", staleAfter, worktree)
 		}
-		return Observation{
-			ID:     task.ID,
-			Status: statusValue,
-			Action: action,
-			Note:   note,
-		}
+		return taskObservation(task, statusValue, action, note, "")
 	}
 	status, err := gitOutput(worktree, "status", "--short", "--branch")
 	if err != nil {
-		return Observation{
-			ID:     task.ID,
-			Status: "blocked",
-			Action: "inspect worktree git state",
-			Note:   err.Error(),
-		}
+		return taskObservation(task, "blocked", "inspect worktree git state", err.Error(), "")
 	}
 	branch := currentBranch(status)
 	if task.Branch != "" && branch != "" && branch != task.Branch {
-		return Observation{
-			ID:        task.ID,
-			Status:    "blocked",
-			Action:    "fix branch mismatch before review",
-			Note:      fmt.Sprintf("Expected %s, found %s.", task.Branch, branch),
-			GitStatus: status,
-		}
+		return taskObservation(task, "blocked", "fix branch mismatch before review", fmt.Sprintf("Expected %s, found %s.", task.Branch, branch), status)
 	}
 	if hasDirtyChanges(status) {
-		return Observation{
-			ID:        task.ID,
-			Status:    "stale-needs-inspection",
-			Action:    "inspect uncommitted scoped diff or nudge same worker",
-			Note:      "Worktree has uncommitted changes.",
-			GitStatus: status,
-		}
+		return taskObservation(task, "stale-needs-inspection", "inspect uncommitted scoped diff or nudge same worker", "Worktree has uncommitted changes.", status)
 	}
 	commitsAfterBase, known := hasCommitsAfterBase(worktree, task.BaseCommit)
 	if known && commitsAfterBase {
-		return Observation{
-			ID:        task.ID,
-			Status:    "completed-unreviewed",
-			Action:    "orchestrator review required before merge",
-			Note:      "Clean worktree has commits after baseCommit.",
-			GitStatus: status,
-		}
+		return taskObservation(task, "completed-unreviewed", "orchestrator review required before merge", "Clean worktree has commits after baseCommit.", status)
 	}
 	if !known {
 		statusValue := task.Status
@@ -1974,38 +2001,14 @@ func inspectTask(task Task, staleAfter time.Duration) Observation {
 			statusValue = "active"
 		}
 		if statusValue == "active" && isTaskStale(task, staleAfter) {
-			return Observation{
-				ID:        task.ID,
-				Status:    "stale-needs-inspection",
-				Action:    "inspect manually",
-				Note:      fmt.Sprintf("Task has no comparable baseCommit and the last observation is older than %s.", staleAfter),
-				GitStatus: status,
-			}
+			return taskObservation(task, "stale-needs-inspection", "inspect manually", fmt.Sprintf("Task has no comparable baseCommit and the last observation is older than %s.", staleAfter), status)
 		}
-		return Observation{
-			ID:        task.ID,
-			Status:    statusValue,
-			Action:    "inspect manually",
-			Note:      "Could not compare baseCommit; ledger may be a template or base is missing.",
-			GitStatus: status,
-		}
+		return taskObservation(task, statusValue, "inspect manually", "Could not compare baseCommit; ledger may be a template or base is missing.", status)
 	}
 	if task.Status == "active" && isTaskStale(task, staleAfter) {
-		return Observation{
-			ID:        task.ID,
-			Status:    "stale-needs-inspection",
-			Action:    "inspect recent thread messages or nudge same worker",
-			Note:      fmt.Sprintf("Clean worktree has no commits after baseCommit, and last observation is older than %s.", staleAfter),
-			GitStatus: status,
-		}
+		return taskObservation(task, "stale-needs-inspection", "inspect recent thread messages or nudge same worker", fmt.Sprintf("Clean worktree has no commits after baseCommit, and last observation is older than %s.", staleAfter), status)
 	}
-	return Observation{
-		ID:        task.ID,
-		Status:    "active",
-		Action:    "quiet",
-		Note:      "Clean worktree has no commits after baseCommit.",
-		GitStatus: status,
-	}
+	return taskObservation(task, "active", "quiet", "Clean worktree has no commits after baseCommit.", status)
 }
 
 func loadLedger(path string) (Ledger, error) {
@@ -2333,6 +2336,13 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- blocked: `%d`\n", summary.ReviewPressure.Blocked)
 	fmt.Fprintf(&b, "- cleanupNeeded: `%d`\n", summary.ReviewPressure.CleanupNeeded)
 	fmt.Fprintf(&b, "- availableSlots: `%d`\n", summary.ReviewPressure.AvailableSlots)
+	fmt.Fprintf(&b, "- tasksWithBudget: `%d`\n", summary.BudgetSummary.TasksWithBudget)
+	if summary.BudgetSummary.TotalMaxRuntimeMinutes > 0 {
+		fmt.Fprintf(&b, "- totalMaxRuntimeMinutes: `%d`\n", summary.BudgetSummary.TotalMaxRuntimeMinutes)
+	}
+	if summary.BudgetSummary.TotalReviewBudgetMinutes > 0 {
+		fmt.Fprintf(&b, "- totalReviewBudgetMinutes: `%d`\n", summary.BudgetSummary.TotalReviewBudgetMinutes)
+	}
 	if summary.Integration.Error != "" {
 		fmt.Fprintf(&b, "- integrationError: `%s`\n", summary.Integration.Error)
 	}
@@ -2350,6 +2360,9 @@ func renderSummary(summary ObserveSummary) string {
 			fmt.Fprintf(&b, "- `%s`: `%s` - %s\n", item.ID, item.Status, item.Action)
 			if item.Note != "" {
 				fmt.Fprintf(&b, "  - note: %s\n", item.Note)
+			}
+			if budget := formatBudget(item.Budget); budget != "" {
+				fmt.Fprintf(&b, "  - budget: %s\n", budget)
 			}
 		}
 	}
@@ -2387,6 +2400,23 @@ func compactEvent(event map[string]any) map[string]string {
 	return result
 }
 
+func formatBudget(budget *BudgetMetadata) string {
+	if budget == nil {
+		return ""
+	}
+	parts := []string{}
+	if budget.MaxRuntimeMinutes > 0 {
+		parts = append(parts, fmt.Sprintf("maxRuntime=%dm", budget.MaxRuntimeMinutes))
+	}
+	if budget.ReviewBudgetMinutes > 0 {
+		parts = append(parts, fmt.Sprintf("review=%dm", budget.ReviewBudgetMinutes))
+	}
+	if budget.Note != "" {
+		parts = append(parts, "note="+budget.Note)
+	}
+	return strings.Join(parts, " ")
+}
+
 func emptyToNil(value string) any {
 	if value == "" {
 		return nil
@@ -2407,6 +2437,11 @@ func printObservations(summary ObserveSummary) {
 	fmt.Printf("Ledger: %s\n", summary.Ledger)
 	fmt.Printf("Project: %s default=%s\n", summary.ProjectRoot, summary.DefaultBranch)
 	fmt.Printf("Overall: %s\n", summary.OverallStatus)
+	fmt.Printf("Budget: tasksWithBudget=%d totalMaxRuntimeMinutes=%d totalReviewBudgetMinutes=%d\n",
+		summary.BudgetSummary.TasksWithBudget,
+		summary.BudgetSummary.TotalMaxRuntimeMinutes,
+		summary.BudgetSummary.TotalReviewBudgetMinutes,
+	)
 	if summary.Integration.Error != "" {
 		fmt.Printf("Integration: blocked (%s)\n", summary.Integration.Error)
 	} else {
@@ -2420,6 +2455,9 @@ func printObservations(summary ObserveSummary) {
 		fmt.Printf("- %s: %s\n", item.ID, item.Status)
 		fmt.Printf("  action: %s\n", item.Action)
 		fmt.Printf("  note: %s\n", item.Note)
+		if budget := formatBudget(item.Budget); budget != "" {
+			fmt.Printf("  budget: %s\n", budget)
+		}
 		if item.GitStatus != "" {
 			fmt.Println("  git:")
 			for _, line := range strings.Split(item.GitStatus, "\n") {
@@ -3437,6 +3475,9 @@ func validateRoutineSpec(spec RoutineSpec) []string {
 	}
 	if spec.MaxRuntimeMinutes < 0 {
 		issues = append(issues, "maxRuntimeMinutes cannot be negative")
+	}
+	if spec.ReviewBudgetMinutes < 0 {
+		issues = append(issues, "reviewBudgetMinutes cannot be negative")
 	}
 	return issues
 }
