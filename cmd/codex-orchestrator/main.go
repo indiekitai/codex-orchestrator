@@ -228,6 +228,7 @@ Usage:
   codex-orchestrator run-routine stale-task-rescuer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine ci-fixer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine release-verifier --tag TAG [--repo PATH] [--expected-asset NAME] [--write-report PATH] [--json]
+  codex-orchestrator run-routine docs-drift-checker [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
   codex-orchestrator record-routine-run --report-json PATH
 
@@ -641,6 +642,8 @@ func cmdRunRoutine(args []string) error {
 		return cmdRunCIFixerRoutine(args[1:])
 	case "release-verifier":
 		return cmdRunReleaseVerifierRoutine(args[1:])
+	case "docs-drift-checker":
+		return cmdRunDocsDriftCheckerRoutine(args[1:])
 	default:
 		return fmt.Errorf("unsupported routine %q", args[0])
 	}
@@ -1344,6 +1347,148 @@ func runReleaseVerifierRoutine(repo string, tag string, expectedAssets []string)
 	report.Status = "passed"
 	report.BlockedReason = ""
 	report.NextSuggestedAction = "Record this routine report if the local/proxy release evidence is sufficient; perform any separate runtime/download smoke before claiming production proof."
+	return report
+}
+
+func cmdRunDocsDriftCheckerRoutine(args []string) error {
+	fs := flag.NewFlagSet("run-routine docs-drift-checker", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path to inspect")
+	writeReport := fs.String("write-report", "", "write routine report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	report := runDocsDriftCheckerRoutine(*repo)
+	if err := validateRoutineRunReport(report); err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote routine report: %s\n", *writeReport)
+	return nil
+}
+
+func runDocsDriftCheckerRoutine(repo string) RoutineRunReport {
+	report := RoutineRunReport{
+		RoutineID: "docs-drift-checker",
+		Status:    "blocked",
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Inspected runnable routine source and docs read-only",
+		},
+		NeedsHuman:          false,
+		BlockedReason:       "",
+		NextSuggestedAction: "Fix the blocked docs-drift-checker precondition, then rerun the routine.",
+	}
+	repo = expandPath(repo)
+	if repo == "" {
+		repo = "."
+	}
+	if info, err := os.Stat(repo); err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path does not exist: %s", repo))
+		report.BlockedReason = "repository path is missing"
+		return report
+	} else if !info.IsDir() {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path is not a directory: %s", repo))
+		report.BlockedReason = "repository path is not a directory"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Repository exists: "+repo)
+
+	sourcePath := filepath.Join(repo, "cmd", "codex-orchestrator", "main.go")
+	sourceData, err := os.ReadFile(sourcePath)
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not read runnable routine source "+sourcePath+": "+err.Error())
+		report.BlockedReason = "could not inspect runnable routine source"
+		return report
+	}
+	runnableIDs, err := extractRunnableRoutineIDs(string(sourceData))
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not extract run-routine command surface: "+err.Error())
+		report.BlockedReason = "could not inspect run-routine command surface"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Runnable routines from cmd/codex-orchestrator/main.go: "+strings.Join(runnableIDs, ", "))
+
+	specIDs, err := collectRoutineSpecIDs(filepath.Join(repo, "routines"))
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not inspect routines directory: "+err.Error())
+		report.BlockedReason = "could not inspect routine specs"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Routine specs in routines/: "+strings.Join(specIDs, ", "))
+
+	failures := []string{}
+	for _, id := range runnableIDs {
+		if !containsString(specIDs, id) {
+			failures = append(failures, fmt.Sprintf("Runnable routine %s is missing routines/%s.json.", id, id))
+		}
+	}
+
+	requiredDocs := []string{
+		"README.md",
+		"README.zh-CN.md",
+		"SKILL.md",
+		filepath.Join("docs", "routines", "README.md"),
+	}
+	for _, doc := range requiredDocs {
+		text, readErr := os.ReadFile(filepath.Join(repo, doc))
+		if readErr != nil {
+			failures = append(failures, fmt.Sprintf("Required docs file %s could not be read: %v.", doc, readErr))
+			continue
+		}
+		missing := missingStrings(runnableIDs, documentedRoutineIDs(string(text), runnableIDs))
+		if len(missing) > 0 {
+			failures = append(failures, fmt.Sprintf("%s is missing runnable routine reference(s): %s.", doc, strings.Join(missing, ", ")))
+		} else {
+			report.Evidence["local"] = append(report.Evidence["local"], doc+" mentions all runnable routines.")
+		}
+	}
+
+	roadmapPath := filepath.Join(repo, "docs", "roadmap.md")
+	if roadmapText, readErr := os.ReadFile(roadmapPath); readErr == nil {
+		missing := missingStrings(runnableIDs, documentedRoutineIDs(string(roadmapText), runnableIDs))
+		if len(missing) > 0 {
+			failures = append(failures, fmt.Sprintf("docs/roadmap.md is missing runnable routine reference(s): %s.", strings.Join(missing, ", ")))
+		} else {
+			report.Evidence["local"] = append(report.Evidence["local"], "docs/roadmap.md mentions all runnable routines.")
+		}
+		for _, phrase := range staleRoadmapPhrases() {
+			if strings.Contains(string(roadmapText), phrase) {
+				failures = append(failures, fmt.Sprintf("docs/roadmap.md contains stale status text %q even though run-routine has runnable MVPs.", phrase))
+			}
+		}
+	} else if errors.Is(readErr, os.ErrNotExist) {
+		report.Evidence["local"] = append(report.Evidence["local"], "docs/roadmap.md is absent; optional roadmap drift check skipped.")
+	} else {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not read optional docs/roadmap.md: "+readErr.Error())
+		report.BlockedReason = "could not inspect optional roadmap"
+		return report
+	}
+
+	report.ActionsTaken = append(report.ActionsTaken, "Compared runnable routines against JSON specs and key docs")
+	if len(failures) > 0 {
+		sort.Strings(failures)
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], failures...)
+		report.NextSuggestedAction = "Update routine specs and key docs so the runnable command surface is documented, then rerun docs-drift-checker."
+		return report
+	}
+
+	report.Status = "passed"
+	report.BlockedReason = ""
+	report.NextSuggestedAction = "Record this local/static report if the docs drift check is sufficient; no direct runtime proof was produced."
 	return report
 }
 
@@ -2090,6 +2235,102 @@ func validateRoutineFile(path string) RoutineValidationResult {
 		result.Errors = append(result.Errors, issue)
 	}
 	return result
+}
+
+func collectRoutineSpecIDs(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		var spec RoutineSpec
+		if err := json.Unmarshal(data, &spec); err != nil {
+			return nil, fmt.Errorf("%s: %w", entry.Name(), err)
+		}
+		if strings.TrimSpace(spec.ID) != "" {
+			ids = append(ids, spec.ID)
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) == 0 {
+		return nil, errors.New("no routine spec JSON files found")
+	}
+	return ids, nil
+}
+
+func extractRunnableRoutineIDs(source string) ([]string, error) {
+	start := strings.Index(source, "func cmdRunRoutine(")
+	if start < 0 {
+		return nil, errors.New("cmdRunRoutine function not found")
+	}
+	block := source[start:]
+	if next := strings.Index(block[len("func cmdRunRoutine("):], "\nfunc "); next >= 0 {
+		block = block[:len("func cmdRunRoutine(")+next]
+	}
+	ids := []string{}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(block, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, `case "`) {
+			continue
+		}
+		rest := strings.TrimPrefix(trimmed, "case ")
+		for {
+			rest = strings.TrimSpace(rest)
+			if !strings.HasPrefix(rest, `"`) {
+				break
+			}
+			rest = strings.TrimPrefix(rest, `"`)
+			end := strings.Index(rest, `"`)
+			if end < 0 {
+				break
+			}
+			id := rest[:end]
+			if id != "" && !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+			rest = rest[end+1:]
+			comma := strings.Index(rest, ",")
+			colon := strings.Index(rest, ":")
+			if comma < 0 || (colon >= 0 && colon < comma) {
+				break
+			}
+			rest = rest[comma+1:]
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) == 0 {
+		return nil, errors.New("no run-routine cases found")
+	}
+	return ids, nil
+}
+
+func documentedRoutineIDs(text string, ids []string) []string {
+	found := []string{}
+	for _, id := range ids {
+		if strings.Contains(text, id) {
+			found = append(found, id)
+		}
+	}
+	return found
+}
+
+func staleRoadmapPhrases() []string {
+	return []string{
+		"还没有自动执行 routine",
+		"还没有自动运行 routine",
+		"no runnable routine",
+		"no automatic routine execution",
+	}
 }
 
 func validateRoutineSpec(spec RoutineSpec) []string {

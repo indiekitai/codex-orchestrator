@@ -902,6 +902,69 @@ func TestRunReleaseVerifierRoutineFailsWhenAssetsMissing(t *testing.T) {
 	}
 }
 
+func TestRunDocsDriftCheckerRoutineWritesPassedReport(t *testing.T) {
+	root := t.TempDir()
+	project := createDocsDriftFixture(t, root, []string{"pr-reviewer", "docs-drift-checker"})
+	reportPath := filepath.Join(root, "reports", "docs-drift-checker.json")
+
+	if err := cmdRunRoutine([]string{"docs-drift-checker", "--repo", project, "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RoutineRunReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.RoutineID != "docs-drift-checker" || report.Status != "passed" {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"Runnable routines from cmd/codex-orchestrator/main.go: docs-drift-checker, pr-reviewer",
+		"Routine specs in routines/: docs-drift-checker, pr-reviewer",
+		"README.md mentions all runnable routines",
+		"docs/roadmap.md mentions all runnable routines",
+	} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, local)
+		}
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
+		t.Fatalf("expected only local evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunDocsDriftCheckerRoutineFailsOnMissingDocReference(t *testing.T) {
+	root := t.TempDir()
+	project := createDocsDriftFixture(t, root, []string{"pr-reviewer"})
+
+	report := runDocsDriftCheckerRoutine(project)
+	if report.Status != "failed" {
+		t.Fatalf("expected failed report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	if !strings.Contains(local, "README.md is missing runnable routine reference(s): docs-drift-checker") {
+		t.Fatalf("expected missing docs-drift-checker evidence, got:\n%s", local)
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
+		t.Fatalf("expected local-only failed evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunDocsDriftCheckerRoutineBlockedWhenSourceMissing(t *testing.T) {
+	root := t.TempDir()
+	report := runDocsDriftCheckerRoutine(root)
+	if report.Status != "blocked" || report.BlockedReason == "" {
+		t.Fatalf("expected blocked report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "Could not read runnable routine source") {
+		t.Fatalf("expected source blocked evidence, got %#v", report.Evidence)
+	}
+}
+
 func TestRecordRoutineRunFromJSONReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
@@ -1058,4 +1121,57 @@ func fakeReleaseViewJSON(tag string, prerelease bool, assets []string) string {
 		panic(err)
 	}
 	return string(data)
+}
+
+func createDocsDriftFixture(t *testing.T, root string, readmeRoutineMentions []string) string {
+	t.Helper()
+	project := filepath.Join(root, "repo")
+	for _, dir := range []string{
+		filepath.Join(project, "cmd", "codex-orchestrator"),
+		filepath.Join(project, "docs", "routines"),
+		filepath.Join(project, "routines"),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	source := `package main
+
+func cmdRunRoutine(args []string) error {
+	switch args[0] {
+	case "pr-reviewer":
+		return nil
+	case "docs-drift-checker":
+		return nil
+	default:
+		return nil
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(project, "cmd", "codex-orchestrator", "main.go"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"pr-reviewer", "docs-drift-checker"} {
+		data, err := json.Marshal(RoutineSpec{ID: id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(project, "routines", id+".json"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	allMentions := "pr-reviewer docs-drift-checker"
+	docs := map[string]string{
+		"README.md":       strings.Join(readmeRoutineMentions, " "),
+		"README.zh-CN.md": allMentions,
+		"SKILL.md":        allMentions,
+		filepath.Join("docs", "routines", "README.md"): allMentions,
+		filepath.Join("docs", "roadmap.md"):            allMentions,
+	}
+	for path, text := range docs {
+		if err := os.WriteFile(filepath.Join(project, path), []byte(text+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return project
 }
