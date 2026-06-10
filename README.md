@@ -228,6 +228,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
 ./codex-orchestrator run-routine stale-task-rescuer --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
+./codex-orchestrator run-routine ci-fixer --task-id TASK --write-report /tmp/ci-fixer-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -263,6 +264,19 @@ mismatches, missing `baseCommit`, or git inspection failures block. The runner
 does not modify ledger status, stage, commit, merge, clean worktrees, dispatch
 new work, or claim direct/proxy runtime proof; MVP evidence is `local` or
 `blocked` only.
+
+`run-routine ci-fixer` is the third runnable routine MVP. Despite the name, it
+does not edit code or auto-fix CI. It loads the ledger task by id, verifies the
+task worktree and expected branch, refuses dirty worktrees, compares
+`baseCommit..HEAD`, records the committed file list, and runs only the gate
+commands already recorded on the ledger task in that task worktree with a local
+timeout. Passing gates plus committed work after `baseCommit` return `passed`
+with a next action to run the orchestrator review/merge flow. Dirty worktrees
+or failing gates return `failed` and send the task back to the same worker or a
+same-task takeover. Missing gates, missing `baseCommit`, branch mismatches, or
+git inspection failures return `blocked`. It does not stage, commit, merge,
+push, clean worktrees, modify ledger status, or claim direct/proxy runtime
+proof; MVP evidence is `local` or `blocked` only.
 
 ## 🧱 Architecture
 

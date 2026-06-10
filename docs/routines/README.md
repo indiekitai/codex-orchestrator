@@ -15,6 +15,7 @@ It can also run the conservative routine MVPs:
 ```bash
 codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
 codex-orchestrator run-routine stale-task-rescuer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
+codex-orchestrator run-routine ci-fixer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/ci-fixer-report.json
 codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ```
 
@@ -38,6 +39,18 @@ takeover recommendation. Missing worktrees, branch mismatches, missing
 `baseCommit`, and git inspection failures block. It does not update ledger
 status, stage, commit, merge, clean, dispatch, or claim direct/proxy runtime
 proof; this MVP emits only `local` or `blocked` evidence.
+
+`run-routine ci-fixer` is a read-only CI/local gate classifier, not an
+auto-fixer. It loads the ledger task by id, requires explicit recorded task
+gates, verifies worktree existence and expected branch, refuses dirty
+worktrees, checks commits and changed files after `baseCommit`, and runs the
+recorded gate commands in the task worktree with a local timeout. Passing gates
+plus committed work after `baseCommit` pass for orchestrator review/merge.
+Dirty worktrees or failing gates fail with local evidence and a same-worker or
+same-task takeover recommendation. Missing gates, missing `baseCommit`, branch
+mismatches, and git inspection failures block. It does not stage, commit,
+merge, push, clean, dispatch, update ledger status, or claim direct/proxy
+runtime proof; this MVP emits only `local` or `blocked` evidence.
 
 Routine specs live in [`../../routines`](../../routines). They are JSON so the
 Go helper can validate them without a Python, YAML, or Node dependency.
@@ -83,7 +96,8 @@ Do not turn `local` or `proxy` evidence into `direct` proof in the final report.
 - `stale-task-rescuer`: classify stale delegated tasks and decide nudge,
   same-task takeover, blocked, or abandon.
 - `pr-reviewer`: review a completed task branch before merge.
-- `ci-fixer`: diagnose and fix a failing CI or local gate.
+- `ci-fixer`: classify failing CI/local gates and route the task back for a
+  same-worker fix; the runnable MVP does not edit code.
 - `browser-runtime-proof`: verify browser-visible behavior through a browser
   harness.
 - `log-proof`: verify behavior through current runtime logs.
