@@ -55,6 +55,7 @@
 | **强制自审查** | 每个会话必须在交付前审查自己的 diff。编排器在合并前再审一遍 |
 | **特性包规划** | 当某个领域有多个局部闭合时，升级为完整里程碑而非继续堆小切片 |
 | **连续运转** | 不只做一个功能——读路线图、选下一个可做的功能、派发、重复。专为过夜/无人值守多功能运行设计 |
+| **续跑保护** | 单个任务 heartbeat 只有在统领确认大队列不需要继续后，才可以停止 |
 
 ## ✅ 前置条件与安全边界
 
@@ -229,6 +230,12 @@ worktree：读取 ledger task、确认 worktree 和 branch 状态、记录
 缺少 `baseCommit` 或 git 检查失败时返回 `blocked`。它不会修改 ledger status、
 stage、commit、merge、清理 worktree、派发新任务，也不会把证据说成
 direct/proxy runtime proof；这个 MVP 只使用 `local` 或 `blocked` 证据。
+
+一个 delegated task 完成 merge、push、release、cleanup，并不等于整个 loop
+结束。删除任务专属 heartbeat 前，统领必须先检查 ledger / repo truth 和 roadmap
+queue。如果还有安全可做的任务，应继续派发下一个有界任务，或把 heartbeat 替换成
+下一任务 monitor。只有在队列耗尽，或下一步被明确 blocker 卡住并已报告后，才删除
+heartbeat。
 
 ## 🧱 架构
 

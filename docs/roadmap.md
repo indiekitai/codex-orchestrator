@@ -89,7 +89,8 @@ Future daemon/UI
 - direct / proxy / blocked 证据标签；
 - maturity model；
 - Codex App worktree setup 注意事项；
-- fallback worker 必须先有隔离 worktree，不能污染 orchestrator checkout。
+- fallback worker 必须先有隔离 worktree，不能污染 orchestrator checkout；
+- 单任务 heartbeat 删除前必须先判断大队列是否继续，不能完成一个 child task 就让统领静默停止。
 
 仍需改进：
 

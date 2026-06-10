@@ -84,7 +84,22 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
    - no evidence exaggeration
 8. If accepted, merge to the default integration branch, push if requested or
    normal for this project, clean the worktree, and delete the local branch.
-9. If rejected, report blocking findings and leave the branch/worktree for targeted fix or cleanup.
+9. Before deleting or disabling the task-specific heartbeat, decide whether the
+   orchestration loop itself should continue:
+   - run `codex-orchestrator observe --json` or equivalent repo/thread checks,
+   - inspect the roadmap/routine queue for the next safe task,
+   - if capacity is available and safe work remains, dispatch the next bounded
+     task or replace the task-specific heartbeat with a fresh next-task monitor,
+   - if no safe work remains, record that queue-drained state and only then
+     delete the heartbeat,
+   - if the next task choice is blocked by missing context, notify with the
+     blocker instead of silently stopping.
+10. If rejected, report blocking findings and leave the branch/worktree for targeted fix or cleanup.
+
+Task-specific heartbeats are watchdogs for the current child task, not the
+whole orchestrator lifecycle. Completing one child task must not be treated as
+permission to stop the larger loop when the user asked the orchestrator to keep
+working through a queue or roadmap.
 
 ## Orchestrator State Ledger
 

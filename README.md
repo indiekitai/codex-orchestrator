@@ -59,6 +59,7 @@ Running one Codex session at a time is fine for small tasks. But for anything la
 | **Self-review enforcement** | Every session must review its own diff before handoff. The orchestrator re-reviews before merging |
 | **Feature-package planning** | When a domain has multiple partial closures, promotes work to a coherent milestone instead of more tiny slices |
 | **Continuous operation** | Doesn't stop after one feature — reads roadmap, picks the next buildable feature, dispatches, repeats. Designed for overnight/unattended multi-feature runs |
+| **Continuation guard** | A task-specific heartbeat can stop only after the orchestrator checks whether the broader queue should continue |
 
 ## ✅ Prerequisites And Safety
 
@@ -263,6 +264,14 @@ mismatches, missing `baseCommit`, or git inspection failures block. The runner
 does not modify ledger status, stage, commit, merge, clean worktrees, dispatch
 new work, or claim direct/proxy runtime proof; MVP evidence is `local` or
 `blocked` only.
+
+When a delegated task is merged, pushed, released, and cleaned, the
+task-specific heartbeat is not automatically the end of the loop. Before
+deleting that heartbeat, the orchestrator should inspect ledger/repo truth and
+the roadmap queue. If safe work remains, it should dispatch the next bounded
+task or replace the heartbeat with a next-task monitor. Delete the heartbeat
+only after the queue is drained, or after the next action is blocked and
+reported.
 
 ## 🧱 Architecture
 
