@@ -148,6 +148,10 @@ With the v2 helper installed, it can also persist task state in
 `.codex-orchestrator/ledger.json` and write heartbeat reports that a fresh
 orchestrator session can resume from.
 
+If this is your first trial, follow the safer disposable-repository path in
+[docs/beta-usability-package.md](docs/beta-usability-package.md) before running
+the workflow on a real project.
+
 ## 📋 Real Example
 
 **Goal**: Build a REST API with 4 major components.
@@ -212,6 +216,9 @@ for the v2 durable ledger and heartbeat helper design, and
 See [docs/routines/README.md](docs/routines/README.md) for the v2.5 routine
 contract format and [docs/routines/harness-map.md](docs/routines/harness-map.md)
 for the feedback-loop harness model.
+For a first-time external-user path from install to a safe local demo, see
+[docs/beta-usability-package.md](docs/beta-usability-package.md). For release
+copy, see [docs/beta-release-notes-draft.md](docs/beta-release-notes-draft.md).
 For a research note on how this maps to Loop Engineering, see
 [docs/research/loop-engineering-alignment.md](docs/research/loop-engineering-alignment.md).
 For the broader v2-v5 plan, see [docs/roadmap.md](docs/roadmap.md).
@@ -398,6 +405,8 @@ codex-orchestrator/
 │       ├── main.go       # Go helper CLI
 │       └── main_test.go  # CLI state-machine tests
 ├── docs/
+│   ├── beta-release-notes-draft.md
+│   ├── beta-usability-package.md
 │   ├── roadmap.md
 │   ├── routines/
 │   │   ├── README.md
