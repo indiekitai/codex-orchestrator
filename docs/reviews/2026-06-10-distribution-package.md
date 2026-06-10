@@ -16,9 +16,9 @@ App-first README prompt:
   GitHub Release body for future tags.
 
 This is still a beta distribution package, not a full package ecosystem.
-`v0.3.0-beta.2` has a git tag and source install proof, but GitHub Release
-publication is blocked by release API authentication. There is no dedicated
-Homebrew tap repository, npm wrapper, or daemon.
+`v0.3.0-beta.2` now has a git tag, GitHub prerelease, release assets, source
+install proof, and release-asset download smoke. There is no dedicated Homebrew
+tap repository, npm wrapper, or daemon.
 
 ## Evidence
 
@@ -46,11 +46,20 @@ Homebrew tap repository, npm wrapper, or daemon.
 - Added release helper scripts:
   - `scripts/build-release-assets.sh`
   - `scripts/publish-release.sh`
+- `scripts/publish-release.sh v0.3.0-beta.2 /tmp/codex-orch-script-dist-check`
+  passed after switching release creation/upload to direct `gh api` endpoints
+  and retrying intermittent `401 Requires authentication` responses.
 
 ### proxy
 
-- The release workflow body path points at the repository release notes draft
-  for future release publication.
+- GitHub prerelease is published:
+  https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.0-beta.2
+- `gh release view v0.3.0-beta.2 --repo indiekitai/codex-orchestrator`
+  reports `isDraft=false`, `isPrerelease=true`, and all 10 expected assets.
+- `release-verifier --tag v0.3.0-beta.2` passed against local tag plus GitHub
+  release metadata.
+- Downloaded `codex-orchestrator_darwin_arm64.tar.gz` from GitHub Release,
+  extracted it, and verified `--help` plus bash/zsh/fish completions.
 - GitHub Actions build jobs for `v0.3.0-beta.2` passed for darwin/linux/windows
   targets.
 
@@ -58,14 +67,16 @@ Homebrew tap repository, npm wrapper, or daemon.
 
 - GitHub Actions publish job for `v0.3.0-beta.2` failed in
   `softprops/action-gh-release@v2` with `401 Requires authentication`.
-- Local `gh release create v0.3.0-beta.2 ...` also failed with
-  `401 Requires authentication`.
-- `gh api repos/indiekitai/codex-orchestrator` reports the active API account
-  has no `push`, `maintain`, or `admin` permission, while the SSH remote
-  authenticates as `indiekitai` and can push git tags. Release publishing needs
-  API write permission, not only git push permission.
-- `release-verifier --tag v0.3.0-beta.2` returned `failed` because the local tag
-  is present but the GitHub Release is not found.
+- Before GitHub CLI account switching, `gh api repos/indiekitai/codex-orchestrator`
+  reported no `push`, `maintain`, or `admin` permission, while the SSH remote
+  could push git tags. Release publishing needs API write permission, not only
+  git push permission.
+- After authenticating `gh` as `indiekitai`, direct `gh api` release creation
+  and asset uploads succeeded. Local `gh release create v0.3.0-beta.2 ...`
+  still returned `401 Requires authentication`, so `scripts/publish-release.sh`
+  now uses direct release API endpoints.
+- Direct delete/upload API calls also intermittently returned `401` during
+  same-release asset replacement; retrying the authenticated call succeeded.
 - `v0.3.0-beta.1` release assets do not include the new `completion` command.
 - A dedicated Homebrew tap repository was not created.
 - Homebrew 5 rejects direct local formula installs outside a tap:
@@ -74,12 +85,12 @@ Homebrew tap repository, npm wrapper, or daemon.
 
 ## Boundaries
 
-No Codex App sessions were dispatched. No release tag was moved. No GitHub
-Release assets were published or edited. No daemon, production, payment,
+No Codex App sessions were dispatched. No release tag was moved. GitHub Release
+assets were published for `v0.3.0-beta.2`; no daemon, production, payment,
 hardware, deployed runtime, or Codex App session-launch proof is claimed.
 
 ## Verdict
 
-Accepted as a beta source/tag distribution foundation with blocked GitHub
-Release publication. The next packaging step should be fixing release API
-permissions or publishing a real tap repository, not more internal routine work.
+Accepted as a beta distribution package with GitHub prerelease assets and source
+install proof. The next packaging step should be a real tap repository or a
+larger App-first demo proof, not more internal routine-count expansion.

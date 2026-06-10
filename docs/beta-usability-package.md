@@ -192,15 +192,16 @@ Use this checklist before `v0.3.0-beta.2`:
 - Chinese README matches the English quickstart at the workflow level.
 - `SKILL.md` is synced with the release.
 - GitHub Actions build matrix passes for the supported OS/arch matrix.
-- GitHub Release assets exist only after release API authentication is fixed;
-  until then, source/tag install is the verified beta path.
+- GitHub Release assets exist for darwin/linux/windows.
+- Release asset download smoke passes for at least one local platform.
 - Known limitations are visible before users try the tool.
 
 ## Known Beta Limitations
 
 - Codex App session creation is still App-provided, not helper-provided.
 - The helper does not run as a daemon.
-- There is a Homebrew formula draft, but no dedicated Homebrew tap yet.
+- There are GitHub prerelease assets and a Homebrew formula draft, but no
+  dedicated Homebrew tap yet.
 - There is no npm wrapper yet.
 - Routine runners are conservative local/proxy checkers.
 - The release verifier uses GitHub metadata as proxy evidence.

@@ -8,21 +8,23 @@ tap publishing permissions.
 
 ## Status
 
-Current package: `v0.3.0-beta.2` source/tag smoke
+Current package: `v0.3.0-beta.2` GitHub prerelease
 
 Implemented:
 
 - `v0.3.0-beta.2` git tag source install path.
+- GitHub prerelease with darwin/linux/windows assets:
+  https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.0-beta.2
 - `scripts/install.sh` source install path for users with Go.
+- Release asset download smoke for `darwin_arm64`.
 - Shell completion generation for bash, zsh, and fish.
 - Homebrew formula draft at `Formula/codex-orchestrator.rb` that builds from
   the release tag.
 - Release verifier routine for local tag and proxy GitHub release metadata.
+- Release publishing helper that creates/releases assets through `gh api`.
 
 Blocked or not yet implemented:
 
-- GitHub Release publication for `v0.3.0-beta.2` assets is blocked by release
-  API authentication in the current environment.
 - Dedicated `homebrew-tap` repository.
 - npm wrapper.
 - Background daemon.
@@ -39,10 +41,16 @@ The intended release-asset path is:
 
 https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.0-beta.2
 
-This path is currently blocked for `v0.3.0-beta.2`: the tag exists and the
-GitHub Actions build matrix passed, but the publish step could not create the
-GitHub Release because the release API returned `401 Requires authentication`.
-Use source install until the release is published.
+`v0.3.0-beta.2` is published as a GitHub prerelease with release assets for:
+
+- `darwin_amd64`
+- `darwin_arm64`
+- `linux_amd64`
+- `linux_arm64`
+- `windows_amd64`
+
+The `darwin_arm64` tarball was downloaded from GitHub Release, extracted, and
+smoked with `--help` plus bash/zsh/fish completion generation.
 
 ## Install From Source
 
@@ -135,11 +143,19 @@ scripts/publish-release.sh v0.3.0-beta.2 /tmp/codex-orchestrator-dist
 `scripts/publish-release.sh` intentionally checks
 `gh api repos/indiekitai/codex-orchestrator` before trying to publish. The API
 account must have write, maintain, or admin permission. This is separate from
-git push access: this repository currently has an SSH remote that can push tags,
-while the active `gh` account only has read API access.
+git push access: SSH may have write access even when the active `gh` account
+only has read API access.
 
 If the permission check fails, authenticate `gh` as an account that can publish
 releases for `indiekitai/codex-orchestrator`, then rerun the script.
+
+The script uses direct `gh api` release creation and upload endpoints instead of
+`gh release create`. This is intentional: during `v0.3.0-beta.2` publication,
+`gh release create` returned `401 Requires authentication` even after
+`gh api repos/indiekitai/codex-orchestrator` showed admin API permission. Direct
+API creation and uploads succeeded. The script also retries GitHub API calls
+because delete/upload operations may intermittently return `401` even when the
+same authenticated account has verified release permission.
 
 ## Verification
 
@@ -159,7 +175,8 @@ Evidence labels:
 
 - `local`: source build, completion generation, formula syntax inspection, local
   tag inspection.
-- `proxy`: GitHub Release metadata and asset names from `gh`.
+- `proxy`: GitHub Release metadata, release asset names from `gh`, and release
+  asset download smoke from GitHub.
 - `failed`: local tag exists but the GitHub Release is missing or missing
   expected assets.
 - `blocked`: unavailable Homebrew tap, GitHub Release API auth/network failures,
