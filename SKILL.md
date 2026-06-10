@@ -204,10 +204,13 @@ ledger. It scans explicit repo-local docs, routine specs, routine report JSON,
 and ledger-shaped JSON for obvious evidence-label issues: weak evidence labels
 near overstated proof wording, missing
 RoutineRunReport evidence buckets, and direct evidence recorded for routines
-whose specs explicitly reserve direct evidence. Findings are local/static
-suspicions until a reviewer confirms them. Its MVP report uses only `local`
-and `blocked` evidence; it does not stage, commit, merge, push, tag, release,
-clean worktrees, dispatch sessions, mutate the ledger, or claim runtime proof.
+whose specs explicitly reserve direct evidence. It uses deterministic named
+policy/eval rules (`ELA001`-`ELA009`), treats glossary/prohibition/blocked
+definition wording as allowed negatives, and summarizes local rule hits when
+findings appear. Findings are local/static suspicions until a reviewer confirms
+them. Its MVP report uses only `local` and `blocked` evidence; it does not
+stage, commit, merge, push, tag, release, clean worktrees, dispatch sessions,
+mutate the ledger, or claim runtime proof.
 
 The roadmap next-task suggester runner is read-only and does not mutate the
 ledger. It parses remaining candidate tasks from `docs/roadmap.md`, compares

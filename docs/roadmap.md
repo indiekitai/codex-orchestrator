@@ -86,7 +86,7 @@ Future daemon/UI
 - max concurrency 规则；
 - stale session 处理规则；
 - anti-shallow-slice gate；
-- direct / proxy / blocked 证据标签；
+- direct / proxy / local / blocked 证据标签；
 - maturity model；
 - Codex App worktree setup 注意事项；
 - fallback worker 必须先有隔离 worktree，不能污染 orchestrator checkout；
@@ -210,6 +210,10 @@ examples/routine-reports/
   api-proof.blocked.json
 ```
 
+其中 `evidence-label-auditor` 现在已经有第一层本地 policy/eval：命名规则
+`ELA001`-`ELA009`、deterministic false-positive guard，以及按规则汇总的
+rule-hit 统计；但它仍然是只读、本地、静态的保守检查器。
+
 剩余：
 
 - per-routine runtime budget / review budget 与 heartbeat 更深集成。
@@ -228,7 +232,7 @@ examples/routine-reports/
 - docs drift checker；
 - rebase helper；
 - release verifier；
-- evidence label auditor deeper policy/eval variants；
+- evidence label auditor follow-on policy/eval expansion beyond the current named-rule local layer；
 
 补充说明：
 

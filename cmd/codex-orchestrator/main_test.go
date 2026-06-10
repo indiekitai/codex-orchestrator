@@ -1068,6 +1068,7 @@ func TestRunEvidenceLabelAuditorRoutineWritesPassedReport(t *testing.T) {
 		"Routine specs with direct evidence explicitly reserved: docs-drift-checker",
 		"Scanned ",
 		"repo-local evidence-label input file(s)",
+		"Rule hits: none.",
 	} {
 		if !strings.Contains(local, want) {
 			t.Fatalf("expected local evidence %q in:\n%s", want, local)
@@ -1090,8 +1091,11 @@ func TestRunEvidenceLabelAuditorRoutineFailsOnPhraseMisuse(t *testing.T) {
 		t.Fatalf("expected failed report, got %#v", report)
 	}
 	local := strings.Join(report.Evidence["local"], "\n")
-	if !strings.Contains(local, "README.md:1: local/static suspicion") {
+	if !strings.Contains(local, "[ELA004] README.md:1: local/static suspicion") {
 		t.Fatalf("expected README suspicion, got:\n%s", local)
+	}
+	if !strings.Contains(local, "Rule hits: ELA004=1.") {
+		t.Fatalf("expected ELA004 summary, got:\n%s", local)
 	}
 	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
 		t.Fatalf("expected local-only failed evidence, got %#v", report.Evidence)
@@ -1125,11 +1129,56 @@ func TestRunEvidenceLabelAuditorRoutineFailsOnReportBucketsAndStaticDirect(t *te
 	}
 	local := strings.Join(audit.Evidence["local"], "\n")
 	for _, want := range []string{
-		`examples/routine-reports/bad.json: local/static suspicion: RoutineRunReport for docs-drift-checker is missing evidence bucket "proxy"`,
-		"RoutineRunReport for static-only routine docs-drift-checker contains direct evidence",
+		`[ELA008] examples/routine-reports/bad.json: local/static suspicion: RoutineRunReport for docs-drift-checker is missing evidence bucket "proxy"`,
+		"[ELA009] examples/routine-reports/bad.json: local/static suspicion: RoutineRunReport for static-only routine docs-drift-checker contains direct evidence",
+		"Rule hits: ELA008=3, ELA009=1.",
 	} {
 		if !strings.Contains(local, want) {
 			t.Fatalf("expected finding %q in:\n%s", want, local)
+		}
+	}
+}
+
+func TestAuditEvidenceTextAllowsGlossaryProhibitionAndBlockedDefinitions(t *testing.T) {
+	text := strings.Join([]string{
+		"Evidence labels are direct evidence, proxy evidence, local evidence, and blocked evidence buckets.",
+		"Do not claim direct runtime proof from local checks.",
+		"Blocked evidence label: the claim could not be proven safely.",
+	}, "\n")
+	findings := auditEvidenceText("README.md", text)
+	if len(findings) != 0 {
+		t.Fatalf("expected no glossary/prohibition findings, got %#v", renderEvidenceAuditFindings(findings))
+	}
+}
+
+func TestAuditEvidenceTextStillFlagsBlockedOverclaim(t *testing.T) {
+	findings := auditEvidenceText("README.md", "Blocked evidence provides direct runtime proof.\n")
+	got := strings.Join(renderEvidenceAuditFindings(findings), "\n")
+	if !strings.Contains(got, "[ELA004] README.md:1: local/static suspicion") {
+		t.Fatalf("expected blocked overclaim finding, got:\n%s", got)
+	}
+}
+
+func TestAuditRoutineSpecEvidenceDescriptionsAddsRuleIDs(t *testing.T) {
+	spec := RoutineSpec{
+		ID: "fixture-proof",
+		OutputSchema: RoutineOutputSpec{
+			Evidence: map[string]string{
+				"direct":  "Local fixture proof.",
+				"local":   "Local evidence provides direct runtime proof.",
+				"blocked": "Blocked evidence is verified.",
+			},
+		},
+	}
+	findings := auditRoutineSpecEvidenceDescriptions("routines/fixture-proof.json", spec)
+	got := strings.Join(renderEvidenceAuditFindings(findings), "\n")
+	for _, want := range []string{
+		"[ELA001] routines/fixture-proof.json: local/static suspicion: direct evidence description for fixture-proof contains local/static wording",
+		"[ELA002] routines/fixture-proof.json: local/static suspicion: local evidence description for fixture-proof contains strong proof wording",
+		"[ELA003] routines/fixture-proof.json: local/static suspicion: blocked evidence description for fixture-proof may describe proof as blocked",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected finding %q in:\n%s", want, got)
 		}
 	}
 }

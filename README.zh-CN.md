@@ -51,7 +51,7 @@
 | **5 分钟心跳** | 定期巡检，将 Codex 线程状态与实际 git 状态对账——杜绝过夜静默卡死 |
 | **卡住会话恢复** | 会话空转 >15 分钟时：已有干净 commit → 直接审查合并；有未提交的有用改动 → 补发 prompt 让 session 继续；没有有用 diff → 标记放弃 |
 | **反浅切片门禁** | 拒绝"又一个占位页面"类任务。强制要求纵向完成、运行时证明或移除阻断点 |
-| **证据纪律** | 证明标签：`direct`（直接）、`proxy`（代理）、`blocked`（阻断）。不许把单元测试升级成生产证明 |
+| **证据纪律** | 证明标签：`direct`（直接）、`proxy`（代理）、`local`（本地）、`blocked`（阻断）。不许把单元测试升级成生产证明 |
 | **强制自审查** | 每个会话必须在交付前审查自己的 diff。编排器在合并前再审一遍 |
 | **特性包规划** | 当某个领域有多个局部闭合时，升级为完整里程碑而非继续堆小切片 |
 | **连续运转** | 不只做一个功能——读路线图、选下一个可做的功能、派发、重复。专为过夜/无人值守多功能运行设计 |
@@ -270,10 +270,12 @@ ledger，也不会声称 runtime proof；这个 MVP 使用 `local` 或 `blocked`
 明确的 repo-local 文档、routine spec、routine report JSON 和 ledger-like JSON，
 查找明显的证据标签问题：弱证据措辞靠近强证明措辞、RoutineRunReport JSON 缺少
 `direct` / `proxy` / `local` / `blocked` bucket，以及在 spec 明确保留
-direct evidence 的 routine 中记录了 direct evidence。这些发现只是启发式疑点，
-不是语义层面的定罪。它不会 stage、commit、merge、push、tag、release、
-清理 worktree、派发 session、修改 ledger，也不会声称 runtime proof；这个 MVP 使用
-`local` 或 `blocked` 证据。
+direct evidence 的 routine 中记录了 direct evidence。它会应用确定性的命名
+policy/eval 规则（`ELA001`-`ELA009`），把 glossary / prohibition /
+blocked-definition 类措辞当作允许的负例，并在出现发现时输出本地 rule-hit 汇总。
+这些发现只是启发式疑点，不是语义层面的定罪。它不会 stage、commit、merge、
+push、tag、release、清理 worktree、派发 session、修改 ledger，也不会声称
+runtime proof；这个 MVP 使用 `local` 或 `blocked` 证据。
 
 `run-routine roadmap-next-task-suggester` 是第七个可运行 routine MVP。它是只读的，
 不会修改 ledger。它会从 `docs/roadmap.md` 解析剩余候选任务，对照本地可运行
@@ -316,7 +318,7 @@ heartbeat。
 | **会话卡死** | 你（终于）注意到了 | 15 分钟自动检测，收割 commit |
 | **合并冲突** | 合并时才发现 | 不相交写入集提前预防 |
 | **浅层工作** | 会话产出一堆占位页面 | 反浅切片门禁拒绝或重写 |
-| **证据诚信** | 信任会话自述 | `direct`/`proxy`/`blocked` 标签强制执行 |
+| **证据诚信** | 信任会话自述 | `direct`/`proxy`/`local`/`blocked` 标签强制执行 |
 | **过夜运行** | 醒来面对一团乱麻 | 醒来看到合并好的分支 |
 | **并发** | 随缘并行 | 契约串行化，最多 2-3 个有规则 |
 
@@ -331,7 +333,7 @@ heartbeat。
 | 心跳间隔 | 5 分钟 | 编排器检查所有会话的频率 |
 | 分支前缀 | `codex/` | 任务分支的命名空间 |
 | Push 策略 | 项目自定 | 仅在项目正常流程或用户明确要求时 push |
-| 证据标签 | `direct`, `proxy`, `blocked` | 硬件/部署/支付证明的必填分类 |
+| 证据标签 | `direct`, `proxy`, `local`, `blocked` | 本地、硬件、部署或支付证明的必填分类 |
 | 反浅切片 | 强制 | 任务派发前必须分类 |
 
 ## 📂 文件结构

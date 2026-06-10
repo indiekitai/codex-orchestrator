@@ -1574,7 +1574,7 @@ func runEvidenceLabelAuditorRoutine(repo string) RoutineRunReport {
 		report.BlockedReason = "could not collect evidence audit inputs"
 		return report
 	}
-	findings := append([]string{}, specFindings...)
+	findings := append([]evidenceAuditFinding{}, specFindings...)
 	for _, path := range paths {
 		data, readErr := os.ReadFile(filepath.Join(repo, path))
 		if readErr != nil {
@@ -1588,13 +1588,13 @@ func runEvidenceLabelAuditorRoutine(repo string) RoutineRunReport {
 			findings = append(findings, auditEvidenceText(path, string(data))...)
 		}
 	}
-	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static evidence-label heuristics")
+	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static evidence-label policy/eval rules ELA001-ELA009")
 	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Scanned %d repo-local evidence-label input file(s).", len(paths)))
+	report.Evidence["local"] = append(report.Evidence["local"], summarizeEvidenceAuditFindings(findings))
 
 	if len(findings) > 0 {
-		sort.Strings(findings)
 		report.Status = "failed"
-		report.Evidence["local"] = append(report.Evidence["local"], findings...)
+		report.Evidence["local"] = append(report.Evidence["local"], renderEvidenceAuditFindings(findings)...)
 		report.NextSuggestedAction = "Review these local/static evidence-label suspicions, fix confirmed wording or report-shape issues, then rerun evidence-label-auditor."
 		return report
 	}
@@ -2844,14 +2844,73 @@ func primaryRoadmapNextAction(suggestion string) string {
 	return suggestion
 }
 
-func inspectEvidenceRoutineSpecs(repo string) (map[string]bool, []string, error) {
+type evidenceAuditFinding struct {
+	RuleID  string
+	Message string
+}
+
+const (
+	evidenceRuleSpecDirectWeakLocal  = "ELA001"
+	evidenceRuleSpecLocalOverclaim   = "ELA002"
+	evidenceRuleSpecBlockedOverclaim = "ELA003"
+	evidenceRuleTextOverclaim        = "ELA004"
+	evidenceRuleJSONParse            = "ELA005"
+	evidenceRuleReportMissingObject  = "ELA006"
+	evidenceRuleReportBadObject      = "ELA007"
+	evidenceRuleReportMissingBucket  = "ELA008"
+	evidenceRuleReportReservedDirect = "ELA009"
+)
+
+func newEvidenceAuditFinding(ruleID string, format string, args ...any) evidenceAuditFinding {
+	return evidenceAuditFinding{
+		RuleID:  ruleID,
+		Message: fmt.Sprintf(format, args...),
+	}
+}
+
+func renderEvidenceAuditFindings(findings []evidenceAuditFinding) []string {
+	sorted := append([]evidenceAuditFinding{}, findings...)
+	sort.Slice(sorted, func(i int, j int) bool {
+		if sorted[i].RuleID == sorted[j].RuleID {
+			return sorted[i].Message < sorted[j].Message
+		}
+		return sorted[i].RuleID < sorted[j].RuleID
+	})
+	rendered := make([]string, 0, len(sorted))
+	for _, finding := range sorted {
+		rendered = append(rendered, fmt.Sprintf("[%s] %s", finding.RuleID, finding.Message))
+	}
+	return rendered
+}
+
+func summarizeEvidenceAuditFindings(findings []evidenceAuditFinding) string {
+	if len(findings) == 0 {
+		return "Rule hits: none."
+	}
+	counts := map[string]int{}
+	for _, finding := range findings {
+		counts[finding.RuleID]++
+	}
+	ruleIDs := make([]string, 0, len(counts))
+	for ruleID := range counts {
+		ruleIDs = append(ruleIDs, ruleID)
+	}
+	sort.Strings(ruleIDs)
+	parts := make([]string, 0, len(ruleIDs))
+	for _, ruleID := range ruleIDs {
+		parts = append(parts, fmt.Sprintf("%s=%d", ruleID, counts[ruleID]))
+	}
+	return "Rule hits: " + strings.Join(parts, ", ") + "."
+}
+
+func inspectEvidenceRoutineSpecs(repo string) (map[string]bool, []evidenceAuditFinding, error) {
 	dir := filepath.Join(repo, "routines")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil, err
 	}
 	staticDirectReserved := map[string]bool{}
-	findings := []string{}
+	findings := []evidenceAuditFinding{}
 	checked := 0
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
@@ -2879,26 +2938,41 @@ func inspectEvidenceRoutineSpecs(repo string) (map[string]bool, []string, error)
 	if checked == 0 {
 		return nil, nil, errors.New("no routine spec JSON files found")
 	}
-	if len(staticDirectReserved) == 0 && len(findings) == 0 {
-		return staticDirectReserved, findings, nil
-	}
 	return staticDirectReserved, findings, nil
 }
 
-func auditRoutineSpecEvidenceDescriptions(path string, spec RoutineSpec) []string {
-	findings := []string{}
+func auditRoutineSpecEvidenceDescriptions(path string, spec RoutineSpec) []evidenceAuditFinding {
+	findings := []evidenceAuditFinding{}
 	evidence := spec.OutputSchema.Evidence
 	direct := evidence["direct"]
 	if containsAnyFold(direct, weakEvidenceTerms()) && !evidenceDescriptionReservesDirect(direct) {
-		findings = append(findings, fmt.Sprintf("%s: local/static suspicion: direct evidence description for %s contains local/static wording: %q", path, spec.ID, direct))
+		findings = append(findings, newEvidenceAuditFinding(
+			evidenceRuleSpecDirectWeakLocal,
+			"%s: local/static suspicion: direct evidence description for %s contains local/static wording: %q",
+			path,
+			spec.ID,
+			direct,
+		))
 	}
 	local := evidence["local"]
 	if containsAnyFold(local, strongEvidenceClaimTerms()) && !containsAnyFold(local, evidenceNegationTerms()) {
-		findings = append(findings, fmt.Sprintf("%s: local/static suspicion: local evidence description for %s contains strong proof wording: %q", path, spec.ID, local))
+		findings = append(findings, newEvidenceAuditFinding(
+			evidenceRuleSpecLocalOverclaim,
+			"%s: local/static suspicion: local evidence description for %s contains strong proof wording: %q",
+			path,
+			spec.ID,
+			local,
+		))
 	}
 	blocked := evidence["blocked"]
 	if containsAnyFold(blocked, []string{"verified", "passed", "proven"}) && !containsAnyFold(blocked, evidenceNegationTerms()) {
-		findings = append(findings, fmt.Sprintf("%s: local/static suspicion: blocked evidence description for %s may describe proof as blocked: %q", path, spec.ID, blocked))
+		findings = append(findings, newEvidenceAuditFinding(
+			evidenceRuleSpecBlockedOverclaim,
+			"%s: local/static suspicion: blocked evidence description for %s may describe proof as blocked: %q",
+			path,
+			spec.ID,
+			blocked,
+		))
 	}
 	return findings
 }
@@ -2977,36 +3051,111 @@ func evidenceAuditPaths(repo string) ([]string, error) {
 	return paths, nil
 }
 
-func auditEvidenceText(path string, text string) []string {
-	findings := []string{}
+func auditEvidenceText(path string, text string) []evidenceAuditFinding {
+	findings := []evidenceAuditFinding{}
 	for index, line := range strings.Split(text, "\n") {
+		if shouldSkipEvidenceTextLine(line) {
+			continue
+		}
 		if !containsAnyFold(line, weakEvidenceTerms()) || !containsAnyFold(line, strongEvidenceClaimTerms()) {
 			continue
 		}
 		if !containsAnyFold(line, evidenceAssertionTerms()) {
 			continue
 		}
-		if containsAnyFold(line, evidenceNegationTerms()) {
-			continue
-		}
-		findings = append(findings, fmt.Sprintf("%s:%d: local/static suspicion: weak evidence wording appears near strong proof wording: %s", path, index+1, strings.TrimSpace(line)))
+		findings = append(findings, newEvidenceAuditFinding(
+			evidenceRuleTextOverclaim,
+			"%s:%d: local/static suspicion: weak evidence wording appears near strong proof wording: %s",
+			path,
+			index+1,
+			strings.TrimSpace(line),
+		))
 	}
 	return findings
 }
 
-func auditEvidenceJSON(path string, data []byte, staticDirectReserved map[string]bool) []string {
+func shouldSkipEvidenceTextLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return true
+	}
+	if containsAnyFold(trimmed, evidenceNegationTerms()) {
+		return true
+	}
+	if isEvidenceGlossaryLine(trimmed) {
+		return true
+	}
+	if isBlockedEvidenceExplanationLine(trimmed) {
+		return true
+	}
+	return false
+}
+
+func isEvidenceGlossaryLine(line string) bool {
+	return mentionsMultipleEvidenceLabels(line) && containsAnyFold(line, []string{
+		"evidence label",
+		"evidence labels",
+		"evidence bucket",
+		"evidence buckets",
+		"labels include",
+		"buckets include",
+		"证据标签",
+		"证据桶",
+	})
+}
+
+func isBlockedEvidenceExplanationLine(line string) bool {
+	return containsAnyFold(line, []string{
+		"blocked means",
+		"blocked evidence label",
+		"blocked evidence bucket",
+		"blocked definition",
+		"blocked label",
+		"blocked bucket",
+		"could not be proven safely",
+		"claim could not be proven safely",
+		"blocked 表示",
+		"阻断定义",
+		"阻断表示",
+		"无法安全证明",
+	})
+}
+
+func mentionsMultipleEvidenceLabels(line string) bool {
+	count := 0
+	for _, term := range []string{"direct", "proxy", "local", "blocked", "直接", "代理", "本地", "阻断"} {
+		if containsAnyFold(line, []string{term}) {
+			count++
+		}
+	}
+	return count >= 2
+}
+
+func auditEvidenceJSON(path string, data []byte, staticDirectReserved map[string]bool) []evidenceAuditFinding {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return []string{fmt.Sprintf("%s: local/static suspicion: JSON could not be parsed for evidence-label audit: %v", path, err)}
+		return []evidenceAuditFinding{
+			newEvidenceAuditFinding(
+				evidenceRuleJSONParse,
+				"%s: local/static suspicion: JSON could not be parsed for evidence-label audit: %v",
+				path,
+				err,
+			),
+		}
 	}
-	findings := []string{}
+	findings := []evidenceAuditFinding{}
 	if looksLikeRoutineRunReport(raw) {
 		findings = append(findings, auditRoutineRunEvidenceObject(path, raw, staticDirectReserved)...)
 	}
 	if runsRaw, ok := raw["routineRuns"]; ok {
 		var runs []map[string]json.RawMessage
 		if err := json.Unmarshal(runsRaw, &runs); err != nil {
-			findings = append(findings, fmt.Sprintf("%s: local/static suspicion: routineRuns could not be parsed for evidence-label audit: %v", path, err))
+			findings = append(findings, newEvidenceAuditFinding(
+				evidenceRuleJSONParse,
+				"%s: local/static suspicion: routineRuns could not be parsed for evidence-label audit: %v",
+				path,
+				err,
+			))
 		} else {
 			for index, run := range runs {
 				findings = append(findings, auditRoutineRunEvidenceObject(fmt.Sprintf("%s routineRuns[%d]", path, index), run, staticDirectReserved)...)
@@ -3022,26 +3171,52 @@ func looksLikeRoutineRunReport(raw map[string]json.RawMessage) bool {
 	return hasRoutineID && hasStatus
 }
 
-func auditRoutineRunEvidenceObject(path string, raw map[string]json.RawMessage, staticDirectReserved map[string]bool) []string {
-	findings := []string{}
+func auditRoutineRunEvidenceObject(path string, raw map[string]json.RawMessage, staticDirectReserved map[string]bool) []evidenceAuditFinding {
+	findings := []evidenceAuditFinding{}
 	routineID := rawString(raw["routineId"])
 	evidenceRaw, ok := raw["evidence"]
 	if !ok {
-		return []string{fmt.Sprintf("%s: local/static suspicion: RoutineRunReport for %s is missing evidence object.", path, emptyToUnknown(routineID))}
+		return []evidenceAuditFinding{
+			newEvidenceAuditFinding(
+				evidenceRuleReportMissingObject,
+				"%s: local/static suspicion: RoutineRunReport for %s is missing evidence object.",
+				path,
+				emptyToUnknown(routineID),
+			),
+		}
 	}
 	var evidence map[string]json.RawMessage
 	if err := json.Unmarshal(evidenceRaw, &evidence); err != nil {
-		return []string{fmt.Sprintf("%s: local/static suspicion: RoutineRunReport evidence for %s could not be parsed: %v", path, emptyToUnknown(routineID), err)}
+		return []evidenceAuditFinding{
+			newEvidenceAuditFinding(
+				evidenceRuleReportBadObject,
+				"%s: local/static suspicion: RoutineRunReport evidence for %s could not be parsed: %v",
+				path,
+				emptyToUnknown(routineID),
+				err,
+			),
+		}
 	}
 	for _, bucket := range []string{"direct", "proxy", "local", "blocked"} {
 		if _, ok := evidence[bucket]; !ok {
-			findings = append(findings, fmt.Sprintf("%s: local/static suspicion: RoutineRunReport for %s is missing evidence bucket %q.", path, emptyToUnknown(routineID), bucket))
+			findings = append(findings, newEvidenceAuditFinding(
+				evidenceRuleReportMissingBucket,
+				"%s: local/static suspicion: RoutineRunReport for %s is missing evidence bucket %q.",
+				path,
+				emptyToUnknown(routineID),
+				bucket,
+			))
 		}
 	}
 	if staticDirectReserved[routineID] {
 		directItems := rawStringSlice(evidence["direct"])
 		if len(directItems) > 0 {
-			findings = append(findings, fmt.Sprintf("%s: local/static suspicion: RoutineRunReport for static-only routine %s contains direct evidence even though the routine spec reserves direct evidence.", path, routineID))
+			findings = append(findings, newEvidenceAuditFinding(
+				evidenceRuleReportReservedDirect,
+				"%s: local/static suspicion: RoutineRunReport for static-only routine %s contains direct evidence even though the routine spec reserves direct evidence.",
+				path,
+				routineID,
+			))
 		}
 	}
 	return findings
