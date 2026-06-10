@@ -134,7 +134,8 @@ create Codex App sessions, merge, push, clean worktrees, or upgrade
 local/proxy evidence into direct proof.
 
 The helper includes read-only MVP runners for PR reviewer, stale task rescuer,
-CI fixer, release verifier, and docs drift checker routines:
+CI fixer, release verifier, docs drift checker, evidence label auditor, and
+roadmap next-task suggester routines:
 
 ```bash
 codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
@@ -143,6 +144,7 @@ codex-orchestrator run-routine ci-fixer --ledger .codex-orchestrator/ledger.json
 codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
 codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
+codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 ```
 
 The PR reviewer runner inspects only local git/static state from the ledger task worktree:
@@ -206,6 +208,17 @@ whose specs explicitly reserve direct evidence. Findings are local/static
 suspicions until a reviewer confirms them. Its MVP report uses only `local`
 and `blocked` evidence; it does not stage, commit, merge, push, tag, release,
 clean worktrees, dispatch sessions, mutate the ledger, or claim runtime proof.
+
+The roadmap next-task suggester runner is read-only and does not mutate the
+ledger. It parses remaining candidate tasks from `docs/roadmap.md`, compares
+them against local runnable routine IDs and `routines/*.json`, optionally
+filters duplicate active/pending/merged matches from a repo-local
+`.codex-orchestrator/ledger.json`, and prefers conservative read-only local
+tasks over mutating, release-scoped, or network-dependent work. If only unsafe
+items remain, it reports a queue-drained next action instead of pretending to
+dispatch. Its MVP report uses only `local` and `blocked` evidence; it does not
+stage, commit, merge, push, tag, release, clean worktrees, dispatch sessions,
+or claim runtime proof.
 
 After a routine is actually run, record the outcome so future orchestrator
 sessions can resume from ledger truth:

@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -230,6 +231,7 @@ Usage:
   codex-orchestrator run-routine release-verifier --tag TAG [--repo PATH] [--expected-asset NAME] [--write-report PATH] [--json]
   codex-orchestrator run-routine docs-drift-checker [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine evidence-label-auditor [--repo PATH] [--write-report PATH] [--json]
+  codex-orchestrator run-routine roadmap-next-task-suggester [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
   codex-orchestrator record-routine-run --report-json PATH
 
@@ -647,6 +649,8 @@ func cmdRunRoutine(args []string) error {
 		return cmdRunDocsDriftCheckerRoutine(args[1:])
 	case "evidence-label-auditor":
 		return cmdRunEvidenceLabelAuditorRoutine(args[1:])
+	case "roadmap-next-task-suggester":
+		return cmdRunRoadmapNextTaskSuggesterRoutine(args[1:])
 	default:
 		return fmt.Errorf("unsupported routine %q", args[0])
 	}
@@ -1601,6 +1605,159 @@ func runEvidenceLabelAuditorRoutine(repo string) RoutineRunReport {
 	return report
 }
 
+func cmdRunRoadmapNextTaskSuggesterRoutine(args []string) error {
+	fs := flag.NewFlagSet("run-routine roadmap-next-task-suggester", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path to inspect")
+	ledgerPath := fs.String("ledger", "", "optional ledger path; defaults to REPO/.codex-orchestrator/ledger.json when present")
+	writeReport := fs.String("write-report", "", "write routine report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	report := runRoadmapNextTaskSuggesterRoutine(*repo, *ledgerPath)
+	if err := validateRoutineRunReport(report); err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote routine report: %s\n", *writeReport)
+	return nil
+}
+
+func runRoadmapNextTaskSuggesterRoutine(repo string, ledgerPath string) RoutineRunReport {
+	report := RoutineRunReport{
+		RoutineID: "roadmap-next-task-suggester",
+		Status:    "blocked",
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Inspected roadmap, routine specs, runnable routines, and repo-local ledger state read-only",
+		},
+		NeedsHuman:          false,
+		BlockedReason:       "",
+		NextSuggestedAction: "Fix the blocked roadmap-next-task-suggester precondition, then rerun the routine.",
+	}
+	repo = expandPath(repo)
+	if repo == "" {
+		repo = "."
+	}
+	if info, err := os.Stat(repo); err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path does not exist: %s", repo))
+		report.BlockedReason = "repository path is missing"
+		return report
+	} else if !info.IsDir() {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path is not a directory: %s", repo))
+		report.BlockedReason = "repository path is not a directory"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Repository exists: "+repo)
+
+	roadmapPath := filepath.Join(repo, "docs", "roadmap.md")
+	roadmapData, err := os.ReadFile(roadmapPath)
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not read docs/roadmap.md: "+err.Error())
+		report.BlockedReason = "could not inspect roadmap"
+		return report
+	}
+	candidates, err := parseRoadmapNextTaskCandidates(string(roadmapData))
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not derive roadmap task candidates from docs/roadmap.md: "+err.Error())
+		report.BlockedReason = "roadmap candidate list is missing or ambiguous"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Roadmap candidate tasks: "+formatRoadmapCandidateNames(candidates))
+	report.ActionsTaken = append(report.ActionsTaken, "Parsed v3 candidate routines and explicit remaining blocks from docs/roadmap.md")
+
+	sourcePath := filepath.Join(repo, "cmd", "codex-orchestrator", "main.go")
+	sourceData, err := os.ReadFile(sourcePath)
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not read runnable routine source "+sourcePath+": "+err.Error())
+		report.BlockedReason = "could not inspect runnable routine source"
+		return report
+	}
+	runnableIDs, err := extractRunnableRoutineIDs(string(sourceData))
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not extract run-routine command surface: "+err.Error())
+		report.BlockedReason = "could not inspect run-routine command surface"
+		return report
+	}
+	specIDs, err := collectRoutineSpecIDs(filepath.Join(repo, "routines"))
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not inspect routines directory: "+err.Error())
+		report.BlockedReason = "could not inspect routine specs"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Runnable routines from cmd/codex-orchestrator/main.go: "+strings.Join(runnableIDs, ", "))
+	report.Evidence["local"] = append(report.Evidence["local"], "Routine specs in routines/: "+strings.Join(specIDs, ", "))
+	report.ActionsTaken = append(report.ActionsTaken, "Compared roadmap candidates against local runnable routines and routine specs")
+
+	implemented := knownRoutineNameSet(append(append([]string{}, runnableIDs...), specIDs...))
+
+	var ledger Ledger
+	var observationsByTaskID map[string]string
+	if resolvedLedger, ok := resolveOptionalLedgerPath(repo, ledgerPath); ok {
+		loaded, loadErr := loadLedger(resolvedLedger)
+		if loadErr != nil {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not inspect repo-local ledger "+resolvedLedger+": "+loadErr.Error())
+			report.BlockedReason = "could not inspect ledger"
+			return report
+		}
+		ledger = loaded
+		report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Ledger loaded from %s with %d task(s).", resolvedLedger, len(ledger.Tasks)))
+		observationsByTaskID = observeTaskStatuses(ledger.Tasks)
+		report.ActionsTaken = append(report.ActionsTaken, "Applied ledger task-state filters to roadmap candidates")
+	} else {
+		report.Evidence["local"] = append(report.Evidence["local"], "Repo-local ledger is absent; active/merged task filter skipped.")
+	}
+
+	suggestions := []string{}
+	skipped := []string{}
+	for _, candidate := range candidates {
+		if implemented[normalizeRoadmapKey(candidate.Name)] {
+			skipped = append(skipped, fmt.Sprintf("%s: already runnable or already has a routine spec.", candidate.Name))
+			continue
+		}
+		if reason, ok := candidateBlockedByLedger(candidate, ledger.Tasks, observationsByTaskID); ok {
+			skipped = append(skipped, fmt.Sprintf("%s: %s", candidate.Name, reason))
+			continue
+		}
+		safe, safetyNote := classifyRoadmapCandidateSafety(candidate.Name)
+		if !safe {
+			skipped = append(skipped, fmt.Sprintf("%s: deferred because it is not a conservative read-only local task (%s).", candidate.Name, safetyNote))
+			continue
+		}
+		reason := fmt.Sprintf("roadmap still lists %q under %s and it remains unimplemented in local runnable routines/specs", candidate.Name, candidate.Source)
+		suggestions = append(suggestions, fmt.Sprintf("local suggestion: %s. reason: %s. safety: %s.", candidate.Name, reason, safetyNote))
+	}
+	if len(skipped) > 0 {
+		report.Evidence["local"] = append(report.Evidence["local"], skipped...)
+	}
+
+	if len(suggestions) == 0 {
+		report.Status = "passed"
+		report.BlockedReason = ""
+		report.Evidence["local"] = append(report.Evidence["local"], "No remaining safe read-only roadmap tasks were found after implemented-state and ledger filters.")
+		report.NextSuggestedAction = "Safe read-only roadmap queue appears drained; either widen scope to a mutating/network task with explicit approval or update docs/roadmap.md with the next bounded local slice."
+		return report
+	}
+
+	report.Status = "passed"
+	report.BlockedReason = ""
+	report.Evidence["local"] = append(report.Evidence["local"], suggestions...)
+	report.NextSuggestedAction = primaryRoadmapNextAction(suggestions[0])
+	return report
+}
+
 func cmdRecordRoutineRun(args []string) error {
 	fs := flag.NewFlagSet("record-routine-run", flag.ExitOnError)
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
@@ -2431,6 +2588,260 @@ func documentedRoutineIDs(text string, ids []string) []string {
 		}
 	}
 	return found
+}
+
+type roadmapCandidate struct {
+	Name   string
+	Source string
+	Line   int
+	Kind   string
+}
+
+func parseRoadmapNextTaskCandidates(text string) ([]roadmapCandidate, error) {
+	lines := strings.Split(text, "\n")
+	candidates := []roadmapCandidate{}
+	seen := map[string]bool{}
+	currentSection := ""
+	inV3 := false
+	collectV3Candidates := false
+	collectRemaining := false
+	addCandidate := func(name string, line int, kind string) {
+		name = cleanRoadmapCandidateText(name)
+		key := normalizeRoadmapKey(name)
+		if key == "" || seen[key] {
+			return
+		}
+		seen[key] = true
+		source := currentSection
+		if source == "" {
+			source = "roadmap"
+		}
+		candidates = append(candidates, roadmapCandidate{Name: name, Source: source, Line: line, Kind: kind})
+	}
+	for index, raw := range lines {
+		trimmed := strings.TrimSpace(raw)
+		switch {
+		case strings.HasPrefix(trimmed, "## "):
+			currentSection = strings.TrimSpace(strings.TrimPrefix(trimmed, "## "))
+			inV3 = strings.Contains(strings.ToLower(currentSection), "v3") && strings.Contains(strings.ToLower(currentSection), "routine")
+			collectV3Candidates = false
+			collectRemaining = false
+			continue
+		case strings.HasPrefix(trimmed, "### "):
+			collectV3Candidates = false
+			collectRemaining = false
+			continue
+		case inV3 && strings.HasPrefix(trimmed, "候选 routine"):
+			collectV3Candidates = true
+			collectRemaining = false
+			continue
+		case trimmed == "剩余：":
+			collectRemaining = true
+			collectV3Candidates = false
+			continue
+		}
+		if collectV3Candidates {
+			if strings.HasPrefix(trimmed, "- ") {
+				addCandidate(strings.TrimPrefix(trimmed, "- "), index+1, "v3")
+				continue
+			}
+			if trimmed == "" {
+				continue
+			}
+			collectV3Candidates = false
+		}
+		if collectRemaining {
+			switch {
+			case strings.HasPrefix(trimmed, "- "):
+				addCandidate(strings.TrimPrefix(trimmed, "- "), index+1, "remaining")
+				continue
+			case hasNumberedListPrefix(trimmed):
+				addCandidate(trimmed[strings.Index(trimmed, ".")+1:], index+1, "remaining")
+				continue
+			case trimmed == "":
+				continue
+			default:
+				collectRemaining = false
+			}
+		}
+	}
+	if len(candidates) == 0 {
+		return nil, errors.New("no v3 candidates or explicit remaining tasks found")
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		left := roadmapCandidatePriority(candidates[i])
+		right := roadmapCandidatePriority(candidates[j])
+		if left != right {
+			return left < right
+		}
+		return candidates[i].Line < candidates[j].Line
+	})
+	return candidates, nil
+}
+
+func roadmapCandidatePriority(candidate roadmapCandidate) int {
+	switch candidate.Kind {
+	case "v3":
+		return 0
+	case "remaining":
+		return 1
+	default:
+		return 2
+	}
+}
+
+func cleanRoadmapCandidateText(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "- ")
+	value = strings.TrimSuffix(value, "；")
+	value = strings.TrimSuffix(value, "。")
+	value = strings.TrimSuffix(value, ":")
+	return strings.TrimSpace(value)
+}
+
+func hasNumberedListPrefix(value string) bool {
+	if len(value) < 3 {
+		return false
+	}
+	dot := strings.Index(value, ".")
+	if dot <= 0 {
+		return false
+	}
+	for _, r := range value[:dot] {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return dot+1 < len(value) && value[dot+1] == ' '
+}
+
+func normalizeRoadmapKey(value string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(value) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func formatRoadmapCandidateNames(candidates []roadmapCandidate) string {
+	names := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		names = append(names, candidate.Name)
+	}
+	return strings.Join(names, ", ")
+}
+
+func knownRoutineNameSet(values []string) map[string]bool {
+	known := map[string]bool{}
+	for _, value := range values {
+		key := normalizeRoadmapKey(value)
+		if key != "" {
+			known[key] = true
+		}
+	}
+	return known
+}
+
+func resolveOptionalLedgerPath(repo string, explicit string) (string, bool) {
+	if strings.TrimSpace(explicit) != "" {
+		return explicit, true
+	}
+	defaultPath := filepath.Join(repo, defaultLedger)
+	if _, err := os.Stat(defaultPath); err == nil {
+		return defaultPath, true
+	}
+	return "", false
+}
+
+func observeTaskStatuses(tasks []Task) map[string]string {
+	statuses := map[string]string{}
+	for _, task := range tasks {
+		statuses[task.ID] = inspectTask(task, 15*time.Minute).Status
+	}
+	return statuses
+}
+
+func candidateBlockedByLedger(candidate roadmapCandidate, tasks []Task, observationsByTaskID map[string]string) (string, bool) {
+	candidateKey := normalizeRoadmapKey(candidate.Name)
+	if candidateKey == "" {
+		return "", false
+	}
+	for _, task := range tasks {
+		if !taskMatchesCandidate(task, candidateKey) {
+			continue
+		}
+		taskStatus := strings.TrimSpace(task.Status)
+		observedStatus := strings.TrimSpace(observationsByTaskID[task.ID])
+		if isLedgerReservedStatus(taskStatus) || isObservationReservedStatus(observedStatus) {
+			reason := fmt.Sprintf("already represented by ledger task %s (status=%s observed=%s)", task.ID, emptyToUnknown(taskStatus), emptyToUnknown(observedStatus))
+			return reason, true
+		}
+	}
+	return "", false
+}
+
+func taskMatchesCandidate(task Task, candidateKey string) bool {
+	for _, value := range []string{task.ID, task.Title, task.Branch} {
+		key := normalizeRoadmapKey(value)
+		if key == "" {
+			continue
+		}
+		if key == candidateKey || strings.Contains(key, candidateKey) || strings.Contains(candidateKey, key) {
+			return true
+		}
+	}
+	return false
+}
+
+func isLedgerReservedStatus(status string) bool {
+	switch status {
+	case "active", "pending-setup", "completed-unreviewed", "merged":
+		return true
+	default:
+		return false
+	}
+}
+
+func isObservationReservedStatus(status string) bool {
+	switch status {
+	case "active", "pending-setup", "completed-unreviewed":
+		return true
+	default:
+		return false
+	}
+}
+
+func classifyRoadmapCandidateSafety(name string) (bool, string) {
+	key := normalizeRoadmapKey(name)
+	switch {
+	case containsAnyFold(name, []string{"rebase", "merge", "push", "cleanup", "delete", "session", "worker pool", "daemon", "release", "tag", "deploy", "hardware", "payment", "prod", "notification"}):
+		return false, "it implies mutating git/release/session/runtime work instead of a local read-only planning or audit slice"
+	case strings.Contains(key, "reviewer"),
+		strings.Contains(key, "checker"),
+		strings.Contains(key, "auditor"),
+		strings.Contains(key, "suggester"),
+		strings.Contains(key, "budget"),
+		strings.Contains(key, "policy"),
+		strings.Contains(key, "eval"),
+		strings.Contains(key, "ledger"),
+		strings.Contains(key, "heartbeat"):
+		return true, "it can stay bounded to repo-local docs/spec/ledger analysis without merge, push, release, or session mutation"
+	default:
+		return false, "it is not clearly a bounded read-only local task"
+	}
+}
+
+func primaryRoadmapNextAction(suggestion string) string {
+	const prefix = "local suggestion: "
+	if strings.HasPrefix(suggestion, prefix) {
+		suggestion = strings.TrimPrefix(suggestion, prefix)
+	}
+	if dot := strings.Index(suggestion, "."); dot >= 0 {
+		suggestion = suggestion[:dot]
+	}
+	return suggestion
 }
 
 func inspectEvidenceRoutineSpecs(repo string) (map[string]bool, []string, error) {
