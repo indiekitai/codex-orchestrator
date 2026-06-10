@@ -123,6 +123,24 @@ workflow, prerelease flag, and assets verify. Record the release-body failure as
 `blocked` or `failed` evidence instead of treating it as source/tag install
 failure.
 
+## Publishing Release Assets
+
+Use the helper scripts when GitHub Release API credentials are available:
+
+```bash
+scripts/build-release-assets.sh v0.3.0-beta.2 /tmp/codex-orchestrator-dist
+scripts/publish-release.sh v0.3.0-beta.2 /tmp/codex-orchestrator-dist
+```
+
+`scripts/publish-release.sh` intentionally checks
+`gh api repos/indiekitai/codex-orchestrator` before trying to publish. The API
+account must have write, maintain, or admin permission. This is separate from
+git push access: this repository currently has an SSH remote that can push tags,
+while the active `gh` account only has read API access.
+
+If the permission check fails, authenticate `gh` as an account that can publish
+releases for `indiekitai/codex-orchestrator`, then rerun the script.
+
 ## Verification
 
 Before announcing a distribution package:

@@ -43,6 +43,9 @@ Homebrew tap repository, npm wrapper, or daemon.
   - `codex-orchestrator completion bash|zsh|fish`
   - `codex-orchestrator init`
   - `codex-orchestrator observe --json`
+- Added release helper scripts:
+  - `scripts/build-release-assets.sh`
+  - `scripts/publish-release.sh`
 
 ### proxy
 
@@ -57,6 +60,10 @@ Homebrew tap repository, npm wrapper, or daemon.
   `softprops/action-gh-release@v2` with `401 Requires authentication`.
 - Local `gh release create v0.3.0-beta.2 ...` also failed with
   `401 Requires authentication`.
+- `gh api repos/indiekitai/codex-orchestrator` reports the active API account
+  has no `push`, `maintain`, or `admin` permission, while the SSH remote
+  authenticates as `indiekitai` and can push git tags. Release publishing needs
+  API write permission, not only git push permission.
 - `release-verifier --tag v0.3.0-beta.2` returned `failed` because the local tag
   is present but the GitHub Release is not found.
 - `v0.3.0-beta.1` release assets do not include the new `completion` command.
