@@ -19,8 +19,9 @@ I want to try codex-orchestrator in this repository.
 Read https://github.com/indiekitai/codex-orchestrator and use it as a
 Codex App-first orchestration workflow.
 
-If the delegated-session-orchestrator skill is not installed, install it from
-that repository into ~/.codex/skills/delegated-session-orchestrator.
+If the Codex App skill from that repository is not installed, install it into
+~/.codex/skills/delegated-session-orchestrator and explain that this internal
+skill name is the Codex App component of codex-orchestrator.
 
 If the Go helper CLI is useful for durable ledger state, explain what it does
 and then install or build it if safe. Do not require me to learn the CLI first.
@@ -36,9 +37,13 @@ explicitly approve.
 ```
 
 The intended user flow is not "learn every command first." The intended flow is
-"give Codex App this runbook, let it read the repository, install the skill,
-decide whether the helper is useful, and explain the orchestration plan before
-doing mutating work."
+"give Codex App the codex-orchestrator repository, let it read the docs, install
+the Codex App skill, decide whether the helper is useful, and explain the
+orchestration plan before doing mutating work."
+
+Naming note: **codex-orchestrator** is the product and repository name.
+**delegated-session-orchestrator** is the internal Codex App skill name used
+after installation.
 
 ## 🔥 The Problem
 
@@ -134,7 +139,7 @@ If you want Codex App to do the setup for you, use the bootstrap prompt above.
 Codex should inspect this repository and then perform the relevant steps:
 
 ```bash
-# Install the skill when needed.
+# Install the Codex App skill when needed.
 cp -r codex-orchestrator ~/.codex/skills/delegated-session-orchestrator
 
 # Optionally install the helper when durable state is useful.
@@ -146,20 +151,20 @@ After the first GitHub release, you can also download a prebuilt
 `codex-orchestrator_<os>_<arch>` binary from the Releases page and put it on
 your `PATH`.
 
-After setup, the Codex App orchestrator can use the skill directly:
+After setup, ask Codex App to use codex-orchestrator. Codex may invoke the
+installed internal skill when appropriate:
 
 ```
-Use $delegated-session-orchestrator to split this feature into
-bounded worktree sessions, review/merge completed branches,
-and dispatch the next batch.
+Use codex-orchestrator to split this feature into bounded worktree sessions,
+review/merge completed branches, and dispatch the next batch.
 ```
 
 Or be specific:
 
 ```
 I need to build a REST API with user auth, CRUD endpoints,
-pagination, and rate limiting. Use $delegated-session-orchestrator
-to run this as parallel sessions overnight.
+pagination, and rate limiting. Use codex-orchestrator to run this as parallel
+sessions overnight.
 ```
 
 The orchestrator will:

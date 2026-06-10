@@ -14,8 +14,9 @@
 请阅读 https://github.com/indiekitai/codex-orchestrator，并把它作为
 Codex App-first 的工程编排工作流来使用。
 
-如果 delegated-session-orchestrator skill 还没安装，请从这个仓库安装到
-~/.codex/skills/delegated-session-orchestrator。
+如果这个仓库提供的 Codex App skill 还没安装，请安装到
+~/.codex/skills/delegated-session-orchestrator，并解释这个内部 skill 名只是
+codex-orchestrator 在 Codex App 里的组件名。
 
 如果 Go helper CLI 对持久 ledger 状态有帮助，请先解释它的作用，然后在安全的情况下安装或构建。
 不要要求我先学习 CLI。
@@ -29,7 +30,10 @@ Codex App-first 的工程编排工作流来使用。
 除非我明确批准，不要 push、deploy、删除 worktree，或执行破坏性操作。
 ```
 
-预期用法不是“人先学完所有命令”，而是“把这份 runbook 交给 Codex App，让它读仓库、安装 skill、判断是否需要 helper，并在做任何会修改项目的动作前先解释编排计划”。
+预期用法不是“人先学完所有命令”，而是“把 codex-orchestrator 仓库交给 Codex App，让它读文档、安装 Codex App skill、判断是否需要 helper，并在做任何会修改项目的动作前先解释编排计划”。
+
+命名说明：**codex-orchestrator** 是产品名和仓库名；
+**delegated-session-orchestrator** 是安装后给 Codex App 调用的内部 skill 名。
 
 ## 🔥 痛点
 
@@ -111,7 +115,7 @@ Codex App-first 的工程编排工作流来使用。
 如果你希望 Codex App 代你完成接入，使用上面的 bootstrap prompt。Codex 应该先阅读本仓库，然后按需执行这些步骤：
 
 ```bash
-# 需要时安装 skill。
+# 需要时安装 Codex App skill。
 cp -r codex-orchestrator ~/.codex/skills/delegated-session-orchestrator
 
 # 需要持久状态时再安装 helper。
@@ -122,10 +126,10 @@ codex-orchestrator init
 发布第一个 GitHub release 后，也可以直接下载预构建的
 `codex-orchestrator_<os>_<arch>` 二进制文件并放到 `PATH` 里。
 
-接入后，Codex App 统领会话可以直接使用这个 skill：
+接入后，直接让 Codex App 使用 codex-orchestrator；Codex 会在需要时调用已安装的内部 skill：
 
 ```
-用 $delegated-session-orchestrator 把这个特性拆成有界的 worktree 会话，
+用 codex-orchestrator 把这个特性拆成有界的 worktree 会话，
 审查合并完成的分支，然后派发下一批。
 ```
 
@@ -133,7 +137,7 @@ codex-orchestrator init
 
 ```
 我需要构建一套 REST API，包含用户认证、CRUD、分页和限流。
-用 $delegated-session-orchestrator 今晚并行跑。
+用 codex-orchestrator 今晚并行跑。
 ```
 
 编排器会自动：

@@ -10,7 +10,7 @@ trust, not new orchestration features.
 
 1. Paste one bootstrap prompt into Codex App.
 2. Let Codex App read this GitHub repository.
-3. Let Codex App install the skill if needed.
+3. Let Codex App install the codex-orchestrator skill if needed.
 4. Let Codex App decide whether the helper CLI is useful and explain why.
 5. Start with a dry run and a disposable-repository demo.
 6. Understand what Codex App will and will not mutate.
@@ -31,8 +31,9 @@ I want to try codex-orchestrator in this repository.
 Read https://github.com/indiekitai/codex-orchestrator and use it as a
 Codex App-first orchestration workflow.
 
-If the delegated-session-orchestrator skill is not installed, install it from
-that repository into ~/.codex/skills/delegated-session-orchestrator.
+If the Codex App skill from that repository is not installed, install it into
+~/.codex/skills/delegated-session-orchestrator and explain that this internal
+skill name is the Codex App component of codex-orchestrator.
 
 If the Go helper CLI is useful for durable ledger state, explain what it does
 and then install or build it if safe. Do not require me to learn the CLI first.
@@ -53,7 +54,7 @@ Codex App should perform the setup and explain each mutating step before doing
 it:
 
 1. Read the GitHub README, `SKILL.md`, and beta usability guide.
-2. Check whether the skill is already installed.
+2. Check whether the codex-orchestrator Codex App skill is already installed.
 3. Install or update the skill if needed.
 4. Decide whether the Go helper is needed for the requested run.
 5. If the helper is useful, build or install it and run `codex-orchestrator --help`.
@@ -164,7 +165,7 @@ clear.
 Before calling a beta release credible, run one real Codex App demo:
 
 1. Create a fresh Codex App orchestrator session in a disposable repository.
-2. Ask it to use `$delegated-session-orchestrator`.
+2. Ask it to use codex-orchestrator.
 3. Dispatch one small worker into an isolated worktree.
 4. Record the worker in the helper ledger.
 5. Let the worker commit and self-review.
