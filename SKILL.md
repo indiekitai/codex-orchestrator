@@ -249,7 +249,7 @@ Record:
 - base commit,
 - allowed/forbidden write set,
 - hardware/env owner and expected release condition,
-- current status: `active`, `pending setup`, `completed-unreviewed`, `merged`, `rejected`, `abandoned`, or `blocked`,
+- current status: `active`, `pending setup`, `completed-unreviewed`, `merged`, `released`, `cleaned`, `rejected`, `abandoned`, or `blocked`,
 - commit hash once available,
 - required gates and artifact/review paths.
 

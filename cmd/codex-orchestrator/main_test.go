@@ -268,6 +268,74 @@ func TestTerminalMergedTaskRequiresCleanupWhenWorktreeRemains(t *testing.T) {
 	}
 }
 
+func TestTerminalReleasedAndCleanedTasksAreQuietAfterCleanup(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		id     string
+		status string
+	}{
+		{id: "RELEASED", status: "released"},
+		{id: "CLEANED", status: "cleaned"},
+	} {
+		missing := filepath.Join(root, strings.ToLower(tc.id))
+		if err := cmdRecordTask([]string{"--ledger", ledger, "--id", tc.id, "--worktree", missing, "--branch", "codex/" + strings.ToLower(tc.id)}); err != nil {
+			t.Fatal(err)
+		}
+		if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", tc.status, "--task-id", tc.id, "--status", tc.status, "--note", "post-merge terminal state"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ledgerData, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleAt := time.Now().Add(-2 * time.Hour).Format(time.RFC3339)
+	for index := range ledgerData.Tasks {
+		ledgerData.Tasks[index].LastObservation["at"] = staleAt
+	}
+	if err := saveLedger(ledger, &ledgerData); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := observeWithOptions(ledger, 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statuses := map[string]string{}
+	actions := map[string]string{}
+	for _, observation := range summary.Observations {
+		statuses[observation.ID] = observation.Status
+		actions[observation.ID] = observation.Action
+	}
+	for _, tc := range []struct {
+		id     string
+		status string
+	}{
+		{id: "RELEASED", status: "released"},
+		{id: "CLEANED", status: "cleaned"},
+	} {
+		if statuses[tc.id] != tc.status {
+			t.Fatalf("expected %s status %q, got %q", tc.id, tc.status, statuses[tc.id])
+		}
+		if actions[tc.id] != "quiet" {
+			t.Fatalf("expected %s to be quiet, got %q", tc.id, actions[tc.id])
+		}
+	}
+	if summary.ReviewPressure.PendingSetup != 0 || summary.ReviewPressure.Stale != 0 || summary.ReviewPressure.Blocked != 0 || summary.ReviewPressure.CleanupNeeded != 0 {
+		t.Fatalf("expected terminal tasks to create no setup/stale/blocker pressure, got %#v", summary.ReviewPressure)
+	}
+	if summary.Counts["pending-setup"] != 0 || summary.Counts["stale-needs-inspection"] != 0 || summary.Counts["blocked"] != 0 || summary.Counts["cleanup-needed"] != 0 {
+		t.Fatalf("expected no pressure statuses for terminal tasks, got %#v", summary.Counts)
+	}
+}
+
 func TestReviewQueueSaturation(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

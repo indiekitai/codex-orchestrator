@@ -2268,7 +2268,7 @@ func summarizeObservations(integration IntegrationState, counts map[string]int, 
 
 func isTerminalStatus(status string) bool {
 	switch status {
-	case "merged", "rejected", "abandoned":
+	case "merged", "released", "cleaned", "rejected", "abandoned":
 		return true
 	default:
 		return false
