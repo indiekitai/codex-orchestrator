@@ -80,6 +80,12 @@ For open-source use, start with a dry run on a disposable repository or feature
 branch. Keep automatic push disabled until you trust the review gates and your
 project's branch protection policy.
 
+The core skill does not require Python. The optional v2 helper currently uses
+`python3` as a portable prototype for the persistent ledger and heartbeat
+checker. If `python3` is unavailable, keep using the skill as a manual/App-first
+orchestration runbook and inspect git/worktree state directly. A packaged CLI
+or single-binary helper is the intended next step.
+
 ## 🚫 What This Is Not
 
 This is not a replacement for engineering judgment, code review, or production

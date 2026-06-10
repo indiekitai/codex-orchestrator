@@ -120,7 +120,14 @@ Future daemon/UI
 
 下一步建议：
 
-1. 给 helper CLI 增加 packaging/install 入口，让用户可以运行：
+1. 给 helper CLI 增加 packaging/install 入口，避免要求用户机器一定有 `python3`。可选方向：
+
+   - Go/Rust 单文件二进制；
+   - npm 包；
+   - Homebrew tap；
+   - 继续保留 Python 脚本作为开发原型。
+
+   最终用户应该能运行：
 
    ```text
    codex-orchestrator init

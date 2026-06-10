@@ -162,6 +162,12 @@ It does not create sessions, merge, push, or clean worktrees. It only compares
 the ledger with local git truth and prints the next suggested orchestrator
 action.
 
+The helper is currently implemented in Python as a small v2 prototype. The core
+skill does not require Python. If a machine has no `python3` command, use the
+same ledger schema manually and let the Codex App orchestrator inspect
+`git status`, `git worktree list`, and task worktrees directly. Do not block the
+v1 workflow just because the optional helper is unavailable.
+
 For compatibility, the original form still works:
 
 ```bash

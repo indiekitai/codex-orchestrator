@@ -70,6 +70,8 @@
 
 开源场景下建议先在可丢弃仓库或功能分支上 dry run。自动 push 应保持关闭，直到你确认 review gate 和项目分支保护策略可靠。
 
+核心 skill 本身不依赖 Python。当前 v2 helper 暂时用 `python3` 实现，只是 persistent ledger 和 heartbeat checker 的可运行原型。如果机器没有 `python3`，仍然可以把这个 skill 当作 Codex App-first 的手动/半自动编排 runbook 使用，并由统领 session 直接检查 git/worktree 状态。后续更合理的方向是打包成可安装 CLI 或单文件二进制。
+
 ## 🚫 这不是什么
 
 它不是工程判断、代码审查或生产验收的替代品。它的目标是让 AI 辅助开发更结构化：有界任务、隔离 worktree、明确证据标签、合并前审查。
