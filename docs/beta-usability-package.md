@@ -8,57 +8,65 @@ trust, not new orchestration features.
 
 `codex-orchestrator` is ready for a beta when a new user can:
 
-1. Install the skill and optional helper.
-2. Understand the App-first boundary.
-3. Initialize a local ledger.
-4. Record one worker task.
-5. Run `observe`, `heartbeat`, and at least one read-only routine.
-6. Understand what the helper will not do.
-7. Decide whether the result is safe to use in their project.
+1. Paste one bootstrap prompt into Codex App.
+2. Let Codex App read this GitHub repository.
+3. Let Codex App install the skill if needed.
+4. Let Codex App decide whether the helper CLI is useful and explain why.
+5. Start with a dry run and a disposable-repository demo.
+6. Understand what Codex App will and will not mutate.
+7. Decide whether the workflow is safe to use in their project.
 
 The beta is not a claim of a fully autonomous agent runtime. It is a packaged
 Codex App orchestration workflow with a conservative local helper.
 
 ## Quickstart For A New User
 
-### 1. Install the skill
+The main entrypoint is a prompt, not a command sequence for the human.
 
-Clone the repository, then copy it into Codex skills:
-
-```bash
-git clone https://github.com/indiekitai/codex-orchestrator.git
-cd codex-orchestrator
-mkdir -p ~/.codex/skills
-cp -R . ~/.codex/skills/delegated-session-orchestrator
-```
-
-Open Codex App and start a session in the repository you want to orchestrate.
-Ask for:
+Open Codex App in the repository you want to orchestrate and paste:
 
 ```text
-Use $delegated-session-orchestrator for this repository.
-Before dispatching, inspect git status, worktrees, and the roadmap.
-Create isolated worktree sessions for worker tasks.
-Review completed branches before merge.
-Label evidence as direct, proxy, local, or blocked.
+I want to try codex-orchestrator in this repository.
+
+Read https://github.com/indiekitai/codex-orchestrator and use it as a
+Codex App-first orchestration workflow.
+
+If the delegated-session-orchestrator skill is not installed, install it from
+that repository into ~/.codex/skills/delegated-session-orchestrator.
+
+If the Go helper CLI is useful for durable ledger state, explain what it does
+and then install or build it if safe. Do not require me to learn the CLI first.
+
+Start with a dry run:
+- inspect git status, worktrees, and project docs;
+- explain how you would split work into isolated Codex worktree sessions;
+- explain what you would monitor, review, merge, push, and clean up;
+- label evidence as direct, proxy, local, or blocked.
+
+Do not push, deploy, delete worktrees, or make destructive changes unless I
+explicitly approve.
 ```
 
-### 2. Install the optional helper
+### What Codex App Should Do
 
-The helper is a Go CLI. It does not replace Codex App dispatch; it stores local
-state and produces reports the App orchestrator can read.
+Codex App should perform the setup and explain each mutating step before doing
+it:
 
-```bash
-scripts/install.sh
-codex-orchestrator --help
-```
+1. Read the GitHub README, `SKILL.md`, and beta usability guide.
+2. Check whether the skill is already installed.
+3. Install or update the skill if needed.
+4. Decide whether the Go helper is needed for the requested run.
+5. If the helper is useful, build or install it and run `codex-orchestrator --help`.
+6. Inspect the target repository with `git status` and `git worktree list`.
+7. Produce a dry-run orchestration plan before creating workers.
 
-If Go is not installed, download a prebuilt binary from GitHub Releases and put
-it on `PATH`.
+The human should not need to understand the helper CLI first. The helper is a
+tool Codex App may use to keep durable state and generate reports.
 
-### 3. Initialize a disposable test repository
+### Disposable Demo Codex Can Run
 
-Do the first trial on a disposable repo or feature branch:
+For a first trial, ask Codex App to run this demo in a disposable location
+before touching a real project:
 
 ```bash
 mkdir /tmp/codex-orchestrator-demo
@@ -70,9 +78,7 @@ git commit -m 'init demo'
 codex-orchestrator init
 ```
 
-### 4. Record a fake worker task
-
-This simulates the state after Codex App creates a worker session/worktree:
+Then Codex can simulate the state after a worktree worker exists:
 
 ```bash
 git worktree add /tmp/codex-orchestrator-demo-worker -b codex/demo-task
@@ -92,7 +98,7 @@ codex-orchestrator record-task \
   --evidence local
 ```
 
-### 5. Observe and run read-only routines
+Codex can then run the read-only checks:
 
 ```bash
 codex-orchestrator observe --json
@@ -112,7 +118,7 @@ Expected outcome:
 - `pr-reviewer` produces a read-only local review report.
 - Nothing is merged, pushed, tagged, cleaned, or dispatched by the helper.
 
-### 6. Let Codex App own the mutating steps
+### Let Codex App Own Mutating Steps
 
 After the helper reports a task is ready, the Codex App orchestrator should:
 
@@ -144,6 +150,14 @@ The helper is intentionally read-mostly. It does not:
 
 This boundary matters because it keeps the dangerous decisions inside the
 reviewing App orchestrator, where the user can inspect the evidence.
+
+For humans, the simplest rule is:
+
+```text
+Give Codex App the bootstrap prompt. Let Codex read, install, explain, and
+operate the workflow. Approve mutating steps only after the dry-run plan is
+clear.
+```
 
 ## Real App Demo Checklist
 

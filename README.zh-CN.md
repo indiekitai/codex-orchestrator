@@ -4,6 +4,33 @@
 
 **OpenAI Codex App 的 Loop Engineering skill。** 它把单个写代码助手变成一个受监督的工程循环：从路线图中拆任务，派发到隔离 worktree 会话，用 heartbeat 巡检，审查并合并干净分支，恢复卡住的 session，并在安全时继续派发下一批。
 
+## 🚀 最快试用方式
+
+在你想编排的项目里打开 Codex App，把下面这段 prompt 粘贴进去，让 Codex 自己读取、安装和接入需要的部分：
+
+```text
+我想在这个仓库里试用 codex-orchestrator。
+
+请阅读 https://github.com/indiekitai/codex-orchestrator，并把它作为
+Codex App-first 的工程编排工作流来使用。
+
+如果 delegated-session-orchestrator skill 还没安装，请从这个仓库安装到
+~/.codex/skills/delegated-session-orchestrator。
+
+如果 Go helper CLI 对持久 ledger 状态有帮助，请先解释它的作用，然后在安全的情况下安装或构建。
+不要要求我先学习 CLI。
+
+先做 dry run：
+- 检查 git status、worktree 和项目文档；
+- 说明你会如何把工作拆成隔离的 Codex worktree session；
+- 说明你会监控、审查、合并、push、清理哪些东西；
+- 把证据标为 direct、proxy、local 或 blocked。
+
+除非我明确批准，不要 push、deploy、删除 worktree，或执行破坏性操作。
+```
+
+预期用法不是“人先学完所有命令”，而是“把这份 runbook 交给 Codex App，让它读仓库、安装 skill、判断是否需要 helper，并在做任何会修改项目的动作前先解释编排计划”。
+
 ## 🔥 痛点
 
 单个 Codex 会话处理小任务没问题。但遇到大活——新建一套 API、重写一个模块、跨服务开发——就开始痛了：
@@ -79,18 +106,15 @@
 
 重点不是让 agent 永远无人值守地写代码，而是把人放在更高杠杆的位置：设计循环、审查证据、决定什么可以发布。
 
-## 🚀 快速开始
+## 🚀 Codex App 接入流程
 
-### 1. 安装 skill
+如果你希望 Codex App 代你完成接入，使用上面的 bootstrap prompt。Codex 应该先阅读本仓库，然后按需执行这些步骤：
 
 ```bash
-# 复制到 Codex skills 目录
+# 需要时安装 skill。
 cp -r codex-orchestrator ~/.codex/skills/delegated-session-orchestrator
-```
 
-可选：安装 v2 Go helper：
-
-```bash
+# 需要持久状态时再安装 helper。
 scripts/install.sh
 codex-orchestrator init
 ```
@@ -98,9 +122,7 @@ codex-orchestrator init
 发布第一个 GitHub release 后，也可以直接下载预构建的
 `codex-orchestrator_<os>_<arch>` 二进制文件并放到 `PATH` 里。
 
-### 2. 在 Codex 中使用
-
-打开 Codex 会话，告诉它编排：
+接入后，Codex App 统领会话可以直接使用这个 skill：
 
 ```
 用 $delegated-session-orchestrator 把这个特性拆成有界的 worktree 会话，
@@ -114,8 +136,6 @@ codex-orchestrator init
 用 $delegated-session-orchestrator 今晚并行跑。
 ```
 
-### 3. 去睡觉
-
 编排器会自动：
 1. 将工作分解为有界任务契约
 2. 将会话派发到独立的 worktree
@@ -128,7 +148,7 @@ codex-orchestrator init
 `.codex-orchestrator/ledger.json`，并写出 heartbeat report，让新的统领
 session 能从 repo/ledger truth 恢复现场。
 
-如果是第一次试用，建议先按
+如果是第一次试用，建议让 Codex App 先按
 [docs/beta-usability-package.md](docs/beta-usability-package.md) 的可丢弃仓库
 路径跑一遍，再用于真实项目。
 

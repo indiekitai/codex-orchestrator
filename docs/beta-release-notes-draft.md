@@ -37,20 +37,25 @@ clear quickstart.
 
 ## Install
 
-Download the asset for your platform from GitHub Releases, or build locally:
+The recommended path is to let Codex App install and explain the setup. Open
+Codex App in the repository you want to orchestrate and paste:
 
-```bash
-go build -trimpath -ldflags='-s -w' -o codex-orchestrator ./cmd/codex-orchestrator
+```text
+I want to try codex-orchestrator in this repository.
+Read https://github.com/indiekitai/codex-orchestrator and use it as a Codex
+App-first orchestration workflow.
+Install the delegated-session-orchestrator skill if needed.
+If the Go helper CLI is useful, explain what it does and install/build it if
+safe.
+Start with a dry run and do not push, deploy, delete worktrees, or make
+destructive changes unless I explicitly approve.
 ```
 
-Install the skill:
+The CLI can still be installed manually or from release assets, but it is meant
+to be a tool the Codex App orchestrator uses, not a prerequisite the human must
+learn before trying the workflow.
 
-```bash
-mkdir -p ~/.codex/skills
-cp -R . ~/.codex/skills/delegated-session-orchestrator
-```
-
-## Try It
+## Helper Smoke
 
 ```bash
 codex-orchestrator init
@@ -59,14 +64,8 @@ codex-orchestrator validate-routines --dir routines
 codex-orchestrator run-routine docs-drift-checker --repo . --json
 ```
 
-Then open Codex App and ask:
-
-```text
-Use $delegated-session-orchestrator for this repository.
-Use codex-orchestrator observe --json as durable state.
-Create isolated worktree sessions for worker tasks.
-Review before merge and keep evidence labels honest.
-```
+Use these commands for verification, demos, or advanced debugging after Codex
+App has explained why the helper is useful.
 
 ## Beta Boundaries
 

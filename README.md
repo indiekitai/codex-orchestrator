@@ -8,6 +8,38 @@ splitting roadmap work into isolated worktree sessions, checking them with
 heartbeats, reviewing and merging clean branches, rescuing stuck sessions, and
 dispatching the next batch when it is safe to do so.
 
+## 🚀 Fastest Way To Try It
+
+Open Codex App in the repository you want to orchestrate, paste this prompt,
+and let Codex inspect and set up what it needs:
+
+```text
+I want to try codex-orchestrator in this repository.
+
+Read https://github.com/indiekitai/codex-orchestrator and use it as a
+Codex App-first orchestration workflow.
+
+If the delegated-session-orchestrator skill is not installed, install it from
+that repository into ~/.codex/skills/delegated-session-orchestrator.
+
+If the Go helper CLI is useful for durable ledger state, explain what it does
+and then install or build it if safe. Do not require me to learn the CLI first.
+
+Start with a dry run:
+- inspect git status, worktrees, and project docs;
+- explain how you would split work into isolated Codex worktree sessions;
+- explain what you would monitor, review, merge, push, and clean up;
+- label evidence as direct, proxy, local, or blocked.
+
+Do not push, deploy, delete worktrees, or make destructive changes unless I
+explicitly approve.
+```
+
+The intended user flow is not "learn every command first." The intended flow is
+"give Codex App this runbook, let it read the repository, install the skill,
+decide whether the helper is useful, and explain the orchestration plan before
+doing mutating work."
+
 ## 🔥 The Problem
 
 Running one Codex session at a time is fine for small tasks. But for anything larger — a new API with 4 endpoints, a module rewrite, a multi-service feature — you hit real pain:
@@ -96,18 +128,16 @@ The goal is not to let agents write unattended forever. The goal is to keep the
 human in the loop at the right leverage point: designing the loop, reviewing the
 evidence, and deciding what should ship.
 
-## 🚀 Quick Start
+## 🚀 Codex App Setup Flow
 
-### 1. Install the skill
+If you want Codex App to do the setup for you, use the bootstrap prompt above.
+Codex should inspect this repository and then perform the relevant steps:
 
 ```bash
-# Copy to your Codex skills directory
+# Install the skill when needed.
 cp -r codex-orchestrator ~/.codex/skills/delegated-session-orchestrator
-```
 
-Optional: install the v2 Go helper:
-
-```bash
+# Optionally install the helper when durable state is useful.
 scripts/install.sh
 codex-orchestrator init
 ```
@@ -116,9 +146,7 @@ After the first GitHub release, you can also download a prebuilt
 `codex-orchestrator_<os>_<arch>` binary from the Releases page and put it on
 your `PATH`.
 
-### 2. Use it in Codex
-
-Open a Codex session and tell it to orchestrate:
+After setup, the Codex App orchestrator can use the skill directly:
 
 ```
 Use $delegated-session-orchestrator to split this feature into
@@ -134,8 +162,6 @@ pagination, and rate limiting. Use $delegated-session-orchestrator
 to run this as parallel sessions overnight.
 ```
 
-### 3. Walk away
-
 The orchestrator will:
 1. Decompose the work into bounded task contracts
 2. Dispatch sessions into separate worktrees
@@ -148,7 +174,8 @@ With the v2 helper installed, it can also persist task state in
 `.codex-orchestrator/ledger.json` and write heartbeat reports that a fresh
 orchestrator session can resume from.
 
-If this is your first trial, follow the safer disposable-repository path in
+If this is your first trial, ask Codex App to follow the safer
+disposable-repository path in
 [docs/beta-usability-package.md](docs/beta-usability-package.md) before running
 the workflow on a real project.
 
