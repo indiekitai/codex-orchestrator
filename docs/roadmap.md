@@ -7,6 +7,7 @@
 - 当前能力是 **Codex App-first**，因为只有 Codex App 具备创建/继续多个 session、管理 worktree session、设置 heartbeat automation 的能力。
 - CLI/helper 不替代 Codex App 调度。它负责持久状态、git/worktree 观察、heartbeat report、policy/eval 检查。
 - 后续演进不应该把 skill 硬撑成所有东西。更合理的是分层：skill 教 Agent 怎么工作，CLI/helper 管状态和检查，daemon/UI 负责长期运行和可视化。
+- 调研结论见 `docs/research/loop-engineering-alignment.md`：当前项目更准确地说是 **outer orchestration loop**，下一阶段要先补 inner verification routines 和 safety/eval，而不是直接堆更大的 agent OS。
 
 ## 当前定位
 
@@ -154,6 +155,34 @@ Future daemon/UI
 - 不 push；
 - 不删除 worktree；
 - 不把 local/proxy evidence 升级成 direct。
+
+## v2.5：Verification routine foundation
+
+状态：下一步优先级最高。
+
+原因：Loop Engineering 不只是调度任务。Claude Code 访谈和 feedback-loop
+engineering 都强调 agent 必须能运行产品、观察结果、修复并复测。否则
+routine library 容易变成任务管理器，而不是可靠 loop。
+
+目标：
+
+- 定义 routine output schema；
+- 定义 evidence schema；
+- 给 browser/log/db/device/API proof 各写一个最小 routine spec；
+- 让 routine 输出可以被 ledger/heartbeat/report 消费；
+- 保持 helper 保守，不自动 merge/push/删除。
+
+候选交付物：
+
+```text
+docs/routines/
+  README.md
+  browser-runtime-proof.md
+  log-proof.md
+  database-proof.md
+  api-proof.md
+  mobile-device-proof.md
+```
 
 ## v3：Routine library
 

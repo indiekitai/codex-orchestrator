@@ -203,6 +203,8 @@ merge.
 See [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)
 for the v2 durable ledger and heartbeat helper design, and
 [docs/v2-usage.md](docs/v2-usage.md) for the Codex App + Go helper workflow.
+For a research note on how this maps to Loop Engineering, see
+[docs/research/loop-engineering-alignment.md](docs/research/loop-engineering-alignment.md).
 For the broader v2-v5 plan, see [docs/roadmap.md](docs/roadmap.md).
 
 The v2 helper CLI currently supports:

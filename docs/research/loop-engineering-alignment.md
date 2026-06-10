@@ -1,0 +1,243 @@
+# Loop Engineering Alignment
+
+This note checks whether `codex-orchestrator` is aligned with the emerging
+"loop engineering" framing, and where the roadmap should change before adding
+more features.
+
+## Sources
+
+- Addy Osmani, [Loop Engineering](https://addyosmani.com/blog/loop-engineering/)
+- YouTube, [Reflecting on a year of Claude Code](https://www.youtube.com/watch?v=Hth_tLaC2j8)
+- Auto-generated transcript provided locally:
+  `/Users/tf/Downloads/[English (auto-generated)] Reflecting on a year of Claude Code [DownSub.com].txt`
+- Feiteng Li's Chinese summary of the same Claude Code year-review interview:
+  <https://x.com/FeitengLi/status/2064594760195801538>
+- Daniel Demmel, [Feedback loop engineering](https://www.danieldemmel.me/blog/feedback-loop-engineering)
+- Latent.Space, [Claude Code: Anthropic's Agent in Your Terminal](https://www.latent.space/p/claude-code)
+
+## Working Definition
+
+Loop engineering is not just "run an agent repeatedly." It is designing the
+system that prompts, observes, checks, records, and improves agent work while
+the human moves up to loop design and evidence review.
+
+The common pattern across the sources:
+
+1. A loop discovers or receives work.
+2. It dispatches one or more agents into isolated execution environments.
+3. It gives them enough project knowledge, but not an overloaded context dump.
+4. It makes them run and verify their work in the real environment.
+5. It records what happened outside the transient chat context.
+6. It uses separate review, security, or eval checks before trusting results.
+7. It turns repeated mistakes into durable rules, skills, evals, or routines.
+
+That means a useful loop has both an outer orchestration layer and an inner
+verification layer:
+
+- Outer loop: task discovery, dispatch, worktree isolation, heartbeat,
+  review/merge, cleanup, and next-task selection.
+- Inner loop: the worker can run the product, inspect logs/browser/device/db,
+  see failures, fix, and retest.
+- Learning loop: failures become skills, project rules, evals, or policy checks
+  so the same mistake is less likely next time.
+
+## What The Claude Code Interview Adds
+
+The Claude Code year-review interview is important because it describes actual
+operating practice, not just terminology.
+
+Key takeaways from the provided transcript:
+
+- Repeated agent mistakes should not be fixed only by telling that one agent to
+  behave differently. Boris describes writing the lesson into `CLAUDE.md`, a
+  skill, or another durable mechanism.
+- Verification means more than lint, typecheck, or unit tests. The agent needs
+  to run the thing. The interview gives examples around simulators, desktop app
+  workflows, local app launch, computer use, edge cases, fixing, and rechecking.
+- Routines are a concrete next layer. The examples include watching GitHub
+  issues or bug reports, proactively proposing fixes, babysitting PRs, fixing
+  CI, rebasing, and routing work back to the owner for review.
+- Safety moved from raw permission prompts to model/classifier checks, backed
+  by collected trajectories, red-team attempts, prompt-injection tests, and
+  evals.
+- The "loop" leap is explicitly described as moving from talking to source
+  code, to talking to an agent, to talking to a loop or routine that prompts the
+  agent.
+- Context strategy is minimalist: give the model a small system prompt, minimal
+  tools, and a way to pull context when needed, rather than stuffing the whole
+  world into the prompt.
+- The future shape is many longer-running agents, not one short synchronous
+  session. The user interface for coordinating them will likely change.
+
+## What Addy's Article Adds
+
+Addy's framing gives the practical 5+1 checklist:
+
+- automations,
+- worktrees,
+- skills,
+- plugins/connectors,
+- sub-agents,
+- memory/state outside the chat.
+
+`codex-orchestrator` maps well to automations, worktrees, skills, and
+memory/state. It is weaker on plugins/connectors and on a formal maker/checker
+sub-agent split.
+
+Addy also emphasizes that loops do not remove engineering judgment. They make
+quality problems sharper because unattended loops can make unattended mistakes.
+That matches this project's evidence-label discipline and review-before-merge
+stance.
+
+## What Feedback Loop Engineering Adds
+
+Daniel Demmel's feedback-loop framing is a useful correction: orchestration is
+not enough. A loop that cannot observe runtime behavior is mostly a task
+manager.
+
+Important implications:
+
+- Inner-loop proof should be product-specific and runtime-specific.
+- Good loop tooling should expose browser state, logs, crash traces, database
+  state, traces, simulators, devices, and real command output in CLI-friendly
+  ways.
+- The best interfaces for current agents are small, pipeable, progressively
+  explorable CLIs with structured output.
+- The outer loop should reflect finished-session lessons into shared knowledge.
+
+This is the biggest gap in `codex-orchestrator`: it has strong outer-loop
+mechanics, but it does not yet provide a library of inner verification routines.
+
+## Current Coverage
+
+`codex-orchestrator` already covers:
+
+- Worktree isolation.
+- Bounded task contracts.
+- Concurrency control.
+- Heartbeat monitoring.
+- Stale-session recovery.
+- Review-before-merge.
+- Persistent ledger and events in v2.
+- Evidence labels such as `direct`, `proxy`, and `blocked`.
+- Self-review requirements.
+- Living runbook behavior: repeated mistakes should update skill/rules/docs.
+- Human notification checkpoints for real-world actions.
+
+This is a credible outer orchestration loop.
+
+## Gaps
+
+The main gaps are not more task states. They are the deeper loop layers:
+
+1. **Inner verification routines**
+
+   The project needs reusable routines for browser proof, log proof, database
+   proof, mobile/device proof, API proof, and artifact proof. These should be
+   CLI-friendly and report structured evidence.
+
+2. **Maker/checker separation**
+
+   Today a worker self-reviews and the orchestrator reviews. That is useful, but
+   not the same as a reusable verifier routine or dedicated review agent shape.
+
+3. **Plugins/connectors**
+
+   The repo currently does not define connector patterns for issue trackers,
+   CI systems, PRs, Slack/notifications, or external project state.
+
+4. **Security classifier and eval loop**
+
+   The roadmap mentions this, but the interview suggests it is not optional for
+   higher autonomy. Permission spam does not scale; dangerous actions need
+   policy/classifier/eval support.
+
+5. **Routine library**
+
+   V3 should not be just YAML files. It should describe triggers, inputs,
+   allowed actions, forbidden actions, gates, output schema, and escalation, and
+   should be backed by helper commands or examples.
+
+6. **Outer learning loop**
+
+   The skill says to update runbooks, but there is no command or template for
+   converting a completed session or failure into a proposed skill/rule/eval.
+
+## Roadmap Adjustment
+
+The previous v2-v5 roadmap is directionally right, but the emphasis should
+change.
+
+Recommended structure:
+
+| Layer | Status | Purpose |
+|-------|--------|---------|
+| v1: outer orchestrator skill | Mature enough | Codex App session dispatch, worktrees, review, merge, cleanup |
+| v2: durable state + heartbeat | Alpha complete | Ledger, events, heartbeat report, resume from repo truth |
+| v2.5: verification routine foundation | Next | Browser/log/db/device proof interfaces and evidence schemas |
+| v3: routine library | After v2.5 | CI fixer, PR reviewer, stale rescuer, docs drift, release verifier |
+| v4: safety/eval layer | Needed before high autonomy | Classifiers, prompt-injection evals, dangerous action policy |
+| v5: agent operating system | Later | Continuous multi-routine coordination and UI/daemon |
+
+The key change is adding **v2.5 verification routine foundation** before a broad
+routine library. Otherwise v3 risks becoming a list of task managers instead of
+real loops.
+
+## Product Positioning
+
+The most accurate public positioning is:
+
+> `codex-orchestrator` is a Codex App-first outer-loop orchestrator for coding
+> agents. It turns roadmap work into isolated sessions, tracks them in a durable
+> ledger, runs heartbeat checks against git/worktree truth, and keeps a human
+> reviewer in control of merge and evidence quality.
+
+Avoid claiming:
+
+- full agent operating system,
+- autonomous development platform,
+- complete Loop Engineering runtime,
+- automatic safety classifier,
+- automatic PR/CI/rebase routine library,
+- production verification layer.
+
+Use "Loop Engineering" carefully:
+
+> It implements the outer orchestration loop and v2 persistent heartbeat layer.
+> The next work is to add inner verification routines and safety/eval gates.
+
+## Recommended Next Work
+
+Do not jump directly to v5 or a daemon UI. The highest-leverage next work is:
+
+1. Add `docs/routines/` with routine specs for:
+   - stale task rescuer,
+   - PR reviewer,
+   - CI fixer,
+   - browser/runtime proof,
+   - docs drift checker.
+2. Add a common routine output schema:
+   - `status`,
+   - `evidence`,
+   - `actionsTaken`,
+   - `needsHuman`,
+   - `blockedReason`,
+   - `nextSuggestedAction`.
+3. Add an evidence schema that separates:
+   - direct runtime proof,
+   - proxy proof,
+   - local-only proof,
+   - blocked claims.
+4. Add a first policy checker command for dangerous paths and evidence
+   exaggeration before adding more automation.
+5. Add a "reflect failure into rule" template before trying self-improving
+   rules.
+
+## Conclusion
+
+The project is aligned with Loop Engineering, but it currently covers the outer
+loop more than the inner verification loop.
+
+That is a good starting point. The mistake would be to keep adding orchestration
+features while postponing runtime verification and safety classification. The
+next phase should make the loop more trustworthy, not merely more autonomous.

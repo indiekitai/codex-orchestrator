@@ -175,6 +175,8 @@ A 和 B 并行运行（写入集不相交）。两者合并后，编排器派发
 
 V2 持久化状态层见
 [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)：持久 ledger 格式和保守 heartbeat helper。
+Loop Engineering 对齐调研见
+[docs/research/loop-engineering-alignment.md](docs/research/loop-engineering-alignment.md)。
 完整 v2-v5 演进路线见 [docs/roadmap.md](docs/roadmap.md)。
 
 当前 v2 helper CLI 已支持：
