@@ -231,6 +231,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine stale-task-rescuer --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
 ./codex-orchestrator run-routine ci-fixer --task-id TASK --write-report /tmp/ci-fixer-report.json
 ./codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
+./codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -291,6 +292,17 @@ auth/network failures, or unparseable release metadata return `blocked`. It
 does not create or edit releases, move tags, upload assets, stage, commit,
 merge, push, clean, dispatch, mutate the ledger, or claim production/runtime
 proof; MVP evidence is `local`, `proxy`, or `blocked`.
+
+`run-routine docs-drift-checker` is the fifth runnable routine MVP. It is
+read-only and does not load or update the ledger. It parses the local
+`run-routine` command surface from `cmd/codex-orchestrator/main.go`, compares
+the runnable routine IDs with `routines/*.json`, and scans `README.md`,
+`README.zh-CN.md`, `SKILL.md`, `docs/routines/README.md`, and
+`docs/roadmap.md` when present for obvious missing routine references or stale
+status text. Missing docs references or missing specs return `failed`; missing
+repository/source/spec access returns `blocked`. It does not stage, commit,
+merge, push, tag, release, clean worktrees, dispatch sessions, mutate the
+ledger, or claim runtime proof; MVP evidence is `local` or `blocked`.
 
 When a delegated task is merged, pushed, released, and cleaned, the
 task-specific heartbeat is not automatically the end of the loop. Before
@@ -369,8 +381,10 @@ codex-orchestrator/
 │   ├── ci-fixer.json
 │   ├── database-proof.json
 │   ├── device-proof.json
+│   ├── docs-drift-checker.json
 │   ├── log-proof.json
 │   ├── pr-reviewer.json
+│   ├── release-verifier.json
 │   └── stale-task-rescuer.json
 ├── examples/
 │   ├── ledger.example.json

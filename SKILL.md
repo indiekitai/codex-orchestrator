@@ -134,13 +134,14 @@ create Codex App sessions, merge, push, clean worktrees, or upgrade
 local/proxy evidence into direct proof.
 
 The helper includes read-only MVP runners for PR reviewer, stale task rescuer,
-CI fixer, and release verifier routines:
+CI fixer, release verifier, and docs drift checker routines:
 
 ```bash
 codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
 codex-orchestrator run-routine stale-task-rescuer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
 codex-orchestrator run-routine ci-fixer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/ci-fixer-report.json
 codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
+codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
 ```
 
 The PR reviewer runner inspects only local git/static state from the ledger task worktree:
@@ -183,6 +184,17 @@ errors, or unparseable release metadata as `blocked`. Its MVP report uses
 `local`, `proxy`, and `blocked` evidence; it does not create or edit releases,
 move tags, upload assets, stage, commit, merge, push, clean, dispatch, mutate
 the ledger, or claim production/runtime proof.
+
+The docs drift checker runner is read-only and does not load or update the
+ledger. It parses the local `run-routine` command surface from
+`cmd/codex-orchestrator/main.go`, compares runnable routine IDs against
+`routines/*.json`, and checks `README.md`, `README.zh-CN.md`, `SKILL.md`,
+`docs/routines/README.md`, and `docs/roadmap.md` when present for obvious
+missing references or stale status text. It classifies missing specs or docs
+mentions as `failed`, missing repository/source/spec access as `blocked`, and a
+clean static comparison as `passed`. Its MVP report uses only `local` and
+`blocked` evidence; it does not stage, commit, merge, push, tag, release, clean
+worktrees, dispatch sessions, mutate the ledger, or claim runtime proof.
 
 After a routine is actually run, record the outcome so future orchestrator
 sessions can resume from ledger truth:

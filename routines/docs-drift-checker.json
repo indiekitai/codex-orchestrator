@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "id": "docs-drift-checker",
+  "title": "Docs Drift Checker",
+  "purpose": "Detect obvious drift between the runnable routine command surface, JSON routine specs, key user docs, and roadmap status text without mutating repository state.",
+  "trigger": "Run after adding or changing routine runners, CLI command help, routine specs, or roadmap/status docs.",
+  "inputs": [
+    "repository path",
+    "cmd/codex-orchestrator/main.go",
+    "routines/*.json",
+    "README.md",
+    "README.zh-CN.md",
+    "SKILL.md",
+    "docs/routines/README.md",
+    "docs/roadmap.md when present"
+  ],
+  "allowedActions": [
+    "inspect the local repository read-only",
+    "parse the run-routine command surface from source",
+    "read JSON routine specs",
+    "scan key docs for runnable routine references",
+    "write a RoutineRunReport JSON when requested"
+  ],
+  "forbiddenActions": [
+    "stage, commit, merge, push, tag, or release",
+    "create, delete, or clean worktrees",
+    "dispatch sessions or start nested subagents",
+    "mutate the orchestration ledger",
+    "claim direct runtime proof from static docs inspection"
+  ],
+  "gates": [
+    "cmd/codex-orchestrator/main.go readable",
+    "runnable run-routine ids extracted",
+    "routines directory readable",
+    "each runnable routine has a JSON spec",
+    "README.md, README.zh-CN.md, SKILL.md, and docs/routines/README.md mention each runnable routine",
+    "docs/roadmap.md checked for runnable routine mentions and stale status text when present"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Reserved for future doc-render or user-facing publication proof; the MVP does not emit direct proof.",
+      "proxy": "Reserved for accepted external docs indexes or release notes; the MVP normally does not emit proxy proof.",
+      "local": "Local source, routine spec, and documentation inspection.",
+      "blocked": "Repository, source, routine spec directory, or optional roadmap cannot be inspected safely."
+    }
+  },
+  "escalation": [
+    "Stop if repository or source files cannot be inspected.",
+    "Do not edit docs from this routine; report drift and let a separate implementation pass fix it.",
+    "Escalate if roadmap status requires product or release-history judgment beyond directly observable local text."
+  ],
+  "maxRuntimeMinutes": 10
+}

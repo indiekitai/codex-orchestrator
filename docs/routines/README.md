@@ -17,6 +17,7 @@ codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.j
 codex-orchestrator run-routine stale-task-rescuer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
 codex-orchestrator run-routine ci-fixer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/ci-fixer-report.json
 codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
+codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
 codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ```
 
@@ -69,6 +70,17 @@ move tags, upload assets, stage, commit, merge, push, clean, dispatch, mutate
 the ledger, or claim production/runtime proof; this MVP emits `local`, `proxy`,
 or `blocked` evidence.
 
+`run-routine docs-drift-checker` is a read-only local docs drift checker. It
+does not load or update the ledger. It parses runnable routine IDs from
+`cmd/codex-orchestrator/main.go`, checks that each runnable routine has a JSON
+spec under `routines/`, and scans `README.md`, `README.zh-CN.md`, `SKILL.md`,
+`docs/routines/README.md`, and `docs/roadmap.md` when present for obvious
+missing routine references or stale status text. Missing specs or docs
+references fail; missing repository/source/spec access blocks. It does not
+stage, commit, merge, push, tag, release, clean worktrees, dispatch sessions,
+mutate the ledger, or claim runtime proof; this MVP emits `local` or `blocked`
+evidence.
+
 Routine specs live in [`../../routines`](../../routines). They are JSON so the
 Go helper can validate them without a Python, YAML, or Node dependency.
 
@@ -117,6 +129,8 @@ Do not turn `local` or `proxy` evidence into `direct` proof in the final report.
   same-worker fix; the runnable MVP does not edit code.
 - `release-verifier`: verify local tag, GitHub release metadata, prerelease
   flag, and expected Go CLI assets without mutating release state.
+- `docs-drift-checker`: compare runnable routine IDs, JSON specs, key docs,
+  and roadmap status text without mutating repository state.
 - `browser-runtime-proof`: verify browser-visible behavior through a browser
   harness.
 - `log-proof`: verify behavior through current runtime logs.
