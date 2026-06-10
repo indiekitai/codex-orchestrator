@@ -227,6 +227,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
+./codex-orchestrator run-routine stale-task-rescuer --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -249,6 +250,19 @@ captures `git diff --name-status`, and runs `git diff --check`. It writes a
 standard `RoutineRunReport` JSON that can later be recorded with
 `record-routine-run --report-json`. It does not merge, push, delete branches,
 clean worktrees, run task-specific test gates, or claim runtime proof.
+
+`run-routine stale-task-rescuer` is the second runnable routine MVP. It is also
+read-only against the task worktree: it loads the ledger task by id, records
+ledger status, last observation, and recent task history, verifies worktree and
+branch state, captures `git status --short --branch` and `git log --oneline -3`,
+then classifies rescue readiness from local git state. A clean task with
+commits after `baseCommit` passes with the next action set to orchestrator
+review of the committed diff. Useful uncommitted changes fail with evidence and
+a same-worker or same-task takeover recommendation. Missing worktrees, branch
+mismatches, missing `baseCommit`, or git inspection failures block. The runner
+does not modify ledger status, stage, commit, merge, clean worktrees, dispatch
+new work, or claim direct/proxy runtime proof; MVP evidence is `local` or
+`blocked` only.
 
 ## 🧱 Architecture
 

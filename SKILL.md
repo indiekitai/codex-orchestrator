@@ -118,18 +118,30 @@ escalation rules, and the output shape expected by the orchestrator. It does not
 create Codex App sessions, merge, push, clean worktrees, or upgrade
 local/proxy evidence into direct proof.
 
-The helper includes a read-only MVP runner for the PR reviewer routine:
+The helper includes read-only MVP runners for the PR reviewer and stale task
+rescuer routines:
 
 ```bash
 codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
+codex-orchestrator run-routine stale-task-rescuer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
 ```
 
-This runner inspects only local git/static state from the ledger task worktree:
+The PR reviewer runner inspects only local git/static state from the ledger task worktree:
 task existence, worktree existence, expected branch match, git status,
 `git diff --name-status baseCommit..HEAD`, `git diff --check baseCommit..HEAD`,
 and whether commits exist after `baseCommit`. Treat its evidence as `local`,
 not `direct` runtime proof, and record the JSON report separately when the run
 should become durable ledger truth.
+
+The stale task rescuer runner is also read-only. It records ledger status, last
+observation, recent task history, worktree/branch state, `git status --short
+--branch`, `git log --oneline -3`, committed diff names, and uncommitted local
+change evidence when present. It classifies clean committed work as `passed`
+for orchestrator review, useful uncommitted work as `failed` with a same-worker
+or same-task takeover next action, and missing worktree, branch mismatch,
+missing `baseCommit`, or git inspection failures as `blocked`. Its MVP report
+uses only `local` and `blocked` evidence; it does not stage, commit, merge,
+clean, dispatch, update ledger status, or claim direct/proxy runtime proof.
 
 After a routine is actually run, record the outcome so future orchestrator
 sessions can resume from ledger truth:

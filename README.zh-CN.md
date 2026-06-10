@@ -197,6 +197,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
+./codex-orchestrator run-routine stale-task-rescuer --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -217,6 +218,17 @@ worktree：读取 ledger task、确认 worktree 和 branch 状态、记录
 `RoutineRunReport` JSON，之后可用 `record-routine-run --report-json` 记录。
 它不会 merge、push、删除 branch、清理 worktree、运行任务专用测试 gate，也不会把
 本地静态证据说成 runtime proof。
+
+`run-routine stale-task-rescuer` 是第二个可运行 routine MVP。它同样只读检查
+任务 worktree：按 id 读取 ledger task，记录 ledger status、last observation
+和近期 task history，确认 worktree 和 branch 状态，采集
+`git status --short --branch` 与 `git log --oneline -3`，再根据本地 git 状态
+保守判断是否可救回。干净 worktree 且 `baseCommit` 之后有 commit 时返回
+`passed`，下一步是统领 review 已提交 diff；有未提交但可能有用的改动时返回
+`failed` 并建议回到同一个 worker 或同任务 takeover；worktree 缺失、分支不匹配、
+缺少 `baseCommit` 或 git 检查失败时返回 `blocked`。它不会修改 ledger status、
+stage、commit、merge、清理 worktree、派发新任务，也不会把证据说成
+direct/proxy runtime proof；这个 MVP 只使用 `local` 或 `blocked` 证据。
 
 ## 🧱 架构
 
