@@ -556,6 +556,152 @@ func TestRunPRReviewerRoutineFailsOnDirtyWorktree(t *testing.T) {
 	}
 }
 
+func TestRunStaleTaskRescuerRoutineWritesPassedReport(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	reportPath := filepath.Join(root, "reports", "stale-task-rescuer.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/stale-rescue", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "STALE-RESCUE",
+		"--worktree", worker,
+		"--branch", "codex/stale-rescue",
+		"--base-commit", base,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ledgerData, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledgerData.Tasks[0].LastObservation["at"] = time.Now().Add(-45 * time.Minute).Format(time.RFC3339)
+	ledgerData.Tasks[0].LastObservation["status"] = "stale-needs-inspection"
+	ledgerData.Tasks[0].History = append(ledgerData.Tasks[0].History, map[string]string{
+		"at":     time.Now().Add(-45 * time.Minute).Format(time.RFC3339),
+		"type":   "observe",
+		"status": "stale-needs-inspection",
+		"note":   "stale",
+	})
+	if err := saveLedger(ledger, &ledgerData); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "feature.txt"), []byte("feature\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "feature.txt")
+	git(t, worker, "commit", "-q", "-m", "feature")
+
+	if err := cmdRunRoutine([]string{"stale-task-rescuer", "--ledger", ledger, "--task-id", "STALE-RESCUE", "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RoutineRunReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.RoutineID != "stale-task-rescuer" || report.TaskID != "STALE-RESCUE" || report.Status != "passed" {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	joined := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{"Last observation:", "Task history:", "git log --oneline -3", "git diff --name-status", "A\tfeature.txt"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, joined)
+		}
+	}
+	if !strings.Contains(report.NextSuggestedAction, "orchestrator review") {
+		t.Fatalf("expected review next action, got %q", report.NextSuggestedAction)
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
+		t.Fatalf("expected only local evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunStaleTaskRescuerRoutineFailsOnDirtyWorktree(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/dirty-rescue", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "DIRTY-RESCUE",
+		"--worktree", worker,
+		"--branch", "codex/dirty-rescue",
+		"--base-commit", base,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "dirty.txt"), []byte("dirty\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report, err := runStaleTaskRescuerRoutine(ledger, "DIRTY-RESCUE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "failed" {
+		t.Fatalf("expected failed dirty report, got %#v", report)
+	}
+	joined := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{"uncommitted changes", "git ls-files --others --exclude-standard", "dirty.txt"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected dirty evidence %q in:\n%s", want, joined)
+		}
+	}
+	if !strings.Contains(report.NextSuggestedAction, "same-task takeover") {
+		t.Fatalf("expected same-task rescue next action, got %q", report.NextSuggestedAction)
+	}
+}
+
+func TestRunStaleTaskRescuerRoutineBlockedOnMissingBaseCommit(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/no-base", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "NO-BASE",
+		"--worktree", worker,
+		"--branch", "codex/no-base",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ledgerData, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledgerData.Tasks[0].BaseCommit = ""
+	if err := saveLedger(ledger, &ledgerData); err != nil {
+		t.Fatal(err)
+	}
+	report, err := runStaleTaskRescuerRoutine(ledger, "NO-BASE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "blocked" || report.BlockedReason != "task baseCommit is missing" {
+		t.Fatalf("expected blocked missing-base report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "no comparable baseCommit") {
+		t.Fatalf("expected baseCommit blocked evidence, got %#v", report.Evidence)
+	}
+}
+
 func TestRecordRoutineRunFromJSONReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

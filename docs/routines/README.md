@@ -10,10 +10,11 @@ codex-orchestrator validate-routines --dir routines
 codex-orchestrator validate-routines --dir routines --json
 ```
 
-It can also run the first conservative routine MVP:
+It can also run the conservative routine MVPs:
 
 ```bash
 codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
+codex-orchestrator run-routine stale-task-rescuer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
 codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ```
 
@@ -25,6 +26,18 @@ after `baseCommit`, records `git diff --name-status baseCommit..HEAD`, and runs
 clean worktrees, run task-specific tests, or claim runtime proof. Its report
 uses `local` evidence only unless a future routine actually observes another
 surface.
+
+`run-routine stale-task-rescuer` is also read-only against the task worktree. It
+loads the ledger task by id, records ledger status, last observation, and recent
+task history, verifies worktree existence and expected branch, captures `git
+status --short --branch` and `git log --oneline -3`, and classifies stale
+rescue readiness conservatively. Clean worktrees with commits after
+`baseCommit` pass for orchestrator review of the committed diff. Useful
+uncommitted work fails with local evidence and a same-worker or same-task
+takeover recommendation. Missing worktrees, branch mismatches, missing
+`baseCommit`, and git inspection failures block. It does not update ledger
+status, stage, commit, merge, clean, dispatch, or claim direct/proxy runtime
+proof; this MVP emits only `local` or `blocked` evidence.
 
 Routine specs live in [`../../routines`](../../routines). They are JSON so the
 Go helper can validate them without a Python, YAML, or Node dependency.
