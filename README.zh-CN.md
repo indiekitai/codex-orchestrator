@@ -128,6 +128,10 @@ codex-orchestrator init
 `.codex-orchestrator/ledger.json`，并写出 heartbeat report，让新的统领
 session 能从 repo/ledger truth 恢复现场。
 
+如果是第一次试用，建议先按
+[docs/beta-usability-package.md](docs/beta-usability-package.md) 的可丢弃仓库
+路径跑一遍，再用于真实项目。
+
 ## 📋 使用示例
 
 **目标**：构建一套包含 4 个主要组件的 REST API。
@@ -182,6 +186,9 @@ V2 持久化状态层见
 [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)：持久 ledger 格式和保守 heartbeat helper。
 V2.5 routine contract 见 [docs/routines/README.md](docs/routines/README.md)，
 feedback-loop harness map 见 [docs/routines/harness-map.md](docs/routines/harness-map.md)。
+外部用户从安装到安全本地 demo 的试用路径见
+[docs/beta-usability-package.md](docs/beta-usability-package.md)。发布文案草稿见
+[docs/beta-release-notes-draft.md](docs/beta-release-notes-draft.md)。
 Loop Engineering 对齐调研见
 [docs/research/loop-engineering-alignment.md](docs/research/loop-engineering-alignment.md)。
 完整 v2-v5 演进路线见 [docs/roadmap.md](docs/roadmap.md)。
@@ -352,6 +359,8 @@ codex-orchestrator/
 │       ├── main.go       # Go helper CLI
 │       └── main_test.go  # CLI 状态机测试
 ├── docs/
+│   ├── beta-release-notes-draft.md
+│   ├── beta-usability-package.md
 │   ├── roadmap.md
 │   ├── routines/
 │   │   ├── README.md

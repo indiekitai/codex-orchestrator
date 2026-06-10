@@ -327,22 +327,24 @@ codex-orchestrator rules propose
 
 ## 近期优先级
 
-最现实的短期路线：
+最现实的短期路线已经从“继续补小 routine”切换为 **beta usability
+package**：
 
 1. 保持 v1 skill 简洁可安装。
-2. 把 v2 helper CLI 做完整：
-   - `init`
-   - `observe`
-   - `status`
-   - `record-task`
-   - `append-event`
-3. 加测试和 fixture。
-4. 写 App-first 使用文档：
-   - “用户只开 Codex App 统领 session”
-   - “统领 session 调用 helper CLI”
-   - “helper CLI 不替代 App 派 session”
-5. 再做 1 个 routine：
-   - stale task rescuer 最适合，因为它已经来自真实痛点。
+2. 把外部用户从安装到安全本地 demo 的路径集中到
+   `docs/beta-usability-package.md`。
+3. 准备 `v0.3.0-beta.1` release notes 草稿：
+   `docs/beta-release-notes-draft.md`。
+4. 跑一次真实 Codex App demo proof，补齐 helper-only smoke 没覆盖的 App
+   dispatch / review / merge / push / cleanup 证据。
+5. 只有当某个 routine 能移除 beta blocker 或证明常见真实工作流时，才继续补
+   routine；不要为了数量继续堆小切片。
+
+之后再选择：
+
+- distribution package：Homebrew tap、shell completion、release notes；
+- daemon prototype：只读 watcher，运行 `observe` 并写报告，不创建 session 或改 git；
+- deeper policy/eval：把真实失败案例沉淀为 eval fixture。
 
 ## 成功标准
 
