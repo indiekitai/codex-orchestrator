@@ -97,6 +97,7 @@ type ObserveSummary struct {
 	ReviewPressure     ReviewPressure   `json:"reviewPressure"`
 	Integration        IntegrationState `json:"integration"`
 	Observations       []Observation    `json:"observations"`
+	RecentRoutineRuns  []RoutineRun     `json:"recentRoutineRuns,omitempty"`
 }
 
 type RoutineSpec struct {
@@ -138,6 +139,17 @@ type RoutineValidationResult struct {
 
 type RoutineRun struct {
 	At                  string              `json:"at"`
+	RoutineID           string              `json:"routineId"`
+	TaskID              string              `json:"taskId,omitempty"`
+	Status              string              `json:"status"`
+	Evidence            map[string][]string `json:"evidence"`
+	ActionsTaken        []string            `json:"actionsTaken"`
+	NeedsHuman          bool                `json:"needsHuman"`
+	BlockedReason       string              `json:"blockedReason,omitempty"`
+	NextSuggestedAction string              `json:"nextSuggestedAction"`
+}
+
+type RoutineRunReport struct {
 	RoutineID           string              `json:"routineId"`
 	TaskID              string              `json:"taskId,omitempty"`
 	Status              string              `json:"status"`
@@ -197,6 +209,7 @@ Usage:
   codex-orchestrator status [--ledger PATH] [--json]
   codex-orchestrator validate-routines [--dir routines] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
+  codex-orchestrator record-routine-run --report-json PATH
 
 This helper is conservative: it does not create Codex sessions, merge, push,
 delete branches, or clean worktrees.`)
@@ -535,11 +548,13 @@ func cmdStatus(args []string) error {
 		counts[status]++
 	}
 	result := map[string]any{
-		"ledger":        *ledgerPath,
-		"projectRoot":   ledger.ProjectRoot,
-		"defaultBranch": ledger.DefaultBranch,
-		"taskCount":     len(ledger.Tasks),
-		"counts":        counts,
+		"ledger":            *ledgerPath,
+		"projectRoot":       ledger.ProjectRoot,
+		"defaultBranch":     ledger.DefaultBranch,
+		"taskCount":         len(ledger.Tasks),
+		"routineRunCount":   len(ledger.RoutineRuns),
+		"counts":            counts,
+		"recentRoutineRuns": recentRoutineRuns(ledger.RoutineRuns, 5),
 	}
 	if *jsonOut {
 		return printJSON(result)
@@ -547,6 +562,7 @@ func cmdStatus(args []string) error {
 	fmt.Printf("Ledger: %s\n", *ledgerPath)
 	fmt.Printf("Project: %s default=%s\n", ledger.ProjectRoot, ledger.DefaultBranch)
 	fmt.Printf("Tasks: %d\n", len(ledger.Tasks))
+	fmt.Printf("Routine runs: %d\n", len(ledger.RoutineRuns))
 	keys := make([]string, 0, len(counts))
 	for key := range counts {
 		keys = append(keys, key)
@@ -554,6 +570,19 @@ func cmdStatus(args []string) error {
 	sort.Strings(keys)
 	for _, key := range keys {
 		fmt.Printf("- %s: %d\n", key, counts[key])
+	}
+	if recent := recentRoutineRuns(ledger.RoutineRuns, 5); len(recent) > 0 {
+		fmt.Println("Recent routine runs:")
+		for _, run := range recent {
+			fmt.Printf("- %s %s", run.RoutineID, run.Status)
+			if run.TaskID != "" {
+				fmt.Printf(" task=%s", run.TaskID)
+			}
+			if run.NextSuggestedAction != "" {
+				fmt.Printf(" next=%q", run.NextSuggestedAction)
+			}
+			fmt.Println()
+		}
 	}
 	return nil
 }
@@ -583,6 +612,7 @@ func cmdRecordRoutineRun(args []string) error {
 	fs := flag.NewFlagSet("record-routine-run", flag.ExitOnError)
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
 	eventsPath := fs.String("events", "", "events path")
+	reportJSON := fs.String("report-json", "", "routine report JSON path")
 	routineID := fs.String("routine", "", "routine id")
 	taskID := fs.String("task-id", "", "optional task id")
 	status := fs.String("status", "", "routine status: passed, failed, or blocked")
@@ -602,47 +632,51 @@ func cmdRecordRoutineRun(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if strings.TrimSpace(*routineID) == "" {
-		return errors.New("record-routine-run requires --routine")
+	report := RoutineRunReport{}
+	if *reportJSON != "" {
+		loaded, err := loadRoutineRunReport(*reportJSON)
+		if err != nil {
+			return err
+		}
+		report = loaded
+	} else {
+		report = RoutineRunReport{
+			RoutineID: *routineID,
+			TaskID:    *taskID,
+			Status:    *status,
+			Evidence: map[string][]string{
+				"direct":  []string(directEvidence),
+				"proxy":   []string(proxyEvidence),
+				"local":   []string(localEvidence),
+				"blocked": []string(blockedEvidence),
+			},
+			ActionsTaken:        []string(actionsTaken),
+			NeedsHuman:          *needsHuman,
+			BlockedReason:       *blockedReason,
+			NextSuggestedAction: *nextSuggestedAction,
+		}
 	}
-	if !containsString([]string{"passed", "failed", "blocked"}, *status) {
-		return errors.New("record-routine-run --status must be passed, failed, or blocked")
-	}
-	if len(directEvidence)+len(proxyEvidence)+len(localEvidence)+len(blockedEvidence) == 0 {
-		return errors.New("record-routine-run requires at least one evidence item")
-	}
-	if len(actionsTaken) == 0 {
-		return errors.New("record-routine-run requires at least one --action")
-	}
-	if strings.TrimSpace(*nextSuggestedAction) == "" {
-		return errors.New("record-routine-run requires --next")
-	}
-	if *status == "blocked" && strings.TrimSpace(*blockedReason) == "" {
-		return errors.New("blocked routine run requires --blocked-reason")
+	if err := validateRoutineRunReport(report); err != nil {
+		return err
 	}
 	ledger, err := loadLedger(*ledgerPath)
 	if err != nil {
 		return err
 	}
-	if *taskID != "" && findTaskIndex(ledger.Tasks, *taskID) < 0 {
-		return fmt.Errorf("task not found: %s", *taskID)
+	if report.TaskID != "" && findTaskIndex(ledger.Tasks, report.TaskID) < 0 {
+		return fmt.Errorf("task not found: %s", report.TaskID)
 	}
 	now := nowISO()
 	run := RoutineRun{
-		At:        now,
-		RoutineID: *routineID,
-		TaskID:    *taskID,
-		Status:    *status,
-		Evidence: map[string][]string{
-			"direct":  []string(directEvidence),
-			"proxy":   []string(proxyEvidence),
-			"local":   []string(localEvidence),
-			"blocked": []string(blockedEvidence),
-		},
-		ActionsTaken:        []string(actionsTaken),
-		NeedsHuman:          *needsHuman,
-		BlockedReason:       *blockedReason,
-		NextSuggestedAction: *nextSuggestedAction,
+		At:                  now,
+		RoutineID:           report.RoutineID,
+		TaskID:              report.TaskID,
+		Status:              report.Status,
+		Evidence:            normalizedEvidence(report.Evidence),
+		ActionsTaken:        report.ActionsTaken,
+		NeedsHuman:          report.NeedsHuman,
+		BlockedReason:       report.BlockedReason,
+		NextSuggestedAction: report.NextSuggestedAction,
 	}
 	ledger.RoutineRuns = append(ledger.RoutineRuns, run)
 	if err := saveLedger(*ledgerPath, &ledger); err != nil {
@@ -655,16 +689,16 @@ func cmdRecordRoutineRun(args []string) error {
 	if err := appendEvent(resolvedEvents, map[string]any{
 		"at":                  now,
 		"type":                "routine-run",
-		"routineId":           *routineID,
-		"taskId":              emptyToNil(*taskID),
-		"status":              *status,
-		"needsHuman":          *needsHuman,
-		"blockedReason":       emptyToNil(*blockedReason),
-		"nextSuggestedAction": *nextSuggestedAction,
+		"routineId":           report.RoutineID,
+		"taskId":              emptyToNil(report.TaskID),
+		"status":              report.Status,
+		"needsHuman":          report.NeedsHuman,
+		"blockedReason":       emptyToNil(report.BlockedReason),
+		"nextSuggestedAction": report.NextSuggestedAction,
 	}); err != nil {
 		return err
 	}
-	fmt.Printf("Recorded routine run: %s %s\n", *routineID, *status)
+	fmt.Printf("Recorded routine run: %s %s\n", report.RoutineID, report.Status)
 	return nil
 }
 
@@ -697,6 +731,7 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		ReviewPressure:     pressure,
 		Integration:        integration,
 		Observations:       observations,
+		RecentRoutineRuns:  recentRoutineRuns(ledger.RoutineRuns, 5),
 	}, nil
 }
 
@@ -850,6 +885,78 @@ func findTaskIndex(tasks []Task, id string) int {
 		}
 	}
 	return -1
+}
+
+func loadRoutineRunReport(path string) (RoutineRunReport, error) {
+	var report RoutineRunReport
+	data, err := os.ReadFile(expandPath(path))
+	if err != nil {
+		return report, err
+	}
+	if err := json.Unmarshal(data, &report); err != nil {
+		return report, err
+	}
+	return report, nil
+}
+
+func validateRoutineRunReport(report RoutineRunReport) error {
+	if strings.TrimSpace(report.RoutineID) == "" {
+		return errors.New("routine report requires routineId")
+	}
+	if !containsString([]string{"passed", "failed", "blocked"}, report.Status) {
+		return errors.New("routine report status must be passed, failed, or blocked")
+	}
+	evidence := normalizedEvidence(report.Evidence)
+	if len(evidence["direct"])+len(evidence["proxy"])+len(evidence["local"])+len(evidence["blocked"]) == 0 {
+		return errors.New("routine report requires at least one evidence item")
+	}
+	if len(report.ActionsTaken) == 0 {
+		return errors.New("routine report requires at least one actionsTaken item")
+	}
+	for index, action := range report.ActionsTaken {
+		if strings.TrimSpace(action) == "" {
+			return fmt.Errorf("routine report actionsTaken[%d] must not be empty", index)
+		}
+	}
+	if strings.TrimSpace(report.NextSuggestedAction) == "" {
+		return errors.New("routine report requires nextSuggestedAction")
+	}
+	if report.Status == "blocked" && strings.TrimSpace(report.BlockedReason) == "" {
+		return errors.New("blocked routine report requires blockedReason")
+	}
+	return nil
+}
+
+func normalizedEvidence(evidence map[string][]string) map[string][]string {
+	normalized := map[string][]string{
+		"direct":  {},
+		"proxy":   {},
+		"local":   {},
+		"blocked": {},
+	}
+	for _, key := range []string{"direct", "proxy", "local", "blocked"} {
+		for _, item := range evidence[key] {
+			if strings.TrimSpace(item) != "" {
+				normalized[key] = append(normalized[key], item)
+			}
+		}
+	}
+	return normalized
+}
+
+func recentRoutineRuns(runs []RoutineRun, limit int) []RoutineRun {
+	if limit <= 0 || len(runs) == 0 {
+		return nil
+	}
+	start := len(runs) - limit
+	if start < 0 {
+		start = 0
+	}
+	recent := append([]RoutineRun(nil), runs[start:]...)
+	for left, right := 0, len(recent)-1; left < right; left, right = left+1, right-1 {
+		recent[left], recent[right] = recent[right], recent[left]
+	}
+	return recent
 }
 
 func inspectIntegration(projectRoot string) IntegrationState {
@@ -1027,12 +1134,28 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "\n## Tasks\n\n")
 	if len(summary.Observations) == 0 {
 		fmt.Fprintf(&b, "- No tasks recorded.\n")
-		return b.String()
+	} else {
+		for _, item := range summary.Observations {
+			fmt.Fprintf(&b, "- `%s`: `%s` - %s\n", item.ID, item.Status, item.Action)
+			if item.Note != "" {
+				fmt.Fprintf(&b, "  - note: %s\n", item.Note)
+			}
+		}
 	}
-	for _, item := range summary.Observations {
-		fmt.Fprintf(&b, "- `%s`: `%s` - %s\n", item.ID, item.Status, item.Action)
-		if item.Note != "" {
-			fmt.Fprintf(&b, "  - note: %s\n", item.Note)
+	if len(summary.RecentRoutineRuns) > 0 {
+		fmt.Fprintf(&b, "\n## Recent Routine Runs\n\n")
+		for _, run := range summary.RecentRoutineRuns {
+			fmt.Fprintf(&b, "- `%s`: `%s`", run.RoutineID, run.Status)
+			if run.TaskID != "" {
+				fmt.Fprintf(&b, " task=`%s`", run.TaskID)
+			}
+			if run.NextSuggestedAction != "" {
+				fmt.Fprintf(&b, " - next: %s", run.NextSuggestedAction)
+			}
+			fmt.Fprintf(&b, "\n")
+			if run.BlockedReason != "" {
+				fmt.Fprintf(&b, "  - blockedReason: %s\n", run.BlockedReason)
+			}
 		}
 	}
 	return b.String()
@@ -1090,6 +1213,23 @@ func printObservations(summary ObserveSummary) {
 			fmt.Println("  git:")
 			for _, line := range strings.Split(item.GitStatus, "\n") {
 				fmt.Printf("    %s\n", line)
+			}
+		}
+	}
+	if len(summary.RecentRoutineRuns) > 0 {
+		fmt.Println()
+		fmt.Println("Recent routine runs:")
+		for _, run := range summary.RecentRoutineRuns {
+			fmt.Printf("- %s: %s", run.RoutineID, run.Status)
+			if run.TaskID != "" {
+				fmt.Printf(" task=%s", run.TaskID)
+			}
+			if run.NextSuggestedAction != "" {
+				fmt.Printf(" next=%q", run.NextSuggestedAction)
+			}
+			fmt.Println()
+			if run.BlockedReason != "" {
+				fmt.Printf("  blockedReason: %s\n", run.BlockedReason)
 			}
 		}
 	}

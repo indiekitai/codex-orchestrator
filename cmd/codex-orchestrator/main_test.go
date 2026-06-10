@@ -408,6 +408,66 @@ func TestRecordRoutineRun(t *testing.T) {
 	if !strings.Contains(string(events), `"type":"routine-run"`) {
 		t.Fatalf("expected routine-run event, got %s", string(events))
 	}
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summary.RecentRoutineRuns) != 1 || summary.RecentRoutineRuns[0].RoutineID != "pr-reviewer" {
+		t.Fatalf("expected recent routine run in observe summary, got %#v", summary.RecentRoutineRuns)
+	}
+	rendered := renderSummary(summary)
+	if !strings.Contains(rendered, "Recent Routine Runs") {
+		t.Fatalf("expected rendered summary to include routine runs:\n%s", rendered)
+	}
+}
+
+func TestRecordRoutineRunFromJSONReport(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	reportPath := filepath.Join(root, "routine-report.json")
+	report := RoutineRunReport{
+		RoutineID: "api-proof",
+		Status:    "blocked",
+		Evidence: map[string][]string{
+			"blocked": {"auth unavailable"},
+		},
+		ActionsTaken:        []string{"checked endpoint contract"},
+		BlockedReason:       "missing token",
+		NextSuggestedAction: "ask human for token",
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(reportPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordRoutineRun([]string{"--ledger", ledger, "--report-json", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.RoutineRuns) != 1 {
+		t.Fatalf("expected one routine run, got %d", len(updated.RoutineRuns))
+	}
+	run := updated.RoutineRuns[0]
+	if run.RoutineID != "api-proof" || run.Status != "blocked" || run.BlockedReason != "missing token" {
+		t.Fatalf("unexpected routine run from report: %#v", run)
+	}
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := renderSummary(summary)
+	if !strings.Contains(rendered, "No tasks recorded") || !strings.Contains(rendered, "Recent Routine Runs") {
+		t.Fatalf("expected empty-task summary to still include recent routine runs:\n%s", rendered)
+	}
 }
 
 func TestRecordRoutineRunValidation(t *testing.T) {

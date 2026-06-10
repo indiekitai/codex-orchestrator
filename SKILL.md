@@ -125,6 +125,12 @@ sessions can resume from ledger truth:
 codex-orchestrator record-routine-run --routine pr-reviewer --task-id TASK --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge task branch"
 ```
 
+If the routine produced a JSON report, prefer recording the report directly:
+
+```bash
+codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
+```
+
 For blocked routine runs, include `--blocked-reason` and at least one
 `--evidence-blocked` item. Keep `direct`, `proxy`, `local`, and `blocked`
 evidence separate.

@@ -197,6 +197,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
+./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
 
 JSON heartbeat report 会包含 `overallStatus`、按状态聚合的 `counts`，以及
@@ -275,7 +276,10 @@ codex-orchestrator/
 │   ├── pr-reviewer.json
 │   └── stale-task-rescuer.json
 ├── examples/
-│   └── ledger.example.json
+│   ├── ledger.example.json
+│   └── routine-reports/
+│       ├── api-proof.blocked.json
+│       └── pr-reviewer.passed.json
 ├── scripts/
 │   ├── install.sh
 │   └── ledger_heartbeat.py

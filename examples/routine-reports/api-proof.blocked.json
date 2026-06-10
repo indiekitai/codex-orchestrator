@@ -1,0 +1,21 @@
+{
+  "routineId": "api-proof",
+  "status": "blocked",
+  "evidence": {
+    "direct": [],
+    "proxy": [],
+    "local": [
+      "Endpoint contract and local route were inspected"
+    ],
+    "blocked": [
+      "No approved auth token was available for live API proof"
+    ]
+  },
+  "actionsTaken": [
+    "Checked the endpoint contract",
+    "Confirmed live request would require unavailable auth"
+  ],
+  "needsHuman": true,
+  "blockedReason": "Live API proof requires an approved token or fixture account.",
+  "nextSuggestedAction": "Ask the human for a safe test token or downgrade the claim to local-only proof."
+}

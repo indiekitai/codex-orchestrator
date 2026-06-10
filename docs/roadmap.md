@@ -158,7 +158,7 @@ Future daemon/UI
 
 ## v2.5：Verification routine foundation
 
-状态：alpha foundation。已经有 routine contract 目录、首批 JSON specs、harness map、Go helper 的 `validate-routines` 校验命令，以及 `record-routine-run` ledger 记录命令；还没有自动执行 routine 或后台 daemon。
+状态：alpha foundation。已经有 routine contract 目录、首批 JSON specs、harness map、Go helper 的 `validate-routines` 校验命令、`record-routine-run` ledger 记录命令、JSON report 输入和 heartbeat recent routine run 摘要；还没有自动执行 routine 或后台 daemon。
 
 原因：Loop Engineering 不只是调度任务。Claude Code 访谈和 feedback-loop
 engineering 都强调 agent 必须能运行产品、观察结果、修复并复测。否则
@@ -192,11 +192,13 @@ routines/
   log-proof.json
 cmd/codex-orchestrator validate-routines --dir routines
 cmd/codex-orchestrator record-routine-run --routine ... --status ...
+examples/routine-reports/
+  pr-reviewer.passed.json
+  api-proof.blocked.json
 ```
 
 剩余：
 
-- routine report examples；
 - per-routine runtime budget / review budget 与 heartbeat 更深集成。
 
 ## v3：Routine library

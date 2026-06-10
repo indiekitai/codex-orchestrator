@@ -210,6 +210,18 @@ For blocked runs, include `--blocked-reason` and put the missing proof under
 `--evidence-blocked`. The command records both `routineRuns[]` in the ledger and
 a `routine-run` event in `events.jsonl`.
 
+For richer output, write a report file that matches the routine output schema
+and record it directly:
+
+```bash
+codex-orchestrator record-routine-run \
+  --report-json examples/routine-reports/pr-reviewer.passed.json
+```
+
+`status`, `observe --json`, and heartbeat reports include the most recent
+routine runs so a fresh orchestrator can see the last reviewer/fixer/proof
+outcome without scanning `events.jsonl` manually.
+
 ## Recovery From A Fresh Session
 
 When a long orchestrator thread gets stale or compressed:

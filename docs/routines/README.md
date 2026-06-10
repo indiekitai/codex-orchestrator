@@ -33,6 +33,13 @@ Every routine must produce a report with these fields:
 }
 ```
 
+Example reports live in [`../../examples/routine-reports`](../../examples/routine-reports)
+and can be recorded with:
+
+```bash
+codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
+```
+
 Evidence labels are intentionally strict:
 
 - `direct`: the routine observed the real target surface itself.

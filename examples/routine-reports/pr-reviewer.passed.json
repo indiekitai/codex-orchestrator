@@ -1,0 +1,22 @@
+{
+  "routineId": "pr-reviewer",
+  "taskId": "API-AUTH-LOCAL",
+  "status": "passed",
+  "evidence": {
+    "direct": [],
+    "proxy": [],
+    "local": [
+      "git diff --check passed",
+      "go test ./... passed"
+    ],
+    "blocked": []
+  },
+  "actionsTaken": [
+    "Reviewed diff and allowed write set",
+    "Checked forbidden path list",
+    "Ran local verification gate"
+  ],
+  "needsHuman": false,
+  "blockedReason": "",
+  "nextSuggestedAction": "Merge the task branch if the integration checkout is clean."
+}
