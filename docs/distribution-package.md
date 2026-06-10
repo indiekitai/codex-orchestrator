@@ -2,23 +2,27 @@
 
 This document is the beta distribution path for external users. It keeps the
 human-facing setup simple: Codex App remains the primary entrypoint, while the
-Go helper can be installed from source, release assets, or a Homebrew formula.
+Go helper can be installed from source today. Release assets and Homebrew tap
+installation are tracked separately because they depend on GitHub Release and
+tap publishing permissions.
 
 ## Status
 
-Current package: `v0.3.0-beta.2`
+Current package: `v0.3.0-beta.2` source/tag smoke
 
 Implemented:
 
-- Cross-platform GitHub release assets for macOS, Linux, and Windows.
+- `v0.3.0-beta.2` git tag source install path.
 - `scripts/install.sh` source install path for users with Go.
 - Shell completion generation for bash, zsh, and fish.
 - Homebrew formula draft at `Formula/codex-orchestrator.rb` that builds from
   the release tag.
 - Release verifier routine for local tag and proxy GitHub release metadata.
 
-Not yet implemented:
+Blocked or not yet implemented:
 
+- GitHub Release publication for `v0.3.0-beta.2` assets is blocked by release
+  API authentication in the current environment.
 - Dedicated `homebrew-tap` repository.
 - npm wrapper.
 - Background daemon.
@@ -31,26 +35,21 @@ The human should not need to learn the helper CLI before the dry run.
 
 ## Install From Release Asset
 
-Download the asset for your OS and architecture from:
+The intended release-asset path is:
 
 https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.0-beta.2
 
-Example for macOS arm64:
-
-```bash
-curl -L -o /tmp/codex-orchestrator.tar.gz \
-  https://github.com/indiekitai/codex-orchestrator/releases/download/v0.3.0-beta.2/codex-orchestrator_darwin_arm64.tar.gz
-mkdir -p /tmp/codex-orchestrator
-tar -xzf /tmp/codex-orchestrator.tar.gz -C /tmp/codex-orchestrator
-install -m 0755 /tmp/codex-orchestrator/codex-orchestrator_darwin_arm64 ~/.local/bin/codex-orchestrator
-codex-orchestrator --help
-```
+This path is currently blocked for `v0.3.0-beta.2`: the tag exists and the
+GitHub Actions build matrix passed, but the publish step could not create the
+GitHub Release because the release API returned `401 Requires authentication`.
+Use source install until the release is published.
 
 ## Install From Source
 
 ```bash
 git clone https://github.com/indiekitai/codex-orchestrator.git
 cd codex-orchestrator
+git checkout v0.3.0-beta.2
 scripts/install.sh
 codex-orchestrator --help
 ```
@@ -97,11 +96,13 @@ This repository includes a formula draft:
 Formula/codex-orchestrator.rb
 ```
 
-Users can test it directly from a checkout:
+Homebrew 5 rejects arbitrary local formula files outside a tap. Use the formula
+as a tap-ready draft, not as a one-command local install:
 
 ```bash
-brew install ./Formula/codex-orchestrator.rb
-codex-orchestrator --help
+brew tap-new indiekitai/codex-orchestrator-tap
+cp Formula/codex-orchestrator.rb "$(brew --repository indiekitai/codex-orchestrator-tap)/Formula/"
+brew install indiekitai/codex-orchestrator-tap/codex-orchestrator
 ```
 
 The formula builds from the release tag and installs completions from the built
@@ -119,7 +120,8 @@ docs/beta-release-notes-draft.md
 
 If GitHub API editing is blocked, the release can still be valid when the tag,
 workflow, prerelease flag, and assets verify. Record the release-body failure as
-`blocked` evidence instead of treating it as a binary release failure.
+`blocked` or `failed` evidence instead of treating it as source/tag install
+failure.
 
 ## Verification
 
@@ -140,8 +142,10 @@ Evidence labels:
 - `local`: source build, completion generation, formula syntax inspection, local
   tag inspection.
 - `proxy`: GitHub Release metadata and asset names from `gh`.
-- `blocked`: unavailable Homebrew tap, failed GitHub API edit, missing release
-  metadata, or network/auth failures.
+- `failed`: local tag exists but the GitHub Release is missing or missing
+  expected assets.
+- `blocked`: unavailable Homebrew tap, GitHub Release API auth/network failures,
+  or metadata that cannot be inspected.
 
 Do not claim direct production, daemon, deployed runtime, payment, hardware, or
 Codex App session-launch proof from this distribution package.

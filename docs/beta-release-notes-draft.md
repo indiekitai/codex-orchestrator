@@ -1,9 +1,9 @@
 # v0.3.0-beta.2 Release Notes Draft
 
 `v0.3.0-beta.2` should be the first release positioned for external users to
-try, not just inspect. It should package the current App-first orchestration
-skill, durable helper, routine contracts, and read-only routine runners behind a
-clear quickstart.
+try from source/tag, not just inspect. It should package the current App-first
+orchestration skill, durable helper, routine contracts, and read-only routine
+runners behind a clear quickstart.
 
 ## Highlights
 
@@ -21,7 +21,8 @@ clear quickstart.
   - `roadmap-next-task-suggester`
 - Budget visibility in ledger, observe, and heartbeat reports.
 - Conservative evidence labels: `direct`, `proxy`, `local`, `blocked`.
-- Cross-platform release binary workflow.
+- Cross-platform release binary workflow, with release publication blocked in
+  the current environment until GitHub Release API permissions are fixed.
 - Shell completion generation for bash, zsh, and fish.
 - Beta usability guide for first-time users.
 
@@ -35,9 +36,9 @@ clear quickstart.
 - Documentation now separates the Codex App orchestrator layer from the local
   helper layer.
 - The roadmap explicitly avoids claiming this is a daemon or full agent OS.
-- The distribution package now documents source install, release-asset install,
-  shell completions, and a Homebrew formula draft that builds from the release
-  tag.
+- The distribution package now documents source/tag install, shell completions,
+  blocked release-asset publication, and a tap-ready Homebrew formula draft that
+  builds from the release tag.
 
 ## Install
 
@@ -57,9 +58,10 @@ Start with a dry run and do not push, deploy, delete worktrees, or make
 destructive changes unless I explicitly approve.
 ```
 
-The CLI can still be installed manually or from release assets, but it is meant
-to be a tool the Codex App orchestrator uses, not a prerequisite the human must
-learn before trying the workflow.
+The CLI can still be installed manually from source/tag, but it is meant to be
+a tool the Codex App orchestrator uses, not a prerequisite the human must learn
+before trying the workflow. Release assets should be used only after the GitHub
+Release publication blocker is resolved.
 
 ## Helper Smoke
 
@@ -91,7 +93,9 @@ This release does not:
 - `codex-orchestrator validate-routines --dir routines`
 - `codex-orchestrator run-routine docs-drift-checker --repo . --json`
 - `codex-orchestrator run-routine evidence-label-auditor --repo . --json`
-- GitHub release assets uploaded for darwin/linux/windows matrix.
+- GitHub Actions build matrix passed for darwin/linux/windows.
+- GitHub Release publication is blocked until release API authentication is
+  fixed.
 
 ## Suggested Announcement
 

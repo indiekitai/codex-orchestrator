@@ -191,7 +191,9 @@ Use this checklist before `v0.3.0-beta.2`:
 - README quickstart works from a clean clone.
 - Chinese README matches the English quickstart at the workflow level.
 - `SKILL.md` is synced with the release.
-- GitHub release assets exist for the supported OS/arch matrix.
+- GitHub Actions build matrix passes for the supported OS/arch matrix.
+- GitHub Release assets exist only after release API authentication is fixed;
+  until then, source/tag install is the verified beta path.
 - Known limitations are visible before users try the tool.
 
 ## Known Beta Limitations
