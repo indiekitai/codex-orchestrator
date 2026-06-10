@@ -199,6 +199,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
 ./codex-orchestrator run-routine stale-task-rescuer --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
+./codex-orchestrator run-routine ci-fixer --task-id TASK --write-report /tmp/ci-fixer-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -229,6 +230,17 @@ worktree：读取 ledger task、确认 worktree 和 branch 状态、记录
 `failed` 并建议回到同一个 worker 或同任务 takeover；worktree 缺失、分支不匹配、
 缺少 `baseCommit` 或 git 检查失败时返回 `blocked`。它不会修改 ledger status、
 stage、commit、merge、清理 worktree、派发新任务，也不会把证据说成
+direct/proxy runtime proof；这个 MVP 只使用 `local` 或 `blocked` 证据。
+
+`run-routine ci-fixer` 是第三个可运行 routine MVP。虽然名字里有 fixer，
+它不会自动改代码或修 CI；它是只读的 CI/local gate 分类器。它按 id 读取
+ledger task，确认任务 worktree 和预期 branch，拒绝 dirty worktree，比较
+`baseCommit..HEAD`，记录已提交文件列表，并只在任务 worktree 里运行 ledger
+task 已记录的 gate 命令，且带本地超时。gate 通过且 `baseCommit` 之后有提交时
+返回 `passed`，下一步是统领 review/merge；dirty worktree 或 gate 失败时返回
+`failed`，建议回到同一个 worker 或同任务 takeover；缺少 gate、缺少
+`baseCommit`、分支不匹配或 git 检查失败时返回 `blocked`。它不会 stage、
+commit、merge、push、清理 worktree、修改 ledger status，也不会把证据说成
 direct/proxy runtime proof；这个 MVP 只使用 `local` 或 `blocked` 证据。
 
 一个 delegated task 完成 merge、push、release、cleanup，并不等于整个 loop

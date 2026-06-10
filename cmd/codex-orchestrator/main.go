@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -212,6 +213,7 @@ Usage:
   codex-orchestrator validate-routines [--dir routines] [--json]
   codex-orchestrator run-routine pr-reviewer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine stale-task-rescuer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
+  codex-orchestrator run-routine ci-fixer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
   codex-orchestrator record-routine-run --report-json PATH
 
@@ -621,6 +623,8 @@ func cmdRunRoutine(args []string) error {
 		return cmdRunPRReviewerRoutine(args[1:])
 	case "stale-task-rescuer":
 		return cmdRunStaleTaskRescuerRoutine(args[1:])
+	case "ci-fixer":
+		return cmdRunCIFixerRoutine(args[1:])
 	default:
 		return fmt.Errorf("unsupported routine %q", args[0])
 	}
@@ -968,6 +972,211 @@ func runStaleTaskRescuerRoutine(ledgerPath string, taskID string) (RoutineRunRep
 	return report, nil
 }
 
+func cmdRunCIFixerRoutine(args []string) error {
+	fs := flag.NewFlagSet("run-routine ci-fixer", flag.ExitOnError)
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	taskID := fs.String("task-id", "", "task id to inspect")
+	writeReport := fs.String("write-report", "", "write routine report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *taskID == "" {
+		return errors.New("run-routine ci-fixer requires --task-id")
+	}
+	report, err := runCIFixerRoutine(*ledgerPath, *taskID)
+	if err != nil {
+		return err
+	}
+	if err := validateRoutineRunReport(report); err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote routine report: %s\n", *writeReport)
+	return nil
+}
+
+func runCIFixerRoutine(ledgerPath string, taskID string) (RoutineRunReport, error) {
+	report := RoutineRunReport{
+		RoutineID: "ci-fixer",
+		TaskID:    taskID,
+		Status:    "blocked",
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Loaded ledger task record",
+		},
+		NeedsHuman:          false,
+		BlockedReason:       "",
+		NextSuggestedAction: "Fix the blocked ci-fixer precondition, then rerun the routine.",
+	}
+	ledger, err := loadLedger(ledgerPath)
+	if err != nil {
+		return report, err
+	}
+	taskIndex := findTaskIndex(ledger.Tasks, taskID)
+	if taskIndex < 0 {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Task not found in ledger: "+taskID)
+		report.BlockedReason = "task not found in ledger"
+		return report, nil
+	}
+	task := ledger.Tasks[taskIndex]
+	report.Evidence["local"] = append(report.Evidence["local"], "Task exists in ledger: "+task.ID)
+	gates := nonEmptyStrings(task.Gates)
+	if len(gates) > 0 {
+		report.Evidence["local"] = append(report.Evidence["local"], "Recorded task gates: "+strings.Join(gates, " && "))
+	} else {
+		report.Status = "blocked"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Task has no recorded gates for ci-fixer to run.")
+		report.BlockedReason = "task gates are missing"
+		report.NextSuggestedAction = "Record explicit local gate commands on the task before running ci-fixer."
+		return report, nil
+	}
+
+	if task.Worktree == "" {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Ledger task has no worktree path.")
+		report.ActionsTaken = append(report.ActionsTaken, "Checked task worktree path")
+		report.BlockedReason = "task worktree path is missing"
+		return report, nil
+	}
+	worktree := expandPath(task.Worktree)
+	if info, err := os.Stat(worktree); err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Worktree does not exist: %s", worktree))
+		report.ActionsTaken = append(report.ActionsTaken, "Checked task worktree path")
+		report.BlockedReason = "task worktree is missing"
+		return report, nil
+	} else if !info.IsDir() {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Worktree path is not a directory: %s", worktree))
+		report.ActionsTaken = append(report.ActionsTaken, "Checked task worktree path")
+		report.BlockedReason = "task worktree path is not a directory"
+		return report, nil
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Worktree exists: "+worktree)
+	report.ActionsTaken = append(report.ActionsTaken, "Inspected task worktree git state read-only")
+
+	statusOut, err := gitOutput(worktree, "status", "--short", "--branch")
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "git status --short --branch failed: "+err.Error())
+		report.BlockedReason = "could not inspect task worktree git status"
+		return report, nil
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "git status --short --branch:\n"+statusOut)
+
+	branch := currentBranch(statusOut)
+	if task.Branch != "" {
+		if branch == "" {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], "Expected branch "+task.Branch+", but current branch could not be determined.")
+			report.BlockedReason = "could not determine current branch"
+			return report, nil
+		}
+		if branch != task.Branch {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Expected branch %s, found %s.", task.Branch, branch))
+			report.BlockedReason = "task worktree branch does not match ledger branch"
+			return report, nil
+		}
+		report.Evidence["local"] = append(report.Evidence["local"], "Branch matches ledger branch: "+branch)
+	}
+
+	if hasDirtyChanges(statusOut) {
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], "Worktree has uncommitted changes; ci-fixer is read-only and did not stage, commit, or modify them.")
+		addOptionalGitEvidence(&report, worktree, "diff", "--name-status")
+		addOptionalGitEvidence(&report, worktree, "diff", "--cached", "--name-status")
+		addOptionalGitEvidence(&report, worktree, "ls-files", "--others", "--exclude-standard")
+		report.ActionsTaken = append(report.ActionsTaken, "Captured local uncommitted change evidence without modifying the worktree")
+		report.NextSuggestedAction = "Return to the same worker or perform a same-task takeover to commit or clean the task worktree before CI fix review."
+		return report, nil
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Worktree is clean.")
+
+	base := strings.TrimSpace(task.BaseCommit)
+	if base == "" || allZeros(base) {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Task has no comparable baseCommit.")
+		report.BlockedReason = "task baseCommit is missing"
+		return report, nil
+	}
+
+	countOut, err := gitOutput(worktree, "rev-list", "--count", base+"..HEAD")
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "git rev-list --count "+base+"..HEAD failed: "+err.Error())
+		report.BlockedReason = "could not compare task branch with baseCommit"
+		return report, nil
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "git rev-list --count "+base+"..HEAD: "+countOut)
+
+	nameStatusOut, err := gitOutput(worktree, "diff", "--name-status", base+"..HEAD")
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "git diff --name-status "+base+"..HEAD failed: "+err.Error())
+		report.BlockedReason = "could not inspect task branch diff"
+		return report, nil
+	}
+	if nameStatusOut == "" {
+		nameStatusOut = "(no changed files)"
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "git diff --name-status "+base+"..HEAD:\n"+nameStatusOut)
+	report.ActionsTaken = append(report.ActionsTaken, "Checked committed file list against baseCommit")
+
+	allGatesPassed := true
+	for _, gate := range gates {
+		output, err := shellOutput(worktree, 2*time.Minute, gate)
+		label := "gate " + gate
+		if strings.TrimSpace(output) == "" {
+			output = "(no output)"
+		}
+		if err != nil {
+			allGatesPassed = false
+			report.Status = "failed"
+			report.Evidence["local"] = append(report.Evidence["local"], label+" failed:\n"+output+"\nerror: "+err.Error())
+			report.NextSuggestedAction = "Return to the same task worker to fix the recorded local gate failure, then rerun ci-fixer."
+			continue
+		}
+		report.Evidence["local"] = append(report.Evidence["local"], label+" passed:\n"+output)
+	}
+	report.ActionsTaken = append(report.ActionsTaken, "Ran recorded task gates in the task worktree with a local timeout")
+	if !allGatesPassed {
+		return report, nil
+	}
+
+	afterStatus, err := gitOutput(worktree, "status", "--short", "--branch")
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "post-gate git status --short --branch failed: "+err.Error())
+		report.BlockedReason = "could not inspect task worktree git status after gates"
+		report.Status = "blocked"
+		report.NextSuggestedAction = "Inspect the task worktree state before treating ci-fixer as complete."
+		return report, nil
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "post-gate git status --short --branch:\n"+afterStatus)
+	if hasDirtyChanges(afterStatus) {
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], "Recorded gates left the worktree dirty; ci-fixer did not stage, commit, or clean the generated changes.")
+		report.NextSuggestedAction = "Return to the same task worker to commit or clean gate-generated changes before CI fix review."
+		return report, nil
+	}
+
+	if strings.TrimSpace(countOut) == "0" {
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], "Gates passed, but no commits are present after baseCommit.")
+		report.NextSuggestedAction = "Do not merge; ask the task worker for a committed implementation or mark the task abandoned."
+		return report, nil
+	}
+
+	report.Status = "passed"
+	report.BlockedReason = ""
+	report.NextSuggestedAction = "Run orchestrator review/merge flow for the clean task branch; ci-fixer made no automatic code changes."
+	return report, nil
+}
+
 func cmdRecordRoutineRun(args []string) error {
 	fs := flag.NewFlagSet("record-routine-run", flag.ExitOnError)
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
@@ -1299,6 +1508,17 @@ func normalizedEvidence(evidence map[string][]string) map[string][]string {
 			if strings.TrimSpace(item) != "" {
 				normalized[key] = append(normalized[key], item)
 			}
+		}
+	}
+	return normalized
+}
+
+func nonEmptyStrings(values []string) []string {
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			normalized = append(normalized, value)
 		}
 	}
 	return normalized
@@ -1811,6 +2031,29 @@ func gitOutput(cwd string, args ...string) (string, error) {
 		return "", fmt.Errorf("%s", strings.TrimSpace(string(out)))
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func shellOutput(cwd string, timeout time.Duration, command string) (string, error) {
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, shell, "-lc", command)
+	cmd.Dir = cwd
+	out, err := cmd.CombinedOutput()
+	output := strings.TrimSpace(string(out))
+	if ctx.Err() == context.DeadlineExceeded {
+		return output, fmt.Errorf("command timed out after %s", timeout)
+	}
+	if err != nil {
+		return output, err
+	}
+	return output, nil
 }
 
 func currentBranch(statusOutput string) string {

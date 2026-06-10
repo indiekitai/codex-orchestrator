@@ -139,6 +139,7 @@ rescuer routines:
 ```bash
 codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
 codex-orchestrator run-routine stale-task-rescuer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
+codex-orchestrator run-routine ci-fixer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/ci-fixer-report.json
 ```
 
 The PR reviewer runner inspects only local git/static state from the ledger task worktree:
@@ -157,6 +158,18 @@ or same-task takeover next action, and missing worktree, branch mismatch,
 missing `baseCommit`, or git inspection failures as `blocked`. Its MVP report
 uses only `local` and `blocked` evidence; it does not stage, commit, merge,
 clean, dispatch, update ledger status, or claim direct/proxy runtime proof.
+
+The ci-fixer runner is also read-only. It is a CI/local gate classifier, not an
+automatic code fixer: it requires explicit gates recorded on the ledger task,
+checks worktree and branch state, refuses dirty worktrees, compares
+`baseCommit..HEAD`, records committed file names, and runs recorded gate
+commands in the task worktree with a local timeout. It classifies passing gates
+with committed work as `passed`, dirty worktrees or failing gates as `failed`
+with a same-worker or same-task takeover next action, and missing gates,
+missing `baseCommit`, branch mismatch, or git inspection failures as
+`blocked`. Its MVP report uses only `local` and `blocked` evidence; it does not
+stage, commit, merge, push, clean, dispatch, update ledger status, or claim
+direct/proxy runtime proof.
 
 After a routine is actually run, record the outcome so future orchestrator
 sessions can resume from ledger truth:

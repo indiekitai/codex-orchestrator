@@ -702,6 +702,137 @@ func TestRunStaleTaskRescuerRoutineBlockedOnMissingBaseCommit(t *testing.T) {
 	}
 }
 
+func TestRunCIFixerRoutineWritesPassedReport(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	reportPath := filepath.Join(root, "reports", "ci-fixer.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/ci-pass", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "CI-PASS",
+		"--worktree", worker,
+		"--branch", "codex/ci-pass",
+		"--base-commit", base,
+		"--gate", "test -f feature.txt",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "feature.txt"), []byte("feature\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "feature.txt")
+	git(t, worker, "commit", "-q", "-m", "feature")
+
+	if err := cmdRunRoutine([]string{"ci-fixer", "--ledger", ledger, "--task-id", "CI-PASS", "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RoutineRunReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.RoutineID != "ci-fixer" || report.TaskID != "CI-PASS" || report.Status != "passed" {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	joined := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{"Recorded task gates", "git diff --name-status", "A\tfeature.txt", "gate test -f feature.txt passed", "post-gate git status"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, joined)
+		}
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
+		t.Fatalf("expected only local evidence, got %#v", report.Evidence)
+	}
+	if !strings.Contains(report.NextSuggestedAction, "no automatic code changes") {
+		t.Fatalf("expected no-auto-fix next action, got %q", report.NextSuggestedAction)
+	}
+}
+
+func TestRunCIFixerRoutineFailsOnGateFailure(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/ci-fail", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "CI-FAIL",
+		"--worktree", worker,
+		"--branch", "codex/ci-fail",
+		"--base-commit", base,
+		"--gate", "printf gate-failed && exit 7",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "feature.txt"), []byte("feature\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "feature.txt")
+	git(t, worker, "commit", "-q", "-m", "feature")
+
+	report, err := runCIFixerRoutine(ledger, "CI-FAIL")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "failed" {
+		t.Fatalf("expected failed report, got %#v", report)
+	}
+	joined := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{"gate printf gate-failed && exit 7 failed", "gate-failed"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected failed gate evidence %q in:\n%s", want, joined)
+		}
+	}
+	if !strings.Contains(report.NextSuggestedAction, "same task worker") {
+		t.Fatalf("expected same worker next action, got %q", report.NextSuggestedAction)
+	}
+}
+
+func TestRunCIFixerRoutineBlockedWhenGatesMissing(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/ci-no-gates", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "CI-NO-GATES",
+		"--worktree", worker,
+		"--branch", "codex/ci-no-gates",
+		"--base-commit", base,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := runCIFixerRoutine(ledger, "CI-NO-GATES")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "blocked" || report.BlockedReason != "task gates are missing" {
+		t.Fatalf("expected blocked missing-gates report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "no recorded gates") {
+		t.Fatalf("expected missing-gates blocked evidence, got %#v", report.Evidence)
+	}
+}
+
 func TestRecordRoutineRunFromJSONReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
