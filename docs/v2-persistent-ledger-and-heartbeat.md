@@ -89,6 +89,7 @@ Use explicit states instead of overloaded words like "done":
 | `reviewing` | Orchestrator is checking diff/gates/docs/evidence |
 | `merged` | Accepted and merged to the integration branch |
 | `rejected` | Reviewed and not accepted |
+| `cleanup-needed` | Accepted terminal task still has a worktree/branch to remove |
 | `blocked` | Cannot proceed without missing input, environment, or decision |
 | `abandoned` | No useful scoped work to rescue |
 
@@ -116,6 +117,7 @@ The heartbeat output should be one of:
 
 - `quiet`: active tasks are still moving or no action is needed,
 - `review-needed`: a clean task commit appears ready for review,
+- `cleanup-needed`: a terminal accepted task still needs worktree/branch cleanup,
 - `stale`: the task needs inspection or a targeted nudge,
 - `blocked`: a setup, tool, environment, or human-action blocker exists,
 - `dispatch-possible`: capacity is free and the roadmap has safe next tasks.
@@ -182,8 +184,13 @@ It emits `overallStatus` values suitable for a Codex App orchestrator:
 - `quiet`
 - `dispatch-possible`
 - `review-needed`
+- `cleanup-needed`
 - `stale`
 - `blocked`
+
+It also emits per-status `counts` and `reviewPressure` fields so a coordinator
+can stop dispatching when the review queue, stale queue, blocked queue, or
+cleanup queue needs attention.
 
 The Python helper remains as a prototype and compatibility reference. If
 neither helper is available, use the same ledger schema manually and let the

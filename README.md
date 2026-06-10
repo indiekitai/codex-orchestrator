@@ -111,6 +111,10 @@ scripts/install.sh
 codex-orchestrator init
 ```
 
+After the first GitHub release, you can also download a prebuilt
+`codex-orchestrator_<os>_<arch>` binary from the Releases page and put it on
+your `PATH`.
+
 ### 2. Use it in Codex
 
 Open a Codex session and tell it to orchestrate:
@@ -218,6 +222,10 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator status
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ```
+
+The JSON heartbeat report includes `overallStatus`, per-status `counts`, and a
+`reviewPressure` block so an orchestrator can pause dispatch when review,
+stale, blocked, or cleanup queues are saturated.
 
 ## 🧱 Architecture
 

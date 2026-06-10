@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLedgerTaskLifecycle(t *testing.T) {
@@ -141,6 +142,9 @@ func TestObserveClassifications(t *testing.T) {
 	if summary.OverallStatus != "blocked" {
 		t.Fatalf("expected overall blocked, got %q", summary.OverallStatus)
 	}
+	if summary.ReviewPressure.Blocked != 1 {
+		t.Fatalf("expected one blocked task, got %#v", summary.ReviewPressure)
+	}
 }
 
 func TestHeartbeatWritesReportAndEvent(t *testing.T) {
@@ -179,6 +183,140 @@ func TestHeartbeatWritesReportAndEvent(t *testing.T) {
 	}
 	if !strings.Contains(string(events), `"type":"heartbeat"`) {
 		t.Fatalf("expected heartbeat event, got %s", string(events))
+	}
+}
+
+func TestIntegrationDirtyBlocksDispatch(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "unrelated.txt"), []byte("dirty\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.OverallStatus != "blocked" {
+		t.Fatalf("expected blocked dirty integration checkout, got %q", summary.OverallStatus)
+	}
+	if !summary.Integration.Dirty {
+		t.Fatalf("expected integration dirty")
+	}
+}
+
+func TestStaleTimeoutClassification(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/stale", worker, "HEAD")
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "STALE", "--worktree", worker, "--branch", "codex/stale"}); err != nil {
+		t.Fatal(err)
+	}
+	ledgerData, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledgerData.Tasks[0].LastObservation["at"] = time.Now().Add(-30 * time.Minute).Format(time.RFC3339)
+	if err := saveLedger(ledger, &ledgerData); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := observeWithOptions(ledger, 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := summary.Observations[0].Status; got != "stale-needs-inspection" {
+		t.Fatalf("expected stale task, got %q", got)
+	}
+	if summary.OverallStatus != "stale" {
+		t.Fatalf("expected overall stale, got %q", summary.OverallStatus)
+	}
+}
+
+func TestTerminalMergedTaskRequiresCleanupWhenWorktreeRemains(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/merged", worker, "HEAD")
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "MERGED", "--worktree", worker, "--branch", "codex/merged"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "merge", "--task-id", "MERGED", "--status", "merged", "--note", "merged but not cleaned"}); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := summary.Observations[0].Status; got != "cleanup-needed" {
+		t.Fatalf("expected cleanup-needed, got %q", got)
+	}
+	if summary.OverallStatus != "cleanup-needed" {
+		t.Fatalf("expected overall cleanup-needed, got %q", summary.OverallStatus)
+	}
+}
+
+func TestReviewQueueSaturation(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"READY-1", "READY-2"} {
+		worker := filepath.Join(root, strings.ToLower(id))
+		git(t, project, "worktree", "add", "-q", "-b", "codex/"+strings.ToLower(id), worker, "HEAD")
+		if err := cmdRecordTask([]string{"--ledger", ledger, "--id", id, "--worktree", worker, "--branch", "codex/" + strings.ToLower(id)}); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(worker, id+".txt"), []byte("done\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git(t, worker, "add", ".")
+		git(t, worker, "commit", "-q", "-m", id)
+	}
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.OverallStatus != "review-needed" {
+		t.Fatalf("expected review-needed, got %q", summary.OverallStatus)
+	}
+	if summary.ReviewPressure.ReviewNeeded != 2 {
+		t.Fatalf("expected two review-needed tasks, got %#v", summary.ReviewPressure)
+	}
+	if len(summary.RecommendedActions) == 0 || !strings.Contains(summary.RecommendedActions[0], "saturated") {
+		t.Fatalf("expected saturated review queue action, got %#v", summary.RecommendedActions)
+	}
+}
+
+func TestBadLedgerAndUnknownTaskErrors(t *testing.T) {
+	root := t.TempDir()
+	badLedger := filepath.Join(root, "bad.json")
+	if err := os.WriteFile(badLedger, []byte("{bad json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := observe(badLedger); err == nil {
+		t.Fatal("expected bad ledger error")
+	}
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "review", "--task-id", "UNKNOWN", "--status", "blocked"}); err == nil {
+		t.Fatal("expected unknown task error")
 	}
 }
 

@@ -94,6 +94,9 @@ scripts/install.sh
 codex-orchestrator init
 ```
 
+发布第一个 GitHub release 后，也可以直接下载预构建的
+`codex-orchestrator_<os>_<arch>` 二进制文件并放到 `PATH` 里。
+
 ### 2. 在 Codex 中使用
 
 打开 Codex 会话，告诉它编排：
@@ -190,6 +193,9 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator status
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ```
+
+JSON heartbeat report 会包含 `overallStatus`、按状态聚合的 `counts`，以及
+`reviewPressure`，让统领在 review / stale / blocked / cleanup 队列堆积时暂停派发。
 
 ## 🧱 架构
 

@@ -72,6 +72,18 @@ type IntegrationState struct {
 	Error     string `json:"error,omitempty"`
 }
 
+type ReviewPressure struct {
+	MaxConcurrency   int `json:"maxConcurrency"`
+	Active           int `json:"active"`
+	PendingSetup     int `json:"pendingSetup"`
+	ReviewNeeded     int `json:"reviewNeeded"`
+	Stale            int `json:"stale"`
+	Blocked          int `json:"blocked"`
+	CleanupNeeded    int `json:"cleanupNeeded"`
+	AvailableSlots   int `json:"availableSlots"`
+	ReviewQueueLimit int `json:"reviewQueueLimit"`
+}
+
 type ObserveSummary struct {
 	Ledger             string           `json:"ledger"`
 	Version            int              `json:"version"`
@@ -80,6 +92,8 @@ type ObserveSummary struct {
 	ObservedAt         string           `json:"observedAt"`
 	OverallStatus      string           `json:"overallStatus"`
 	RecommendedActions []string         `json:"recommendedActions"`
+	Counts             map[string]int   `json:"counts"`
+	ReviewPressure     ReviewPressure   `json:"reviewPressure"`
 	Integration        IntegrationState `json:"integration"`
 	Observations       []Observation    `json:"observations"`
 }
@@ -502,7 +516,9 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		observations = append(observations, inspectTask(task, staleAfter))
 	}
 	integration := inspectIntegration(ledger.ProjectRoot)
-	overall, actions := summarizeObservations(integration, observations, ledger.MaxConcurrency)
+	counts := countObservationStatuses(observations)
+	pressure := calculateReviewPressure(counts, ledger.MaxConcurrency)
+	overall, actions := summarizeObservations(integration, counts, pressure)
 	return ObserveSummary{
 		Ledger:             ledgerPath,
 		Version:            ledger.Version,
@@ -511,12 +527,33 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		ObservedAt:         nowISO(),
 		OverallStatus:      overall,
 		RecommendedActions: actions,
+		Counts:             counts,
+		ReviewPressure:     pressure,
 		Integration:        integration,
 		Observations:       observations,
 	}, nil
 }
 
 func inspectTask(task Task, staleAfter time.Duration) Observation {
+	if isTerminalStatus(task.Status) {
+		if task.Worktree != "" {
+			worktree := expandPath(task.Worktree)
+			if _, err := os.Stat(worktree); err == nil && task.Status != "rejected" {
+				return Observation{
+					ID:     task.ID,
+					Status: "cleanup-needed",
+					Action: "remove accepted task worktree and delete local task branch if safe",
+					Note:   fmt.Sprintf("Task is %s but worktree still exists: %s", task.Status, worktree),
+				}
+			}
+		}
+		return Observation{
+			ID:     task.ID,
+			Status: task.Status,
+			Action: "quiet",
+			Note:   fmt.Sprintf("Task is recorded as %s.", task.Status),
+		}
+	}
 	if task.Worktree == "" {
 		return Observation{
 			ID:     task.ID,
@@ -683,33 +720,75 @@ func isTaskStale(task Task, threshold time.Duration) bool {
 	return time.Since(observed) > threshold
 }
 
-func summarizeObservations(integration IntegrationState, observations []Observation, maxConcurrency int) (string, []string) {
+func countObservationStatuses(observations []Observation) map[string]int {
+	counts := map[string]int{}
+	for _, observation := range observations {
+		status := observation.Status
+		if status == "" {
+			status = "unknown"
+		}
+		counts[status]++
+	}
+	return counts
+}
+
+func calculateReviewPressure(counts map[string]int, maxConcurrency int) ReviewPressure {
+	if maxConcurrency <= 0 {
+		maxConcurrency = 2
+	}
+	active := counts["active"]
+	pending := counts["pending-setup"]
+	usedSlots := active + pending + counts["reviewing"]
+	available := maxConcurrency - usedSlots
+	if available < 0 {
+		available = 0
+	}
+	return ReviewPressure{
+		MaxConcurrency:   maxConcurrency,
+		Active:           active,
+		PendingSetup:     pending,
+		ReviewNeeded:     counts["completed-unreviewed"],
+		Stale:            counts["stale-needs-inspection"],
+		Blocked:          counts["blocked"],
+		CleanupNeeded:    counts["cleanup-needed"],
+		AvailableSlots:   available,
+		ReviewQueueLimit: 1,
+	}
+}
+
+func summarizeObservations(integration IntegrationState, counts map[string]int, pressure ReviewPressure) (string, []string) {
 	if integration.Error != "" {
 		return "blocked", []string{"Inspect integration checkout git state before dispatching or merging."}
 	}
 	if integration.Dirty {
 		return "blocked", []string{"Integration checkout is dirty; classify local changes before dispatching or merging."}
 	}
-	counts := map[string]int{}
-	for _, observation := range observations {
-		counts[observation.Status]++
-	}
 	switch {
 	case counts["blocked"] > 0:
 		return "blocked", []string{"Resolve blocked task setup/state before dispatching new work."}
 	case counts["completed-unreviewed"] > 0:
+		if pressure.ReviewNeeded > pressure.ReviewQueueLimit {
+			return "review-needed", []string{"Review queue is saturated; review completed task commits before dispatching more work."}
+		}
 		return "review-needed", []string{"Review completed task commits, run gates, then merge or reject."}
+	case counts["cleanup-needed"] > 0:
+		return "cleanup-needed", []string{"Cleanup accepted task worktrees/branches before dispatching more work."}
 	case counts["stale-needs-inspection"] > 0:
 		return "stale", []string{"Inspect stale task worktrees and either nudge, take over, abandon, or mark blocked."}
 	}
-	active := counts["active"] + counts["pending-setup"] + counts["reviewing"]
-	if maxConcurrency <= 0 {
-		maxConcurrency = 2
-	}
-	if active < maxConcurrency {
+	if pressure.AvailableSlots > 0 {
 		return "dispatch-possible", []string{"Capacity is available; dispatch the next safe roadmap task if one exists."}
 	}
 	return "quiet", []string{"Active tasks are within concurrency limit; continue monitoring."}
+}
+
+func isTerminalStatus(status string) bool {
+	switch status {
+	case "merged", "rejected", "abandoned":
+		return true
+	default:
+		return false
+	}
 }
 
 func writeJSON(path string, value any) error {
@@ -764,6 +843,12 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- projectRoot: `%s`\n", summary.ProjectRoot)
 	fmt.Fprintf(&b, "- defaultBranch: `%s`\n", summary.DefaultBranch)
 	fmt.Fprintf(&b, "- integrationDirty: `%t`\n", summary.Integration.Dirty)
+	fmt.Fprintf(&b, "- active: `%d`\n", summary.ReviewPressure.Active)
+	fmt.Fprintf(&b, "- reviewNeeded: `%d`\n", summary.ReviewPressure.ReviewNeeded)
+	fmt.Fprintf(&b, "- stale: `%d`\n", summary.ReviewPressure.Stale)
+	fmt.Fprintf(&b, "- blocked: `%d`\n", summary.ReviewPressure.Blocked)
+	fmt.Fprintf(&b, "- cleanupNeeded: `%d`\n", summary.ReviewPressure.CleanupNeeded)
+	fmt.Fprintf(&b, "- availableSlots: `%d`\n", summary.ReviewPressure.AvailableSlots)
 	if summary.Integration.Error != "" {
 		fmt.Fprintf(&b, "- integrationError: `%s`\n", summary.Integration.Error)
 	}

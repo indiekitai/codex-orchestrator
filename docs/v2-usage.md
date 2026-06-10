@@ -28,6 +28,15 @@ If you install elsewhere:
 BIN_DIR=/usr/local/bin scripts/install.sh
 ```
 
+After a GitHub release is published, users can also download the matching
+prebuilt binary from the Releases page:
+
+```bash
+tar -xzf codex-orchestrator_darwin_arm64.tar.gz
+chmod +x codex-orchestrator_darwin_arm64
+mv codex-orchestrator_darwin_arm64 ~/.local/bin/codex-orchestrator
+```
+
 ## Initialize A Project Ledger
 
 Run this from the repository you want to orchestrate:
@@ -84,6 +93,8 @@ The report includes:
 - integration checkout dirty/error state,
 - per-task observations,
 - `overallStatus`,
+- per-status `counts`,
+- `reviewPressure` with active/review/stale/blocked/cleanup queues,
 - recommended next actions for the orchestrator.
 
 Important statuses:
@@ -93,6 +104,7 @@ Important statuses:
 | `quiet` | Keep monitoring; active work is within concurrency limit |
 | `dispatch-possible` | Capacity is free and the repo is clean |
 | `review-needed` | A worker has a clean commit after `baseCommit` |
+| `cleanup-needed` | A terminal task still has a worktree/branch that should be cleaned |
 | `stale` | A task needs inspection or same-task nudge |
 | `blocked` | Setup, branch, git, or integration state blocks safe progress |
 

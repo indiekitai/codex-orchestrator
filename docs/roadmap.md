@@ -98,7 +98,7 @@ Future daemon/UI
 
 ## v2：Persistent task ledger + heartbeat helper
 
-状态：alpha 已完成，可用于 App-first orchestration 的持久 ledger 和保守 heartbeat；还不是自动创建 session / 自动合并的后台系统。
+状态：alpha-plus。可用于 App-first orchestration 的持久 ledger 和保守 heartbeat，已补 release hardening 测试与 review-pressure 输出；还不是自动创建 session / 自动合并的后台系统。
 
 目标：
 
@@ -122,10 +122,10 @@ Future daemon/UI
   - `append-event`
   - `heartbeat`
 - integration checkout dirty/error 检查；
-- per-task `pending-setup` / `stale-needs-inspection` / `completed-unreviewed` / `blocked` 分类；
-- `overallStatus` 和 recommended actions；
+- per-task `pending-setup` / `stale-needs-inspection` / `completed-unreviewed` / `blocked` / `cleanup-needed` 分类；
+- `overallStatus`、recommended actions、counts 和 reviewPressure；
 - JSON report 和 Markdown summary；
-- Go 单测覆盖核心状态机；
+- Go 单测覆盖核心状态机、dirty integration、bad ledger、unknown task、stale timeout、cleanup-needed 和 review queue saturation；
 - `scripts/install.sh` 本地安装入口；
 - GitHub Actions release binary workflow。
 
