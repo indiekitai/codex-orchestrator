@@ -14,6 +14,13 @@ more features.
   <https://x.com/FeitengLi/status/2064594760195801538>
 - Daniel Demmel, [Feedback loop engineering](https://www.danieldemmel.me/blog/feedback-loop-engineering)
 - Latent.Space, [Claude Code: Anthropic's Agent in Your Terminal](https://www.latent.space/p/claude-code)
+- Martin Fowler / Thoughtworks, [Harness engineering for coding agent users](https://martinfowler.com/articles/harness-engineering.html)
+- Addy Osmani, [Agent Harness Engineering](https://addyosmani.com/blog/agent-harness-engineering/)
+- Thoughtworks, [Harness engineering and agent feedback: Exploring AI coding sensors](https://www.thoughtworks.com/en-us/insights/blog/generative-ai/harness-engineering-agent-feedback-exploring-ai-coding-sensors)
+- The Pragmatic Engineer, [The creator of Clawd: "I ship code I don't read"](https://newsletter.pragmaticengineer.com/p/the-creator-of-clawd-i-ship-code)
+- WyeWorks, [The Workflow Is the Product](https://www.wyeworks.com/es/blog/2026/05/13/custom-agentic-workflows-for-coding-agents/)
+- Lower-weight trend scans from Reddit, Substack, MindStudio, DX, and X search
+  results around "loop engineering", used only to check terminology drift.
 
 ## Working Definition
 
@@ -108,6 +115,81 @@ Important implications:
 This is the biggest gap in `codex-orchestrator`: it has strong outer-loop
 mechanics, but it does not yet provide a library of inner verification routines.
 
+## What Harness Engineering Adds
+
+Harness engineering is the broader frame around the loop. The useful mental
+model is:
+
+```text
+agent = model + harness
+```
+
+The harness includes:
+
+- feedforward guides that steer the agent before it acts, such as
+  `AGENTS.md`, `CLAUDE.md`, skills, specs, types, linting, and architecture
+  rules;
+- feedback sensors that let the agent observe consequences, such as tests,
+  browser state, logs, traces, database checks, simulator runs, screenshots,
+  security checks, and maintainability sensors;
+- control boundaries that decide what tools the agent may use, when it must
+  stop, and when a human or verifier must take over.
+
+This matters because `codex-orchestrator` is not just a loop. It is part of the
+harness. The skill is a feedforward guide. The Go helper and heartbeat are
+state/feedback sensors. The review-before-merge and evidence-label rules are
+control boundaries.
+
+The gap is that the current harness is stronger at orchestration than at
+runtime sensing. It knows whether a worker branch exists, whether a worktree is
+dirty, and whether a commit needs review. It does not yet know whether the
+feature actually worked in a browser, mobile app, terminal, database, API,
+device, or CI system unless the delegated task manually reports that evidence.
+
+## What Peter Steinberger / Closed-Loop Workflows Add
+
+Peter Steinberger's public workflow discussions reinforce a practical point:
+parallel agents are not the hard part by themselves. The hard part is closing
+the loop so agents can compile, lint, execute, inspect output, and validate
+their own work before handing it back.
+
+This adds two constraints to the roadmap:
+
+1. Do not measure loop maturity by number of simultaneous sessions. A loop with
+   three well-instrumented workers is more valuable than a loop with twenty
+   blind workers.
+2. Each routine should name its verification surface. "Fix CI" is a real loop
+   because CI is an observable sensor. "Implement feature" is not a complete
+   loop unless it includes runtime proof.
+
+`codex-orchestrator` already handles the review bandwidth problem by defaulting
+to low concurrency. That should remain a feature, not a limitation. The next
+improvement is not more parallelism; it is better per-worker verification.
+
+## What Workflow Engineering Adds
+
+The WyeWorks workflow framing is useful because it shifts attention from a
+single clever agent to a repeatable pipeline. Their pattern is roughly:
+
+```text
+plan -> analyze -> implement -> validate -> visual/runtime QA -> review
+```
+
+This is close to what `codex-orchestrator` needs for V2.5. A routine should not
+only say "run tests." It should define the whole validation pipeline for a
+specific task family:
+
+- what context to inspect,
+- what artifact to produce,
+- what runtime to launch,
+- what sensor to read,
+- what evidence to store,
+- what failure means,
+- what human decision is needed.
+
+That suggests the routine library should be written as workflow contracts, not
+just command aliases.
+
 ## Current Coverage
 
 `codex-orchestrator` already covers:
@@ -163,6 +245,18 @@ The main gaps are not more task states. They are the deeper loop layers:
    The skill says to update runbooks, but there is no command or template for
    converting a completed session or failure into a proposed skill/rule/eval.
 
+7. **Harness boundary clarity**
+
+   The project should explicitly distinguish feedforward guides, feedback
+   sensors, and control boundaries. Today they are present, but mixed together
+   across README, `SKILL.md`, docs, and helper behavior.
+
+8. **Workflow contracts**
+
+   Routine specs should describe the full pipeline for a family of work, not
+   just a prompt or command. Without this, V3 could become a collection of
+   shortcuts rather than robust loops.
+
 ## Roadmap Adjustment
 
 The previous v2-v5 roadmap is directionally right, but the emphasis should
@@ -174,8 +268,8 @@ Recommended structure:
 |-------|--------|---------|
 | v1: outer orchestrator skill | Mature enough | Codex App session dispatch, worktrees, review, merge, cleanup |
 | v2: durable state + heartbeat | Alpha complete | Ledger, events, heartbeat report, resume from repo truth |
-| v2.5: verification routine foundation | Next | Browser/log/db/device proof interfaces and evidence schemas |
-| v3: routine library | After v2.5 | CI fixer, PR reviewer, stale rescuer, docs drift, release verifier |
+| v2.5: verification routine foundation | Next | Browser/log/db/device proof interfaces, evidence schemas, harness boundary model |
+| v3: routine library | After v2.5 | Workflow contracts for CI fixer, PR reviewer, stale rescuer, docs drift, release verifier |
 | v4: safety/eval layer | Needed before high autonomy | Classifiers, prompt-injection evals, dangerous action policy |
 | v5: agent operating system | Later | Continuous multi-routine coordination and UI/daemon |
 
@@ -232,12 +326,33 @@ Do not jump directly to v5 or a daemon UI. The highest-leverage next work is:
    exaggeration before adding more automation.
 5. Add a "reflect failure into rule" template before trying self-improving
    rules.
+6. Add a short harness map:
+   - feedforward guides,
+   - feedback sensors,
+   - control boundaries,
+   - current implementation,
+   - missing implementation.
+7. For each routine spec, require a workflow contract:
+   - trigger,
+   - context inputs,
+   - isolated execution surface,
+   - verification sensors,
+   - evidence output,
+   - escalation rule.
 
 ## Conclusion
 
 The project is aligned with Loop Engineering, but it currently covers the outer
 loop more than the inner verification loop.
 
-That is a good starting point. The mistake would be to keep adding orchestration
-features while postponing runtime verification and safety classification. The
-next phase should make the loop more trustworthy, not merely more autonomous.
+The broader web scan strengthened that conclusion rather than overturning it.
+The repeated theme across Loop Engineering, Feedback Loop Engineering, Harness
+Engineering, and closed-loop workflow discussions is the same: the leverage is
+not just asking more agents to do more work. The leverage is designing a
+recoverable, observable, bounded system where agents can verify themselves and
+where failures become durable improvements.
+
+That is a good starting point. The mistake would be to keep adding
+orchestration features while postponing runtime verification and safety
+classification. The next phase should make the loop more trustworthy, not
+merely more autonomous.

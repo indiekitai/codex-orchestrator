@@ -168,7 +168,9 @@ routine library 容易变成任务管理器，而不是可靠 loop。
 
 - 定义 routine output schema；
 - 定义 evidence schema；
+- 定义 harness map：feedforward guides、feedback sensors、control boundaries；
 - 给 browser/log/db/device/API proof 各写一个最小 routine spec；
+- 要求每个 routine 都是 workflow contract，而不只是 prompt 或命令别名；
 - 让 routine 输出可以被 ledger/heartbeat/report 消费；
 - 保持 helper 保守，不自动 merge/push/删除。
 
@@ -182,6 +184,7 @@ docs/routines/
   database-proof.md
   api-proof.md
   mobile-device-proof.md
+  harness-map.md
 ```
 
 ## v3：Routine library
