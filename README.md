@@ -232,6 +232,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine ci-fixer --task-id TASK --write-report /tmp/ci-fixer-report.json
 ./codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 ./codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
+./codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -303,6 +304,17 @@ status text. Missing docs references or missing specs return `failed`; missing
 repository/source/spec access returns `blocked`. It does not stage, commit,
 merge, push, tag, release, clean worktrees, dispatch sessions, mutate the
 ledger, or claim runtime proof; MVP evidence is `local` or `blocked`.
+
+`run-routine evidence-label-auditor` is the sixth runnable routine MVP. It is
+read-only and does not load or update the ledger. It scans explicit repo-local
+docs, routine specs, routine report JSON files, and ledger-shaped JSON for
+obvious evidence-label issues: weak evidence wording near strong proof wording,
+RoutineRunReport JSON missing the `direct` / `proxy` / `local` / `blocked`
+buckets, and direct evidence recorded for routines whose specs explicitly
+reserve direct evidence. Findings are heuristic suspicions, not proof of
+wrongdoing. It does not stage, commit, merge, push, tag, release, clean
+worktrees, dispatch sessions, mutate the ledger, or claim runtime proof; MVP
+evidence is `local` or `blocked`.
 
 When a delegated task is merged, pushed, released, and cleaned, the
 task-specific heartbeat is not automatically the end of the loop. Before
@@ -382,6 +394,7 @@ codex-orchestrator/
 │   ├── database-proof.json
 │   ├── device-proof.json
 │   ├── docs-drift-checker.json
+│   ├── evidence-label-auditor.json
 │   ├── log-proof.json
 │   ├── pr-reviewer.json
 │   ├── release-verifier.json

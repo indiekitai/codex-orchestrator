@@ -18,6 +18,7 @@ codex-orchestrator run-routine stale-task-rescuer --ledger .codex-orchestrator/l
 codex-orchestrator run-routine ci-fixer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/ci-fixer-report.json
 codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
+codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
 codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ```
 
@@ -81,6 +82,17 @@ stage, commit, merge, push, tag, release, clean worktrees, dispatch sessions,
 mutate the ledger, or claim runtime proof; this MVP emits `local` or `blocked`
 evidence.
 
+`run-routine evidence-label-auditor` is a read-only local/static evidence-label
+checker. It does not load or update the ledger. It scans explicit repo-local
+docs, routine specs, routine report JSON files, and ledger-shaped JSON for
+obvious evidence-label issues: weak evidence labels near overstated proof
+wording, RoutineRunReport JSON missing the required evidence buckets, and
+direct evidence recorded for routines whose specs explicitly reserve direct
+evidence. Findings are heuristics and are reported as local/static suspicions,
+not semantic proof. It does not stage, commit, merge, push, tag, release, clean
+worktrees, dispatch sessions, mutate the ledger, or claim runtime proof; this
+MVP emits `local` or `blocked` evidence.
+
 Routine specs live in [`../../routines`](../../routines). They are JSON so the
 Go helper can validate them without a Python, YAML, or Node dependency.
 
@@ -131,6 +143,9 @@ Do not turn `local` or `proxy` evidence into `direct` proof in the final report.
   flag, and expected Go CLI assets without mutating release state.
 - `docs-drift-checker`: compare runnable routine IDs, JSON specs, key docs,
   and roadmap status text without mutating repository state.
+- `evidence-label-auditor`: scan local docs, routine specs, routine reports,
+  and ledger-shaped JSON for obvious evidence-label misuse without mutating
+  repository state.
 - `browser-runtime-proof`: verify browser-visible behavior through a browser
   harness.
 - `log-proof`: verify behavior through current runtime logs.

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "id": "evidence-label-auditor",
+  "title": "Evidence Label Auditor",
+  "purpose": "Find obvious local/static evidence-label misuse in repo docs, routine specs, routine reports, and ledger-shaped JSON without mutating repository state.",
+  "trigger": "Run after routine reports, docs, roadmap text, or routine specs change, especially before publishing proof claims or accepting delegated handoffs.",
+  "inputs": [
+    "repository path",
+    "README.md",
+    "README.zh-CN.md",
+    "SKILL.md",
+    "docs/routines/*.md",
+    "docs/roadmap.md when present",
+    "routines/*.json",
+    "examples/routine-reports/*.json",
+    "repo-local ledger-shaped JSON when present"
+  ],
+  "allowedActions": [
+    "inspect repo-local docs and JSON read-only",
+    "parse routine specs for direct evidence reservations",
+    "parse RoutineRunReport JSON evidence buckets",
+    "scan text for explicit weak-evidence wording near strong proof wording",
+    "write a RoutineRunReport JSON when requested"
+  ],
+  "forbiddenActions": [
+    "stage, commit, merge, push, tag, or release",
+    "create, delete, or clean worktrees",
+    "dispatch sessions or start nested subagents",
+    "mutate the orchestration ledger",
+    "walk hidden user config outside the inspected repository",
+    "claim semantic proof of wrongdoing from heuristic text matches"
+  ],
+  "gates": [
+    "repository path readable",
+    "routines directory readable",
+    "routine specs parsed for explicit direct-evidence reservations",
+    "repo-local docs, specs, routine reports, and ledger-shaped JSON scanned with deterministic heuristics",
+    "RoutineRunReport JSON evidence buckets checked for direct, proxy, local, and blocked keys"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Reserved for future rendered, runtime, or human-reviewed proof; the MVP does not emit direct proof.",
+      "proxy": "Reserved for accepted external audit indexes or review artifacts; the MVP normally does not emit proxy proof.",
+      "local": "Local static scan of repo docs, routine specs, routine reports, and ledger-shaped JSON.",
+      "blocked": "Repository, routine specs, docs, or JSON audit inputs cannot be inspected safely."
+    }
+  },
+  "escalation": [
+    "Treat findings as local/static suspicions until a reviewer confirms the wording or report-shape issue.",
+    "Stop if the repository or routine specs cannot be inspected.",
+    "Do not edit docs or reports from this routine; report drift and let a separate implementation pass fix it."
+  ],
+  "maxRuntimeMinutes": 10
+}

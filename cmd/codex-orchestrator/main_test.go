@@ -965,6 +965,110 @@ func TestRunDocsDriftCheckerRoutineBlockedWhenSourceMissing(t *testing.T) {
 	}
 }
 
+func TestRunEvidenceLabelAuditorRoutineWritesPassedReport(t *testing.T) {
+	root := t.TempDir()
+	project := createEvidenceAuditFixture(t, root)
+	reportPath := filepath.Join(root, "reports", "evidence-label-auditor.json")
+
+	if err := cmdRunRoutine([]string{"evidence-label-auditor", "--repo", project, "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RoutineRunReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.RoutineID != "evidence-label-auditor" || report.Status != "passed" {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"Routine specs with direct evidence explicitly reserved: docs-drift-checker",
+		"Scanned ",
+		"repo-local evidence-label input file(s)",
+	} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, local)
+		}
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
+		t.Fatalf("expected only local evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunEvidenceLabelAuditorRoutineFailsOnPhraseMisuse(t *testing.T) {
+	root := t.TempDir()
+	project := createEvidenceAuditFixture(t, root)
+	if err := os.WriteFile(filepath.Join(project, "README.md"), []byte("Local unit tests provide direct runtime proof for production.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runEvidenceLabelAuditorRoutine(project)
+	if report.Status != "failed" {
+		t.Fatalf("expected failed report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	if !strings.Contains(local, "README.md:1: local/static suspicion") {
+		t.Fatalf("expected README suspicion, got:\n%s", local)
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
+		t.Fatalf("expected local-only failed evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunEvidenceLabelAuditorRoutineFailsOnReportBucketsAndStaticDirect(t *testing.T) {
+	root := t.TempDir()
+	project := createEvidenceAuditFixture(t, root)
+	report := RoutineRunReport{
+		RoutineID: "docs-drift-checker",
+		Status:    "passed",
+		Evidence: map[string][]string{
+			"direct": []string{"rendered docs in browser"},
+		},
+		ActionsTaken:        []string{"claimed direct docs proof"},
+		NeedsHuman:          false,
+		NextSuggestedAction: "none",
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "examples", "routine-reports", "bad.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	audit := runEvidenceLabelAuditorRoutine(project)
+	if audit.Status != "failed" {
+		t.Fatalf("expected failed report, got %#v", audit)
+	}
+	local := strings.Join(audit.Evidence["local"], "\n")
+	for _, want := range []string{
+		`examples/routine-reports/bad.json: local/static suspicion: RoutineRunReport for docs-drift-checker is missing evidence bucket "proxy"`,
+		"RoutineRunReport for static-only routine docs-drift-checker contains direct evidence",
+	} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected finding %q in:\n%s", want, local)
+		}
+	}
+}
+
+func TestRunEvidenceLabelAuditorRoutineBlockedWhenSpecsMissing(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("safe docs\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report := runEvidenceLabelAuditorRoutine(root)
+	if report.Status != "blocked" || report.BlockedReason == "" {
+		t.Fatalf("expected blocked report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "Could not inspect routines directory") {
+		t.Fatalf("expected routines directory blocked evidence, got %#v", report.Evidence)
+	}
+}
+
 func TestRecordRoutineRunFromJSONReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
@@ -1174,4 +1278,87 @@ func cmdRunRoutine(args []string) error {
 		}
 	}
 	return project
+}
+
+func createEvidenceAuditFixture(t *testing.T, root string) string {
+	t.Helper()
+	project := filepath.Join(root, "repo")
+	for _, dir := range []string{
+		filepath.Join(project, "docs", "routines"),
+		filepath.Join(project, "routines"),
+		filepath.Join(project, "examples", "routine-reports"),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	docs := map[string]string{
+		"README.md":       "Local checks stay local. Do not claim direct runtime proof from static checks.",
+		"README.zh-CN.md": "本地检查只作为本地证据，不要升级为直接证明。",
+		"SKILL.md":        "Keep direct, proxy, local, and blocked evidence labels separate.",
+		filepath.Join("docs", "routines", "README.md"): "Routine reports include direct, proxy, local, and blocked evidence buckets.",
+		filepath.Join("docs", "roadmap.md"):            "The evidence-label-auditor is documented as a local/static routine.",
+	}
+	for path, text := range docs {
+		if err := os.WriteFile(filepath.Join(project, path), []byte(text+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeEvidenceAuditRoutineSpec(t, project, "docs-drift-checker", "Reserved for future doc-render or user-facing publication proof; the MVP does not emit direct proof.")
+	writeEvidenceAuditRoutineSpec(t, project, "api-proof", "Approved target API was called and returned the expected behavior.")
+	report := RoutineRunReport{
+		RoutineID: "docs-drift-checker",
+		Status:    "passed",
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   []string{"checked docs"},
+			"blocked": {},
+		},
+		ActionsTaken:        []string{"checked docs"},
+		NeedsHuman:          false,
+		NextSuggestedAction: "record local report",
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "examples", "routine-reports", "docs-drift-checker.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return project
+}
+
+func writeEvidenceAuditRoutineSpec(t *testing.T, project string, id string, directEvidence string) {
+	t.Helper()
+	spec := RoutineSpec{
+		SchemaVersion:    1,
+		ID:               id,
+		Title:            id,
+		Purpose:          "fixture routine",
+		Trigger:          "test",
+		Inputs:           []string{"fixture"},
+		AllowedActions:   []string{"inspect read-only"},
+		ForbiddenActions: []string{"stage, commit, merge, push, or mutate ledger"},
+		Gates:            []string{"fixture gate"},
+		EvidenceLabels:   []string{"direct", "proxy", "local", "blocked"},
+		OutputSchema: RoutineOutputSpec{
+			RequiredFields: []string{"status", "evidence", "actionsTaken", "needsHuman", "blockedReason", "nextSuggestedAction"},
+			StatusValues:   []string{"passed", "failed", "blocked"},
+			Evidence: map[string]string{
+				"direct":  directEvidence,
+				"proxy":   "Accepted indirect evidence.",
+				"local":   "Local source or fixture inspection.",
+				"blocked": "Claim could not be proven safely.",
+			},
+		},
+		Escalation: []string{"stop if fixture is unavailable"},
+	}
+	data, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "routines", id+".json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
