@@ -6,14 +6,15 @@ Go helper can be installed from source, release assets, or a Homebrew formula.
 
 ## Status
 
-Current package: `v0.3.0-beta.1`
+Current package: `v0.3.0-beta.2`
 
 Implemented:
 
 - Cross-platform GitHub release assets for macOS, Linux, and Windows.
 - `scripts/install.sh` source install path for users with Go.
 - Shell completion generation for bash, zsh, and fish.
-- Homebrew formula draft at `Formula/codex-orchestrator.rb`.
+- Homebrew formula draft at `Formula/codex-orchestrator.rb` that builds from
+  the release tag.
 - Release verifier routine for local tag and proxy GitHub release metadata.
 
 Not yet implemented:
@@ -32,13 +33,13 @@ The human should not need to learn the helper CLI before the dry run.
 
 Download the asset for your OS and architecture from:
 
-https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.0-beta.1
+https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.0-beta.2
 
 Example for macOS arm64:
 
 ```bash
 curl -L -o /tmp/codex-orchestrator.tar.gz \
-  https://github.com/indiekitai/codex-orchestrator/releases/download/v0.3.0-beta.1/codex-orchestrator_darwin_arm64.tar.gz
+  https://github.com/indiekitai/codex-orchestrator/releases/download/v0.3.0-beta.2/codex-orchestrator_darwin_arm64.tar.gz
 mkdir -p /tmp/codex-orchestrator
 tar -xzf /tmp/codex-orchestrator.tar.gz -C /tmp/codex-orchestrator
 install -m 0755 /tmp/codex-orchestrator/codex-orchestrator_darwin_arm64 ~/.local/bin/codex-orchestrator
@@ -103,8 +104,10 @@ brew install ./Formula/codex-orchestrator.rb
 codex-orchestrator --help
 ```
 
-This is not yet a dedicated Homebrew tap. Publishing a tap should be a separate
-repository operation so updates, bottle policy, and release cadence are clear.
+The formula builds from the release tag and installs completions from the built
+helper. This is not yet a dedicated Homebrew tap. Publishing a tap should be a
+separate repository operation so updates, bottle policy, and release cadence
+are clear.
 
 ## Release Notes
 
@@ -129,7 +132,7 @@ go build -trimpath -ldflags='-s -w' -o /tmp/codex-orchestrator ./cmd/codex-orche
 /tmp/codex-orchestrator completion zsh >/tmp/_codex-orchestrator
 /tmp/codex-orchestrator completion fish >/tmp/codex-orchestrator.fish
 go run ./cmd/codex-orchestrator validate-routines --dir routines
-go run ./cmd/codex-orchestrator run-routine release-verifier --tag v0.3.0-beta.1 --repo . --json
+go run ./cmd/codex-orchestrator run-routine release-verifier --tag v0.3.0-beta.2 --repo . --json
 ```
 
 Evidence labels:

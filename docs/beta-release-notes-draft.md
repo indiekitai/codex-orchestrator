@@ -1,6 +1,6 @@
-# v0.3.0-beta.1 Release Notes Draft
+# v0.3.0-beta.2 Release Notes Draft
 
-`v0.3.0-beta.1` should be the first release positioned for external users to
+`v0.3.0-beta.2` should be the first release positioned for external users to
 try, not just inspect. It should package the current App-first orchestration
 skill, durable helper, routine contracts, and read-only routine runners behind a
 clear quickstart.
@@ -23,7 +23,6 @@ clear quickstart.
 - Conservative evidence labels: `direct`, `proxy`, `local`, `blocked`.
 - Cross-platform release binary workflow.
 - Shell completion generation for bash, zsh, and fish.
-- Homebrew formula draft for macOS/Linux release assets.
 - Beta usability guide for first-time users.
 
 ## What Changed Since Alpha
@@ -37,7 +36,8 @@ clear quickstart.
   helper layer.
 - The roadmap explicitly avoids claiming this is a daemon or full agent OS.
 - The distribution package now documents source install, release-asset install,
-  shell completions, and the formula draft.
+  shell completions, and a Homebrew formula draft that builds from the release
+  tag.
 
 ## Install
 
