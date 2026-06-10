@@ -192,6 +192,7 @@ routines/
   release-verifier.json
   docs-drift-checker.json
   evidence-label-auditor.json
+  roadmap-next-task-suggester.json
   database-proof.json
   device-proof.json
   log-proof.json
@@ -202,6 +203,7 @@ cmd/codex-orchestrator run-routine ci-fixer --task-id ...
 cmd/codex-orchestrator run-routine release-verifier --tag ...
 cmd/codex-orchestrator run-routine docs-drift-checker
 cmd/codex-orchestrator run-routine evidence-label-auditor
+cmd/codex-orchestrator run-routine roadmap-next-task-suggester
 cmd/codex-orchestrator record-routine-run --routine ... --status ...
 examples/routine-reports/
   pr-reviewer.passed.json
@@ -227,7 +229,10 @@ examples/routine-reports/
 - rebase helper；
 - release verifier；
 - evidence label auditor deeper policy/eval variants；
-- roadmap next-task suggester。
+
+补充说明：
+
+- `roadmap-next-task-suggester` 的第一版只读 MVP 已经具备；接下来剩余的是更深的排序、policy/eval 约束，以及和 heartbeat / ledger budget 的联动。
 
 推荐形式：
 

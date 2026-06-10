@@ -19,6 +19,7 @@ codex-orchestrator run-routine ci-fixer --ledger .codex-orchestrator/ledger.json
 codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
 codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
+codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ```
 
@@ -93,6 +94,17 @@ not semantic proof. It does not stage, commit, merge, push, tag, release, clean
 worktrees, dispatch sessions, mutate the ledger, or claim runtime proof; this
 MVP emits `local` or `blocked` evidence.
 
+`run-routine roadmap-next-task-suggester` is a read-only local planning
+assistant. It reads `docs/roadmap.md`, compares the remaining v3 and explicit
+remaining-task candidates against the local runnable routine ids and
+`routines/*.json`, and optionally filters duplicate active/pending/merged
+matches from a repo-local `.codex-orchestrator/ledger.json` when present. It
+prefers conservative read-only local tasks such as checkers, auditors, and
+suggester-style work, and marks the queue drained when only mutating,
+release-scoped, or otherwise unsafe items remain. It does not stage, commit,
+merge, push, tag, release, clean worktrees, dispatch sessions, mutate the
+ledger, or claim runtime proof; this MVP emits `local` or `blocked` evidence.
+
 Routine specs live in [`../../routines`](../../routines). They are JSON so the
 Go helper can validate them without a Python, YAML, or Node dependency.
 
@@ -146,6 +158,9 @@ Do not turn `local` or `proxy` evidence into `direct` proof in the final report.
 - `evidence-label-auditor`: scan local docs, routine specs, routine reports,
   and ledger-shaped JSON for obvious evidence-label misuse without mutating
   repository state.
+- `roadmap-next-task-suggester`: suggest the next safe bounded roadmap task
+  from repo-local roadmap, runnable routine, routine-spec, and optional ledger
+  state without mutating repository state.
 - `browser-runtime-proof`: verify browser-visible behavior through a browser
   harness.
 - `log-proof`: verify behavior through current runtime logs.

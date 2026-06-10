@@ -965,6 +965,85 @@ func TestRunDocsDriftCheckerRoutineBlockedWhenSourceMissing(t *testing.T) {
 	}
 }
 
+func TestRunRoadmapNextTaskSuggesterRoutineWritesPassedReport(t *testing.T) {
+	root := t.TempDir()
+	project, ledger := createRoadmapNextTaskFixture(t, root, true)
+	reportPath := filepath.Join(root, "reports", "roadmap-next-task-suggester.json")
+
+	if err := cmdRunRoutine([]string{"roadmap-next-task-suggester", "--repo", project, "--ledger", ledger, "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RoutineRunReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.RoutineID != "roadmap-next-task-suggester" || report.Status != "passed" {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"Roadmap candidate tasks: stale task rescuer, PR reviewer, CI fixer, docs drift checker, rebase helper, release verifier, evidence label auditor deeper policy/eval variants, roadmap next-task suggester, per-routine runtime budget / review budget 与 heartbeat 更深集成",
+		"Runnable routines from cmd/codex-orchestrator/main.go: ci-fixer, docs-drift-checker, evidence-label-auditor, pr-reviewer, release-verifier, roadmap-next-task-suggester, stale-task-rescuer",
+		"rebase helper: already represented by ledger task REBASE-HELPER",
+		"local suggestion: evidence label auditor deeper policy/eval variants.",
+		"local suggestion: per-routine runtime budget / review budget 与 heartbeat 更深集成.",
+	} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, local)
+		}
+	}
+	if !strings.Contains(report.NextSuggestedAction, "evidence label auditor deeper policy/eval variants") {
+		t.Fatalf("expected primary next action to prefer remaining v3 read-only work, got %q", report.NextSuggestedAction)
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
+		t.Fatalf("expected local-only passed evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunRoadmapNextTaskSuggesterRoutineQueueDrainedWhenOnlyUnsafeItemsRemain(t *testing.T) {
+	root := t.TempDir()
+	project, _ := createRoadmapNextTaskFixture(t, root, false)
+	roadmap := `# roadmap
+
+## v3：Routine library
+
+候选 routine：
+
+- rebase helper；
+- release verifier。
+`
+	if err := os.WriteFile(filepath.Join(project, "docs", "roadmap.md"), []byte(roadmap), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runRoadmapNextTaskSuggesterRoutine(project, "")
+	if report.Status != "passed" {
+		t.Fatalf("expected passed queue-drained report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	if !strings.Contains(local, "No remaining safe read-only roadmap tasks were found") {
+		t.Fatalf("expected queue-drained local evidence, got:\n%s", local)
+	}
+	if !strings.Contains(report.NextSuggestedAction, "queue appears drained") {
+		t.Fatalf("expected queue-drained next action, got %q", report.NextSuggestedAction)
+	}
+}
+
+func TestRunRoadmapNextTaskSuggesterRoutineBlockedWhenRoadmapMissing(t *testing.T) {
+	root := t.TempDir()
+	report := runRoadmapNextTaskSuggesterRoutine(root, "")
+	if report.Status != "blocked" || report.BlockedReason == "" {
+		t.Fatalf("expected blocked report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "Could not read docs/roadmap.md") {
+		t.Fatalf("expected roadmap blocked evidence, got %#v", report.Evidence)
+	}
+}
+
 func TestRunEvidenceLabelAuditorRoutineWritesPassedReport(t *testing.T) {
 	root := t.TempDir()
 	project := createEvidenceAuditFixture(t, root)
@@ -1278,6 +1357,105 @@ func cmdRunRoutine(args []string) error {
 		}
 	}
 	return project
+}
+
+func createRoadmapNextTaskFixture(t *testing.T, root string, withLedger bool) (string, string) {
+	t.Helper()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	for _, dir := range []string{
+		filepath.Join(project, "cmd", "codex-orchestrator"),
+		filepath.Join(project, "docs"),
+		filepath.Join(project, "routines"),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	source := `package main
+
+func cmdRunRoutine(args []string) error {
+	switch args[0] {
+	case "stale-task-rescuer":
+		return nil
+	case "pr-reviewer":
+		return nil
+	case "ci-fixer":
+		return nil
+	case "release-verifier":
+		return nil
+	case "docs-drift-checker":
+		return nil
+	case "evidence-label-auditor":
+		return nil
+	case "roadmap-next-task-suggester":
+		return nil
+	default:
+		return nil
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(project, "cmd", "codex-orchestrator", "main.go"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{
+		"stale-task-rescuer",
+		"pr-reviewer",
+		"ci-fixer",
+		"release-verifier",
+		"docs-drift-checker",
+		"evidence-label-auditor",
+		"roadmap-next-task-suggester",
+	} {
+		data, err := json.Marshal(RoutineSpec{ID: id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(project, "routines", id+".json"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	roadmap := `# roadmap
+
+## v2.5：Verification routine foundation
+
+剩余：
+
+- per-routine runtime budget / review budget 与 heartbeat 更深集成。
+
+## v3：Routine library
+
+候选 routine：
+
+- stale task rescuer；
+- PR reviewer；
+- CI fixer；
+- docs drift checker；
+- rebase helper；
+- release verifier；
+- evidence label auditor deeper policy/eval variants；
+- roadmap next-task suggester。
+`
+	if err := os.WriteFile(filepath.Join(project, "docs", "roadmap.md"), []byte(roadmap), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if !withLedger {
+		return project, ""
+	}
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "REBASE-HELPER",
+		"--title", "rebase helper",
+		"--worktree", filepath.Join(root, "missing-rebase"),
+		"--branch", "codex/rebase-helper",
+		"--base-commit", gitOutputForTest(t, project, "rev-parse", "HEAD"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return project, ledger
 }
 
 func createEvidenceAuditFixture(t *testing.T, root string) string {

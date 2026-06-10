@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "id": "roadmap-next-task-suggester",
+  "title": "Roadmap Next-Task Suggester",
+  "purpose": "Suggest the next safe bounded roadmap task from repo-local roadmap, routine-spec, runnable-command, and optional ledger state without mutating repository or orchestration state.",
+  "trigger": "Run when the orchestrator needs a conservative next-task recommendation from docs/roadmap.md and repo-local state before dispatching more work.",
+  "inputs": [
+    "repository path",
+    "docs/roadmap.md",
+    "cmd/codex-orchestrator/main.go",
+    "routines/*.json",
+    "optional .codex-orchestrator/ledger.json"
+  ],
+  "allowedActions": [
+    "inspect repo-local roadmap text read-only",
+    "parse runnable routine ids from source",
+    "compare implemented routine ids against roadmap candidate names",
+    "inspect optional repo-local ledger task state read-only",
+    "write a RoutineRunReport JSON when requested"
+  ],
+  "forbiddenActions": [
+    "stage, commit, merge, push, tag, or release",
+    "create, delete, or clean worktrees",
+    "dispatch sessions or start nested subagents",
+    "mutate the orchestration ledger",
+    "claim direct or proxy runtime proof from static planning evidence"
+  ],
+  "gates": [
+    "docs/roadmap.md readable",
+    "runnable run-routine ids extracted",
+    "routines directory readable",
+    "candidate suggestions filtered against implemented routines and optional active repo-local ledger tasks",
+    "report uses only local or blocked evidence"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Reserved for future human-reviewed or runtime-backed prioritization proof; the MVP does not emit direct proof.",
+      "proxy": "Reserved for future accepted external planning artifacts; the MVP normally does not emit proxy proof.",
+      "local": "Local roadmap, source, routine-spec, and optional ledger inspection.",
+      "blocked": "Roadmap, source, routine-spec, or optional ledger inputs could not be inspected safely or were too ambiguous."
+    }
+  },
+  "escalation": [
+    "Stop if docs/roadmap.md or runnable routine source cannot be inspected.",
+    "Do not mutate the ledger or dispatch work from this routine; report only a suggestion.",
+    "Escalate when the remaining roadmap items are too ambiguous to classify as a bounded safe task."
+  ],
+  "maxRuntimeMinutes": 10
+}

@@ -233,6 +233,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 ./codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
 ./codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
+./codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -316,6 +317,17 @@ wrongdoing. It does not stage, commit, merge, push, tag, release, clean
 worktrees, dispatch sessions, mutate the ledger, or claim runtime proof; MVP
 evidence is `local` or `blocked`.
 
+`run-routine roadmap-next-task-suggester` is the seventh runnable routine MVP.
+It is read-only and does not mutate the ledger. It parses remaining candidate
+tasks from `docs/roadmap.md`, compares them against local runnable routine IDs
+and `routines/*.json`, optionally filters duplicate active or merged matches
+from a repo-local `.codex-orchestrator/ledger.json`, and prefers conservative
+read-only local tasks over mutating, release-scoped, or network-dependent
+work. If only unsafe items remain, it returns a queue-drained next action
+instead of pretending to dispatch. It does not stage, commit, merge, push,
+tag, release, clean worktrees, dispatch sessions, mutate the ledger, or claim
+runtime proof; MVP evidence is `local` or `blocked`.
+
 When a delegated task is merged, pushed, released, and cleaned, the
 task-specific heartbeat is not automatically the end of the loop. Before
 deleting that heartbeat, the orchestrator should inspect ledger/repo truth and
@@ -398,6 +410,7 @@ codex-orchestrator/
 │   ├── log-proof.json
 │   ├── pr-reviewer.json
 │   ├── release-verifier.json
+│   ├── roadmap-next-task-suggester.json
 │   └── stale-task-rescuer.json
 ├── examples/
 │   ├── ledger.example.json

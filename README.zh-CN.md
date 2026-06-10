@@ -203,6 +203,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 ./codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
 ./codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
+./codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -273,6 +274,16 @@ direct evidence 的 routine 中记录了 direct evidence。这些发现只是启
 不是语义层面的定罪。它不会 stage、commit、merge、push、tag、release、
 清理 worktree、派发 session、修改 ledger，也不会声称 runtime proof；这个 MVP 使用
 `local` 或 `blocked` 证据。
+
+`run-routine roadmap-next-task-suggester` 是第七个可运行 routine MVP。它是只读的，
+不会修改 ledger。它会从 `docs/roadmap.md` 解析剩余候选任务，对照本地可运行
+routine ID 和 `routines/*.json`，并在 repo-local `.codex-orchestrator/ledger.json`
+存在时过滤已由 active / pending / merged 任务占用的重复候选项；同时优先建议
+read-only、本地、保守的 checker / auditor / suggester 类工作，而不是会改 git、
+涉及 release、或依赖网络的任务。如果只剩下高风险项，它会明确返回 queue-drained
+下一步，而不是假装已经可以派发。它不会 stage、commit、merge、push、tag、
+release、清理 worktree、派发 session、修改 ledger，也不会声称 runtime proof；
+这个 MVP 使用 `local` 或 `blocked` 证据。
 
 一个 delegated task 完成 merge、push、release、cleanup，并不等于整个 loop
 结束。删除任务专属 heartbeat 前，统领必须先检查 ledger / repo truth 和 roadmap
@@ -354,6 +365,7 @@ codex-orchestrator/
 │   ├── log-proof.json
 │   ├── pr-reviewer.json
 │   ├── release-verifier.json
+│   ├── roadmap-next-task-suggester.json
 │   └── stale-task-rescuer.json
 ├── examples/
 │   ├── ledger.example.json
