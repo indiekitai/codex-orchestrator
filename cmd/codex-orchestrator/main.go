@@ -46,6 +46,17 @@ type Task struct {
 	History         []map[string]string `json:"history,omitempty"`
 }
 
+type stringList []string
+
+func (s *stringList) String() string {
+	return strings.Join(*s, ",")
+}
+
+func (s *stringList) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
+
 type Observation struct {
 	ID        string `json:"id,omitempty"`
 	Status    string `json:"status"`
@@ -78,6 +89,10 @@ func run(args []string) error {
 	switch args[0] {
 	case "init":
 		return cmdInit(args[1:])
+	case "record-task":
+		return cmdRecordTask(args[1:])
+	case "append-event":
+		return cmdAppendEvent(args[1:])
 	case "observe":
 		return cmdObserve(args[1:])
 	case "status":
@@ -95,6 +110,8 @@ func usage() {
 
 Usage:
   codex-orchestrator init [--ledger PATH] [--project-root PATH]
+  codex-orchestrator record-task --id ID --worktree PATH --branch BRANCH [--allowed PATH] [--forbidden PATH] [--gate CMD]
+  codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--note TEXT]
   codex-orchestrator observe [--ledger PATH] [--json] [--write-report PATH]
   codex-orchestrator status [--ledger PATH] [--json]
 
@@ -105,6 +122,7 @@ delete branches, or clean worktrees.`)
 func cmdInit(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	eventsPath := fs.String("events", "", "events path")
 	projectRoot := fs.String("project-root", ".", "project root")
 	defaultBranchValue := fs.String("default-branch", "", "default branch")
 	remote := fs.String("remote", "origin", "remote")
@@ -114,7 +132,7 @@ func cmdInit(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if _, err := os.Stat(*ledgerPath); err == nil && !*force {
+	if _, err := os.Stat(expandPath(*ledgerPath)); err == nil && !*force {
 		return fmt.Errorf("ledger already exists: %s (use --force to overwrite)", *ledgerPath)
 	}
 	root, err := filepath.Abs(*projectRoot)
@@ -140,8 +158,11 @@ func cmdInit(args []string) error {
 	if err := writeJSON(*ledgerPath, ledger); err != nil {
 		return err
 	}
-	eventsPath := filepath.Join(filepath.Dir(expandPath(*ledgerPath)), "events.jsonl")
-	if err := appendEvent(eventsPath, map[string]string{
+	resolvedEvents := *eventsPath
+	if resolvedEvents == "" {
+		resolvedEvents = eventsPathForLedger(*ledgerPath)
+	}
+	if err := appendEvent(resolvedEvents, map[string]any{
 		"at":     now,
 		"type":   "init",
 		"status": "created",
@@ -150,7 +171,168 @@ func cmdInit(args []string) error {
 		return err
 	}
 	fmt.Printf("Initialized ledger: %s\n", *ledgerPath)
-	fmt.Printf("Initialized events: %s\n", eventsPath)
+	fmt.Printf("Initialized events: %s\n", resolvedEvents)
+	return nil
+}
+
+func cmdRecordTask(args []string) error {
+	fs := flag.NewFlagSet("record-task", flag.ExitOnError)
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	eventsPath := fs.String("events", "", "events path")
+	id := fs.String("id", "", "task id")
+	title := fs.String("title", "", "task title")
+	threadID := fs.String("thread-id", "", "Codex thread id")
+	worktree := fs.String("worktree", "", "task worktree path")
+	branch := fs.String("branch", "", "task branch")
+	baseCommit := fs.String("base-commit", "", "base commit")
+	status := fs.String("status", "active", "task status")
+	evidence := fs.String("evidence", "local", "expected evidence type")
+	evidenceNote := fs.String("evidence-note", "", "evidence note")
+	note := fs.String("note", "", "history note")
+	var allowed stringList
+	var forbidden stringList
+	var gates stringList
+	fs.Var(&allowed, "allowed", "allowed write path, repeatable")
+	fs.Var(&forbidden, "forbidden", "forbidden path, repeatable")
+	fs.Var(&gates, "gate", "verification gate, repeatable")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *id == "" {
+		return errors.New("record-task requires --id")
+	}
+	if *worktree == "" {
+		return errors.New("record-task requires --worktree")
+	}
+	if *branch == "" {
+		return errors.New("record-task requires --branch")
+	}
+	ledger, err := loadLedger(*ledgerPath)
+	if err != nil {
+		return err
+	}
+	if findTaskIndex(ledger.Tasks, *id) >= 0 {
+		return fmt.Errorf("task already exists: %s", *id)
+	}
+	base := *baseCommit
+	if base == "" {
+		base = headCommit(ledger.ProjectRoot)
+	}
+	now := nowISO()
+	taskTitle := *title
+	if taskTitle == "" {
+		taskTitle = *id
+	}
+	historyNote := *note
+	if historyNote == "" {
+		historyNote = "Task recorded."
+	}
+	task := Task{
+		ID:         *id,
+		Title:      taskTitle,
+		ThreadID:   *threadID,
+		Worktree:   *worktree,
+		Branch:     *branch,
+		BaseCommit: base,
+		Status:     *status,
+		WriteSet: map[string][]string{
+			"allowed":   []string(allowed),
+			"forbidden": []string(forbidden),
+		},
+		Gates: []string(gates),
+		Evidence: map[string]any{
+			"expected": *evidence,
+			"labels":   []string{"direct", "proxy", "blocked"},
+			"notes":    *evidenceNote,
+		},
+		LastObservation: map[string]string{
+			"at":     now,
+			"result": *status,
+			"note":   "Task recorded.",
+		},
+		History: []map[string]string{{
+			"at":     now,
+			"type":   "record-task",
+			"status": *status,
+			"note":   historyNote,
+		}},
+	}
+	ledger.Tasks = append(ledger.Tasks, task)
+	if err := saveLedger(*ledgerPath, &ledger); err != nil {
+		return err
+	}
+	resolvedEvents := *eventsPath
+	if resolvedEvents == "" {
+		resolvedEvents = eventsPathForLedger(*ledgerPath)
+	}
+	if err := appendEvent(resolvedEvents, map[string]any{
+		"at":     nowISO(),
+		"type":   "record-task",
+		"taskId": *id,
+		"status": *status,
+	}); err != nil {
+		return err
+	}
+	fmt.Printf("Recorded task: %s\n", *id)
+	return nil
+}
+
+func cmdAppendEvent(args []string) error {
+	fs := flag.NewFlagSet("append-event", flag.ExitOnError)
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	eventsPath := fs.String("events", "", "events path")
+	taskID := fs.String("task-id", "", "task id")
+	eventType := fs.String("type", "", "event type")
+	status := fs.String("status", "", "status")
+	note := fs.String("note", "", "event note")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *eventType == "" {
+		return errors.New("append-event requires --type")
+	}
+	ledger, err := loadLedger(*ledgerPath)
+	if err != nil {
+		return err
+	}
+	taskIndex := -1
+	if *taskID != "" {
+		taskIndex = findTaskIndex(ledger.Tasks, *taskID)
+		if taskIndex < 0 {
+			return fmt.Errorf("task not found: %s", *taskID)
+		}
+	}
+	now := nowISO()
+	event := map[string]any{
+		"at":     now,
+		"type":   *eventType,
+		"status": emptyToNil(*status),
+		"taskId": emptyToNil(*taskID),
+		"note":   *note,
+	}
+	resolvedEvents := *eventsPath
+	if resolvedEvents == "" {
+		resolvedEvents = eventsPathForLedger(*ledgerPath)
+	}
+	if err := appendEvent(resolvedEvents, event); err != nil {
+		return err
+	}
+	if *taskID != "" {
+		task := &ledger.Tasks[taskIndex]
+		if *status != "" {
+			task.Status = *status
+		}
+		task.LastObservation = map[string]string{
+			"at":     now,
+			"result": task.Status,
+			"note":   *note,
+		}
+		task.History = append(task.History, compactEvent(event))
+		if err := saveLedger(*ledgerPath, &ledger); err != nil {
+			return err
+		}
+	}
+	fmt.Printf("Appended event: %s\n", *eventType)
 	return nil
 }
 
@@ -333,6 +515,20 @@ func loadLedger(path string) (Ledger, error) {
 	return ledger, nil
 }
 
+func saveLedger(path string, ledger *Ledger) error {
+	ledger.UpdatedAt = nowISO()
+	return writeJSON(path, ledger)
+}
+
+func findTaskIndex(tasks []Task, id string) int {
+	for index, task := range tasks {
+		if task.ID == id {
+			return index
+		}
+	}
+	return -1
+}
+
 func writeJSON(path string, value any) error {
 	target := expandPath(path)
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -346,7 +542,7 @@ func writeJSON(path string, value any) error {
 	return os.WriteFile(target, data, 0o644)
 }
 
-func appendEvent(path string, event map[string]string) error {
+func appendEvent(path string, event map[string]any) error {
 	target := expandPath(path)
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
@@ -363,6 +559,28 @@ func appendEvent(path string, event map[string]string) error {
 	defer f.Close()
 	_, err = f.Write(data)
 	return err
+}
+
+func compactEvent(event map[string]any) map[string]string {
+	result := map[string]string{}
+	for _, key := range []string{"at", "type", "status", "taskId", "note"} {
+		value, ok := event[key]
+		if !ok || value == nil {
+			continue
+		}
+		text := fmt.Sprint(value)
+		if text != "" {
+			result[key] = text
+		}
+	}
+	return result
+}
+
+func emptyToNil(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }
 
 func printJSON(value any) error {
@@ -400,6 +618,20 @@ func defaultBranch(repo string) string {
 		return parts[1]
 	}
 	return "main"
+}
+
+func headCommit(repo string) string {
+	if repo == "" {
+		repo = "."
+	}
+	if commit, err := gitOutput(expandPath(repo), "rev-parse", "HEAD"); err == nil {
+		return strings.TrimSpace(commit)
+	}
+	return ""
+}
+
+func eventsPathForLedger(ledgerPath string) string {
+	return filepath.Join(filepath.Dir(expandPath(ledgerPath)), "events.jsonl")
 }
 
 func gitOutput(cwd string, args ...string) (string, error) {

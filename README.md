@@ -198,8 +198,10 @@ The v2 helper CLI currently supports:
 ```bash
 go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
+./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task
 ./codex-orchestrator observe
 ./codex-orchestrator status
+./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ```
 
 ## 🧱 Architecture

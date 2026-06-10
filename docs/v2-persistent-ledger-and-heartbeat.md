@@ -167,13 +167,16 @@ seed for machines that should not depend on `python3`:
 
 ```bash
 go build -o codex-orchestrator ./cmd/codex-orchestrator
+./codex-orchestrator init
+./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task
 ./codex-orchestrator observe --ledger examples/ledger.example.json
+./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ```
 
-The Python helper remains as a prototype and compatibility reference while the
-Go CLI catches up. If neither helper is available, use the same ledger schema
-manually and let the Codex App orchestrator inspect `git status`,
-`git worktree list`, and task worktrees directly.
+The Python helper remains as a prototype and compatibility reference. If neither
+helper is available, use the same ledger schema manually and let the Codex App
+orchestrator inspect `git status`, `git worktree list`, and task worktrees
+directly.
 
 For compatibility, the original form still works:
 

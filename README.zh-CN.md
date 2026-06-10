@@ -171,8 +171,10 @@ A 和 B 并行运行（写入集不相交）。两者合并后，编排器派发
 ```bash
 go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
+./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task
 ./codex-orchestrator observe
 ./codex-orchestrator status
+./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ```
 
 ## 🧱 架构
