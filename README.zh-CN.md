@@ -70,7 +70,7 @@
 
 开源场景下建议先在可丢弃仓库或功能分支上 dry run。自动 push 应保持关闭，直到你确认 review gate 和项目分支保护策略可靠。
 
-核心 skill 本身不依赖 Python。当前 v2 helper 暂时用 `python3` 实现，只是 persistent ledger 和 heartbeat checker 的可运行原型。如果机器没有 `python3`，仍然可以把这个 skill 当作 Codex App-first 的手动/半自动编排 runbook 使用，并由统领 session 直接检查 git/worktree 状态。后续更合理的方向是打包成可安装 CLI 或单文件二进制。
+核心 skill 本身不依赖 Python。v2 helper 现在已有 Go CLI seed，可以构建成单文件二进制。Python helper 会先保留，作为开发原型和兼容参考。
 
 ## 🚫 这不是什么
 
@@ -169,11 +169,10 @@ A 和 B 并行运行（写入集不相交）。两者合并后，编排器派发
 当前 v2 helper CLI 已支持：
 
 ```bash
-python3 scripts/ledger_heartbeat.py init
-python3 scripts/ledger_heartbeat.py record-task --id TASK --worktree /path/to/wt --branch codex/task
-python3 scripts/ledger_heartbeat.py observe
-python3 scripts/ledger_heartbeat.py status
-python3 scripts/ledger_heartbeat.py append-event --type review --task-id TASK --status completed-unreviewed
+go build -o codex-orchestrator ./cmd/codex-orchestrator
+./codex-orchestrator init
+./codex-orchestrator observe
+./codex-orchestrator status
 ```
 
 ## 🧱 架构
@@ -226,6 +225,9 @@ codex-orchestrator/
 ├── SKILL.md              # 编排器 skill（复制到 ~/.codex/skills/）
 ├── agents/
 │   └── openai.yaml       # Agent 接口定义
+├── cmd/
+│   └── codex-orchestrator/
+│       └── main.go       # Go helper CLI seed
 ├── docs/
 │   ├── roadmap.md
 │   └── v2-persistent-ledger-and-heartbeat.md
@@ -233,6 +235,7 @@ codex-orchestrator/
 │   └── ledger.example.json
 ├── scripts/
 │   └── ledger_heartbeat.py
+├── go.mod
 ├── README.md             # 英文说明
 ├── README.zh-CN.md       # 本文件
 └── LICENSE               # MIT

@@ -80,11 +80,9 @@ For open-source use, start with a dry run on a disposable repository or feature
 branch. Keep automatic push disabled until you trust the review gates and your
 project's branch protection policy.
 
-The core skill does not require Python. The optional v2 helper currently uses
-`python3` as a portable prototype for the persistent ledger and heartbeat
-checker. If `python3` is unavailable, keep using the skill as a manual/App-first
-orchestration runbook and inspect git/worktree state directly. A packaged CLI
-or single-binary helper is the intended next step.
+The core skill does not require Python. The v2 helper now has a Go CLI seed that
+can be built as a single binary. The Python helper remains as a prototype and
+compatibility reference.
 
 ## 🚫 What This Is Not
 
@@ -198,11 +196,10 @@ For the broader v2-v5 plan, see [docs/roadmap.md](docs/roadmap.md).
 The v2 helper CLI currently supports:
 
 ```bash
-python3 scripts/ledger_heartbeat.py init
-python3 scripts/ledger_heartbeat.py record-task --id TASK --worktree /path/to/wt --branch codex/task
-python3 scripts/ledger_heartbeat.py observe
-python3 scripts/ledger_heartbeat.py status
-python3 scripts/ledger_heartbeat.py append-event --type review --task-id TASK --status completed-unreviewed
+go build -o codex-orchestrator ./cmd/codex-orchestrator
+./codex-orchestrator init
+./codex-orchestrator observe
+./codex-orchestrator status
 ```
 
 ## 🧱 Architecture
@@ -255,6 +252,9 @@ codex-orchestrator/
 ├── SKILL.md              # The orchestrator skill (copy to ~/.codex/skills/)
 ├── agents/
 │   └── openai.yaml       # Agent interface definition
+├── cmd/
+│   └── codex-orchestrator/
+│       └── main.go       # Go helper CLI seed
 ├── docs/
 │   ├── roadmap.md
 │   └── v2-persistent-ledger-and-heartbeat.md
@@ -262,6 +262,7 @@ codex-orchestrator/
 │   └── ledger.example.json
 ├── scripts/
 │   └── ledger_heartbeat.py
+├── go.mod
 ├── README.md             # This file
 ├── README.zh-CN.md       # Chinese README
 └── LICENSE               # MIT

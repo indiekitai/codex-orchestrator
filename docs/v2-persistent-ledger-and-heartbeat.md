@@ -162,11 +162,18 @@ It does not create sessions, merge, push, or clean worktrees. It only compares
 the ledger with local git truth and prints the next suggested orchestrator
 action.
 
-The helper is currently implemented in Python as a small v2 prototype. The core
-skill does not require Python. If a machine has no `python3` command, use the
-same ledger schema manually and let the Codex App orchestrator inspect
-`git status`, `git worktree list`, and task worktrees directly. Do not block the
-v1 workflow just because the optional helper is unavailable.
+The core skill does not require Python. This repository now includes a Go CLI
+seed for machines that should not depend on `python3`:
+
+```bash
+go build -o codex-orchestrator ./cmd/codex-orchestrator
+./codex-orchestrator observe --ledger examples/ledger.example.json
+```
+
+The Python helper remains as a prototype and compatibility reference while the
+Go CLI catches up. If neither helper is available, use the same ledger schema
+manually and let the Codex App orchestrator inspect `git status`,
+`git worktree list`, and task worktrees directly.
 
 For compatibility, the original form still works:
 

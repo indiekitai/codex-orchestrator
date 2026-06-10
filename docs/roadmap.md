@@ -120,9 +120,9 @@ Future daemon/UI
 
 下一步建议：
 
-1. 给 helper CLI 增加 packaging/install 入口，避免要求用户机器一定有 `python3`。可选方向：
+1. 完善 Go helper CLI，避免要求用户机器一定有 `python3`。当前已开始 Go CLI seed，下一步是补齐 Python helper 已有的写入命令。可选分发方向：
 
-   - Go/Rust 单文件二进制；
+   - Go 单文件二进制；
    - npm 包；
    - Homebrew tap；
    - 继续保留 Python 脚本作为开发原型。
