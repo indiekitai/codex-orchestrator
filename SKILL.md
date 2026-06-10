@@ -133,13 +133,14 @@ escalation rules, and the output shape expected by the orchestrator. It does not
 create Codex App sessions, merge, push, clean worktrees, or upgrade
 local/proxy evidence into direct proof.
 
-The helper includes read-only MVP runners for the PR reviewer and stale task
-rescuer routines:
+The helper includes read-only MVP runners for PR reviewer, stale task rescuer,
+CI fixer, and release verifier routines:
 
 ```bash
 codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
 codex-orchestrator run-routine stale-task-rescuer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
 codex-orchestrator run-routine ci-fixer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/ci-fixer-report.json
+codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 ```
 
 The PR reviewer runner inspects only local git/static state from the ledger task worktree:
@@ -170,6 +171,18 @@ missing `baseCommit`, branch mismatch, or git inspection failures as
 `blocked`. Its MVP report uses only `local` and `blocked` evidence; it does not
 stage, commit, merge, push, clean, dispatch, update ledger status, or claim
 direct/proxy runtime proof.
+
+The release verifier runner is read-only and does not load or update the
+ledger. It verifies a supplied local git tag, records the local tag object type,
+reads GitHub release metadata through `gh release view` when `gh` is available,
+checks alpha/beta/rc prerelease flags, and compares release asset names against
+this repo's default Go CLI asset set or explicit repeated `--expected-asset`
+values. It classifies missing tags, missing releases, drafts, prerelease
+mismatches, and missing assets as `failed`; unavailable `gh`, auth/network
+errors, or unparseable release metadata as `blocked`. Its MVP report uses
+`local`, `proxy`, and `blocked` evidence; it does not create or edit releases,
+move tags, upload assets, stage, commit, merge, push, clean, dispatch, mutate
+the ledger, or claim production/runtime proof.
 
 After a routine is actually run, record the outcome so future orchestrator
 sessions can resume from ledger truth:
