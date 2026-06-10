@@ -110,7 +110,7 @@ ledger over chat-only state:
 
 ```bash
 codex-orchestrator init
-codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch codex/task
+codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 codex-orchestrator observe --json
 codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json --write-summary .codex-orchestrator/heartbeat-summary.md
 codex-orchestrator append-event --task-id TASK --type review --status completed-unreviewed --note "Ready for orchestrator review."
@@ -119,6 +119,10 @@ codex-orchestrator append-event --task-id TASK --type review --status completed-
 The helper is not a session launcher and must not be treated as one. It is a
 state and heartbeat tool. The Codex App orchestrator still owns worker dispatch,
 review, merge, push, and cleanup decisions.
+
+Optional task runtime/review budget metadata is visibility-only. `observe` and
+`heartbeat` can surface recorded budgets, but the helper must not kill
+processes, schedule sessions, or enforce budget decisions.
 
 If the repository includes v2.5 routine contracts, validate them before relying
 on routine names in a plan:

@@ -187,6 +187,97 @@ func TestHeartbeatWritesReportAndEvent(t *testing.T) {
 	}
 }
 
+func TestTaskBudgetMetadataSurfacesInObserveAndHeartbeat(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	budgetWorker := filepath.Join(root, "worker-budget")
+	legacyWorker := filepath.Join(root, "worker-legacy")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	report := filepath.Join(project, ".codex-orchestrator", "heartbeat-report.json")
+	summaryPath := filepath.Join(project, ".codex-orchestrator", "heartbeat-summary.md")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/budget", budgetWorker, "HEAD")
+	git(t, project, "worktree", "add", "-q", "-b", "codex/legacy", legacyWorker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "BUDGETED",
+		"--worktree", budgetWorker,
+		"--branch", "codex/budget",
+		"--max-runtime-minutes", "90",
+		"--review-budget-minutes", "25",
+		"--budget-note", "local-only",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "LEGACY", "--worktree", legacyWorker, "--branch", "codex/legacy"}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Tasks[0].Budget == nil {
+		t.Fatal("expected budget metadata to be stored")
+	}
+	if stored.Tasks[0].Budget.MaxRuntimeMinutes != 90 || stored.Tasks[0].Budget.ReviewBudgetMinutes != 25 {
+		t.Fatalf("unexpected stored budget: %#v", stored.Tasks[0].Budget)
+	}
+	if stored.Tasks[1].Budget != nil {
+		t.Fatalf("expected legacy task to omit budget metadata, got %#v", stored.Tasks[1].Budget)
+	}
+
+	observed, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if observed.BudgetSummary.TasksWithBudget != 1 || observed.BudgetSummary.TasksMissingBudget != 1 {
+		t.Fatalf("unexpected budget summary: %#v", observed.BudgetSummary)
+	}
+	if observed.BudgetSummary.TotalMaxRuntimeMinutes != 90 || observed.BudgetSummary.TotalReviewBudgetMinutes != 25 {
+		t.Fatalf("unexpected budget totals: %#v", observed.BudgetSummary)
+	}
+	var budgetObservation *Observation
+	for index := range observed.Observations {
+		if observed.Observations[index].ID == "BUDGETED" {
+			budgetObservation = &observed.Observations[index]
+			break
+		}
+	}
+	if budgetObservation == nil || budgetObservation.Budget == nil {
+		t.Fatalf("expected budgeted observation, got %#v", observed.Observations)
+	}
+	rendered := renderSummary(observed)
+	for _, want := range []string{"tasksWithBudget: `1`", "totalMaxRuntimeMinutes: `90`", "budget: maxRuntime=90m review=25m note=local-only"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected rendered summary to include %q:\n%s", want, rendered)
+		}
+	}
+
+	if err := cmdHeartbeat([]string{"--ledger", ledger, "--interval", "0", "--count", "1", "--write-report", report, "--write-summary", summaryPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var heartbeat ObserveSummary
+	if err := json.Unmarshal(data, &heartbeat); err != nil {
+		t.Fatal(err)
+	}
+	if heartbeat.BudgetSummary.TasksWithBudget != 1 || heartbeat.BudgetSummary.TotalReviewBudgetMinutes != 25 {
+		t.Fatalf("expected heartbeat report budget summary, got %#v", heartbeat.BudgetSummary)
+	}
+	summaryData, err := os.ReadFile(summaryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(summaryData), "budget: maxRuntime=90m review=25m note=local-only") {
+		t.Fatalf("expected heartbeat summary to include task budget:\n%s", string(summaryData))
+	}
+}
+
 func TestIntegrationDirtyBlocksDispatch(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

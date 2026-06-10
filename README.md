@@ -221,7 +221,7 @@ The v2 helper CLI currently supports:
 ```bash
 go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
-./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task
+./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
@@ -238,9 +238,11 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
 
-The JSON heartbeat report includes `overallStatus`, per-status `counts`, and a
-`reviewPressure` block so an orchestrator can pause dispatch when review,
-stale, blocked, or cleanup queues are saturated.
+The JSON heartbeat report includes `overallStatus`, per-status `counts`, a
+`reviewPressure` block, and a read-only `budgetSummary` when task budget
+metadata exists. Per-task runtime/review budgets recorded with `record-task`
+are surfaced in `observe` and heartbeat summaries for visibility only; the
+helper does not kill processes, schedule sessions, or enforce budgets.
 
 Codex App worktree dispatch is App-first. Save the repository as a Codex App
 project before relying on project worktree sessions. If dispatch fails because

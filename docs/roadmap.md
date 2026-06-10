@@ -160,7 +160,7 @@ Future daemon/UI
 
 ## v2.5：Verification routine foundation
 
-状态：alpha foundation。已经有 routine contract 目录、首批 JSON specs、harness map、Go helper 的 `validate-routines` 校验命令、`record-routine-run` ledger 记录命令、JSON report 输入、heartbeat recent routine run 摘要，以及多个只读 `run-routine` MVP；还没有后台 daemon、自动调度器或会主动派发 session 的 routine runtime。
+状态：alpha foundation。已经有 routine contract 目录、首批 JSON specs、harness map、Go helper 的 `validate-routines` 校验命令、`record-routine-run` ledger 记录命令、JSON report 输入、heartbeat recent routine run 摘要、只读 task budget summary，以及多个只读 `run-routine` MVP；还没有后台 daemon、自动调度器或会主动派发 session 的 routine runtime。
 
 原因：Loop Engineering 不只是调度任务。Claude Code 访谈和 feedback-loop
 engineering 都强调 agent 必须能运行产品、观察结果、修复并复测。否则
@@ -205,6 +205,8 @@ cmd/codex-orchestrator run-routine docs-drift-checker
 cmd/codex-orchestrator run-routine evidence-label-auditor
 cmd/codex-orchestrator run-routine roadmap-next-task-suggester
 cmd/codex-orchestrator record-routine-run --routine ... --status ...
+cmd/codex-orchestrator record-task --max-runtime-minutes ... --review-budget-minutes ...
+cmd/codex-orchestrator observe / heartbeat budgetSummary
 examples/routine-reports/
   pr-reviewer.passed.json
   api-proof.blocked.json
@@ -216,7 +218,7 @@ rule-hit 统计；但它仍然是只读、本地、静态的保守检查器。
 
 剩余：
 
-- per-routine runtime budget / review budget 与 heartbeat 更深集成。
+- 更深的 per-routine budget 策略、排序、告警或调度联动；当前 helper 只记录和展示预算元数据，不执行预算。
 
 ## v3：Routine library
 

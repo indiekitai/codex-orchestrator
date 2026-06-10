@@ -111,6 +111,12 @@ ledger, or claim runtime proof; this MVP emits `local` or `blocked` evidence.
 Routine specs live in [`../../routines`](../../routines). They are JSON so the
 Go helper can validate them without a Python, YAML, or Node dependency.
 
+Routine specs may include `maxRuntimeMinutes` and `reviewBudgetMinutes` as
+non-negative budget metadata. These fields are validated and documented for
+planning visibility only; the local helper does not enforce runtime limits or
+review budgets. Task-level budget metadata recorded in the ledger is surfaced
+through `observe` and heartbeat summaries when present.
+
 ## Required Output Shape
 
 Every routine must produce a report with these fields:
