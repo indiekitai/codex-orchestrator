@@ -191,6 +191,7 @@ routines/
   ci-fixer.json
   release-verifier.json
   docs-drift-checker.json
+  evidence-label-auditor.json
   database-proof.json
   device-proof.json
   log-proof.json
@@ -200,6 +201,7 @@ cmd/codex-orchestrator run-routine stale-task-rescuer --task-id ...
 cmd/codex-orchestrator run-routine ci-fixer --task-id ...
 cmd/codex-orchestrator run-routine release-verifier --tag ...
 cmd/codex-orchestrator run-routine docs-drift-checker
+cmd/codex-orchestrator run-routine evidence-label-auditor
 cmd/codex-orchestrator record-routine-run --routine ... --status ...
 examples/routine-reports/
   pr-reviewer.passed.json
@@ -224,7 +226,7 @@ examples/routine-reports/
 - docs drift checker；
 - rebase helper；
 - release verifier；
-- evidence label auditor；
+- evidence label auditor deeper policy/eval variants；
 - roadmap next-task suggester。
 
 推荐形式：

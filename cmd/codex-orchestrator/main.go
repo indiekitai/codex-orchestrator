@@ -229,6 +229,7 @@ Usage:
   codex-orchestrator run-routine ci-fixer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine release-verifier --tag TAG [--repo PATH] [--expected-asset NAME] [--write-report PATH] [--json]
   codex-orchestrator run-routine docs-drift-checker [--repo PATH] [--write-report PATH] [--json]
+  codex-orchestrator run-routine evidence-label-auditor [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
   codex-orchestrator record-routine-run --report-json PATH
 
@@ -644,6 +645,8 @@ func cmdRunRoutine(args []string) error {
 		return cmdRunReleaseVerifierRoutine(args[1:])
 	case "docs-drift-checker":
 		return cmdRunDocsDriftCheckerRoutine(args[1:])
+	case "evidence-label-auditor":
+		return cmdRunEvidenceLabelAuditorRoutine(args[1:])
 	default:
 		return fmt.Errorf("unsupported routine %q", args[0])
 	}
@@ -1492,6 +1495,112 @@ func runDocsDriftCheckerRoutine(repo string) RoutineRunReport {
 	return report
 }
 
+func cmdRunEvidenceLabelAuditorRoutine(args []string) error {
+	fs := flag.NewFlagSet("run-routine evidence-label-auditor", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path to inspect")
+	writeReport := fs.String("write-report", "", "write routine report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	report := runEvidenceLabelAuditorRoutine(*repo)
+	if err := validateRoutineRunReport(report); err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote routine report: %s\n", *writeReport)
+	return nil
+}
+
+func runEvidenceLabelAuditorRoutine(repo string) RoutineRunReport {
+	report := RoutineRunReport{
+		RoutineID: "evidence-label-auditor",
+		Status:    "blocked",
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Inspected repo-local docs, routine specs, routine reports, and ledger-shaped JSON read-only",
+		},
+		NeedsHuman:          false,
+		BlockedReason:       "",
+		NextSuggestedAction: "Fix the blocked evidence-label-auditor precondition, then rerun the routine.",
+	}
+	repo = expandPath(repo)
+	if repo == "" {
+		repo = "."
+	}
+	if info, err := os.Stat(repo); err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path does not exist: %s", repo))
+		report.BlockedReason = "repository path is missing"
+		return report
+	} else if !info.IsDir() {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path is not a directory: %s", repo))
+		report.BlockedReason = "repository path is not a directory"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Repository exists: "+repo)
+
+	staticDirectReserved, specFindings, err := inspectEvidenceRoutineSpecs(repo)
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not inspect routines directory: "+err.Error())
+		report.BlockedReason = "could not inspect routine specs"
+		return report
+	}
+	reservedIDs := mapKeys(staticDirectReserved)
+	if len(reservedIDs) == 0 {
+		report.Evidence["local"] = append(report.Evidence["local"], "No routine specs explicitly reserve direct evidence.")
+	} else {
+		report.Evidence["local"] = append(report.Evidence["local"], "Routine specs with direct evidence explicitly reserved: "+strings.Join(reservedIDs, ", "))
+	}
+
+	paths, err := evidenceAuditPaths(repo)
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not collect evidence audit paths: "+err.Error())
+		report.BlockedReason = "could not collect evidence audit inputs"
+		return report
+	}
+	findings := append([]string{}, specFindings...)
+	for _, path := range paths {
+		data, readErr := os.ReadFile(filepath.Join(repo, path))
+		if readErr != nil {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Could not read %s: %v", path, readErr))
+			report.BlockedReason = "could not read evidence audit input"
+			return report
+		}
+		if strings.HasSuffix(path, ".json") {
+			findings = append(findings, auditEvidenceJSON(path, data, staticDirectReserved)...)
+		} else {
+			findings = append(findings, auditEvidenceText(path, string(data))...)
+		}
+	}
+	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static evidence-label heuristics")
+	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Scanned %d repo-local evidence-label input file(s).", len(paths)))
+
+	if len(findings) > 0 {
+		sort.Strings(findings)
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], findings...)
+		report.NextSuggestedAction = "Review these local/static evidence-label suspicions, fix confirmed wording or report-shape issues, then rerun evidence-label-auditor."
+		return report
+	}
+
+	report.Status = "passed"
+	report.BlockedReason = ""
+	report.NextSuggestedAction = "Record this local/static report if the conservative evidence-label audit is sufficient; no direct runtime proof was produced."
+	return report
+}
+
 func cmdRecordRoutineRun(args []string) error {
 	fs := flag.NewFlagSet("record-routine-run", flag.ExitOnError)
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
@@ -2322,6 +2431,362 @@ func documentedRoutineIDs(text string, ids []string) []string {
 		}
 	}
 	return found
+}
+
+func inspectEvidenceRoutineSpecs(repo string) (map[string]bool, []string, error) {
+	dir := filepath.Join(repo, "routines")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	staticDirectReserved := map[string]bool{}
+	findings := []string{}
+	checked := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		checked++
+		path := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, nil, err
+		}
+		var spec RoutineSpec
+		if err := json.Unmarshal(data, &spec); err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", entry.Name(), err)
+		}
+		if spec.ID == "" {
+			continue
+		}
+		direct := spec.OutputSchema.Evidence["direct"]
+		if evidenceDescriptionReservesDirect(direct) {
+			staticDirectReserved[spec.ID] = true
+		}
+		findings = append(findings, auditRoutineSpecEvidenceDescriptions(filepath.Join("routines", entry.Name()), spec)...)
+	}
+	if checked == 0 {
+		return nil, nil, errors.New("no routine spec JSON files found")
+	}
+	if len(staticDirectReserved) == 0 && len(findings) == 0 {
+		return staticDirectReserved, findings, nil
+	}
+	return staticDirectReserved, findings, nil
+}
+
+func auditRoutineSpecEvidenceDescriptions(path string, spec RoutineSpec) []string {
+	findings := []string{}
+	evidence := spec.OutputSchema.Evidence
+	direct := evidence["direct"]
+	if containsAnyFold(direct, weakEvidenceTerms()) && !evidenceDescriptionReservesDirect(direct) {
+		findings = append(findings, fmt.Sprintf("%s: local/static suspicion: direct evidence description for %s contains local/static wording: %q", path, spec.ID, direct))
+	}
+	local := evidence["local"]
+	if containsAnyFold(local, strongEvidenceClaimTerms()) && !containsAnyFold(local, evidenceNegationTerms()) {
+		findings = append(findings, fmt.Sprintf("%s: local/static suspicion: local evidence description for %s contains strong proof wording: %q", path, spec.ID, local))
+	}
+	blocked := evidence["blocked"]
+	if containsAnyFold(blocked, []string{"verified", "passed", "proven"}) && !containsAnyFold(blocked, evidenceNegationTerms()) {
+		findings = append(findings, fmt.Sprintf("%s: local/static suspicion: blocked evidence description for %s may describe proof as blocked: %q", path, spec.ID, blocked))
+	}
+	return findings
+}
+
+func evidenceDescriptionReservesDirect(text string) bool {
+	return containsAnyFold(text, []string{
+		"reserved",
+		"does not emit direct",
+		"does not claim direct",
+		"future direct",
+		"no direct",
+	})
+}
+
+func evidenceAuditPaths(repo string) ([]string, error) {
+	paths := []string{}
+	addIfExists := func(path string) error {
+		full := filepath.Join(repo, path)
+		info, err := os.Stat(full)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	}
+	for _, path := range []string{
+		"README.md",
+		"README.zh-CN.md",
+		"SKILL.md",
+		filepath.Join("docs", "roadmap.md"),
+		filepath.Join("examples", "ledger.example.json"),
+		filepath.Join(".codex-orchestrator", "ledger.json"),
+	} {
+		if err := addIfExists(path); err != nil {
+			return nil, err
+		}
+	}
+	for _, dir := range []string{
+		filepath.Join("docs", "routines"),
+		"routines",
+		filepath.Join("examples", "routine-reports"),
+		filepath.Join(".codex-orchestrator"),
+	} {
+		entries, err := os.ReadDir(filepath.Join(repo, dir))
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			path := filepath.Join(dir, entry.Name())
+			switch {
+			case strings.HasSuffix(entry.Name(), ".md"):
+				paths = append(paths, path)
+			case strings.HasSuffix(entry.Name(), ".json") && dir != filepath.Join(".codex-orchestrator"):
+				paths = append(paths, path)
+			case strings.HasSuffix(entry.Name(), ".json") && strings.Contains(entry.Name(), "routine"):
+				paths = append(paths, path)
+			}
+		}
+	}
+	paths = uniqueSortedStrings(paths)
+	if len(paths) == 0 {
+		return nil, errors.New("no docs, routine specs, routine reports, or ledger-like JSON files found")
+	}
+	return paths, nil
+}
+
+func auditEvidenceText(path string, text string) []string {
+	findings := []string{}
+	for index, line := range strings.Split(text, "\n") {
+		if !containsAnyFold(line, weakEvidenceTerms()) || !containsAnyFold(line, strongEvidenceClaimTerms()) {
+			continue
+		}
+		if !containsAnyFold(line, evidenceAssertionTerms()) {
+			continue
+		}
+		if containsAnyFold(line, evidenceNegationTerms()) {
+			continue
+		}
+		findings = append(findings, fmt.Sprintf("%s:%d: local/static suspicion: weak evidence wording appears near strong proof wording: %s", path, index+1, strings.TrimSpace(line)))
+	}
+	return findings
+}
+
+func auditEvidenceJSON(path string, data []byte, staticDirectReserved map[string]bool) []string {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return []string{fmt.Sprintf("%s: local/static suspicion: JSON could not be parsed for evidence-label audit: %v", path, err)}
+	}
+	findings := []string{}
+	if looksLikeRoutineRunReport(raw) {
+		findings = append(findings, auditRoutineRunEvidenceObject(path, raw, staticDirectReserved)...)
+	}
+	if runsRaw, ok := raw["routineRuns"]; ok {
+		var runs []map[string]json.RawMessage
+		if err := json.Unmarshal(runsRaw, &runs); err != nil {
+			findings = append(findings, fmt.Sprintf("%s: local/static suspicion: routineRuns could not be parsed for evidence-label audit: %v", path, err))
+		} else {
+			for index, run := range runs {
+				findings = append(findings, auditRoutineRunEvidenceObject(fmt.Sprintf("%s routineRuns[%d]", path, index), run, staticDirectReserved)...)
+			}
+		}
+	}
+	return findings
+}
+
+func looksLikeRoutineRunReport(raw map[string]json.RawMessage) bool {
+	_, hasRoutineID := raw["routineId"]
+	_, hasStatus := raw["status"]
+	return hasRoutineID && hasStatus
+}
+
+func auditRoutineRunEvidenceObject(path string, raw map[string]json.RawMessage, staticDirectReserved map[string]bool) []string {
+	findings := []string{}
+	routineID := rawString(raw["routineId"])
+	evidenceRaw, ok := raw["evidence"]
+	if !ok {
+		return []string{fmt.Sprintf("%s: local/static suspicion: RoutineRunReport for %s is missing evidence object.", path, emptyToUnknown(routineID))}
+	}
+	var evidence map[string]json.RawMessage
+	if err := json.Unmarshal(evidenceRaw, &evidence); err != nil {
+		return []string{fmt.Sprintf("%s: local/static suspicion: RoutineRunReport evidence for %s could not be parsed: %v", path, emptyToUnknown(routineID), err)}
+	}
+	for _, bucket := range []string{"direct", "proxy", "local", "blocked"} {
+		if _, ok := evidence[bucket]; !ok {
+			findings = append(findings, fmt.Sprintf("%s: local/static suspicion: RoutineRunReport for %s is missing evidence bucket %q.", path, emptyToUnknown(routineID), bucket))
+		}
+	}
+	if staticDirectReserved[routineID] {
+		directItems := rawStringSlice(evidence["direct"])
+		if len(directItems) > 0 {
+			findings = append(findings, fmt.Sprintf("%s: local/static suspicion: RoutineRunReport for static-only routine %s contains direct evidence even though the routine spec reserves direct evidence.", path, routineID))
+		}
+	}
+	return findings
+}
+
+func weakEvidenceTerms() []string {
+	return []string{
+		"local",
+		"proxy",
+		"blocked",
+		"unit",
+		"static",
+		"fixture",
+		"mock",
+		"synthetic",
+		"build",
+		"compile",
+		"scaffold",
+		"本地",
+		"代理",
+		"阻断",
+		"单元测试",
+		"静态",
+		"桩",
+	}
+}
+
+func strongEvidenceClaimTerms() []string {
+	return []string{
+		"direct proof",
+		"direct evidence",
+		"runtime proof",
+		"production proof",
+		"prod proof",
+		"pre proof",
+		"device proof",
+		"real-device proof",
+		"production runtime",
+		"live runtime",
+		"runtime verified",
+		"prod verified",
+		"直接证明",
+		"直接证据",
+		"运行时证明",
+		"生产证明",
+		"真实设备证明",
+	}
+}
+
+func evidenceNegationTerms() []string {
+	return []string{
+		"do not",
+		"does not",
+		"don't",
+		"not claim",
+		"not direct",
+		"not production",
+		"not runtime",
+		"no direct",
+		"no runtime",
+		"never",
+		"without",
+		"reserved",
+		"cannot",
+		"could not",
+		"不",
+		"不会",
+		"不要",
+		"不得",
+		"不许",
+		"不能",
+		"没有",
+	}
+}
+
+func evidenceAssertionTerms() []string {
+	return []string{
+		"provide",
+		"provides",
+		"provided",
+		"prove",
+		"proves",
+		"proved",
+		"verified",
+		"complete",
+		"passed",
+		"backs",
+		"backed by",
+		"counts as",
+		"demonstrates",
+		"confirms",
+		" is direct",
+		" are direct",
+		"as direct",
+		"提供",
+		"证明了",
+		"验证了",
+		"通过",
+		"算作",
+	}
+}
+
+func containsAnyFold(text string, terms []string) bool {
+	lower := strings.ToLower(text)
+	for _, term := range terms {
+		if strings.Contains(lower, strings.ToLower(term)) {
+			return true
+		}
+	}
+	return false
+}
+
+func rawString(raw json.RawMessage) string {
+	var value string
+	if len(raw) == 0 || json.Unmarshal(raw, &value) != nil {
+		return ""
+	}
+	return value
+}
+
+func rawStringSlice(raw json.RawMessage) []string {
+	var values []string
+	if len(raw) == 0 || json.Unmarshal(raw, &values) != nil {
+		return nil
+	}
+	return nonEmptyStrings(values)
+}
+
+func emptyToUnknown(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "(unknown)"
+	}
+	return value
+}
+
+func mapKeys(values map[string]bool) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func uniqueSortedStrings(values []string) []string {
+	seen := map[string]bool{}
+	result := []string{}
+	for _, value := range values {
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func staleRoadmapPhrases() []string {

@@ -142,6 +142,7 @@ codex-orchestrator run-routine stale-task-rescuer --ledger .codex-orchestrator/l
 codex-orchestrator run-routine ci-fixer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/ci-fixer-report.json
 codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
+codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
 ```
 
 The PR reviewer runner inspects only local git/static state from the ledger task worktree:
@@ -195,6 +196,16 @@ mentions as `failed`, missing repository/source/spec access as `blocked`, and a
 clean static comparison as `passed`. Its MVP report uses only `local` and
 `blocked` evidence; it does not stage, commit, merge, push, tag, release, clean
 worktrees, dispatch sessions, mutate the ledger, or claim runtime proof.
+
+The evidence label auditor runner is read-only and does not load or update the
+ledger. It scans explicit repo-local docs, routine specs, routine report JSON,
+and ledger-shaped JSON for obvious evidence-label issues: weak evidence labels
+near overstated proof wording, missing
+RoutineRunReport evidence buckets, and direct evidence recorded for routines
+whose specs explicitly reserve direct evidence. Findings are local/static
+suspicions until a reviewer confirms them. Its MVP report uses only `local`
+and `blocked` evidence; it does not stage, commit, merge, push, tag, release,
+clean worktrees, dispatch sessions, mutate the ledger, or claim runtime proof.
 
 After a routine is actually run, record the outcome so future orchestrator
 sessions can resume from ledger truth:

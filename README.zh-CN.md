@@ -202,6 +202,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine ci-fixer --task-id TASK --write-report /tmp/ci-fixer-report.json
 ./codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 ./codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
+./codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -263,6 +264,15 @@ proof；这个 MVP 使用 `local`、`proxy` 或 `blocked` 证据。
 缺少 spec 时返回 `failed`；仓库、源码或 spec 目录无法检查时返回 `blocked`。它不会
 stage、commit、merge、push、tag、release、清理 worktree、派发 session、修改
 ledger，也不会声称 runtime proof；这个 MVP 使用 `local` 或 `blocked` 证据。
+
+`run-routine evidence-label-auditor` 是第六个可运行 routine MVP。它只读扫描
+明确的 repo-local 文档、routine spec、routine report JSON 和 ledger-like JSON，
+查找明显的证据标签问题：弱证据措辞靠近强证明措辞、RoutineRunReport JSON 缺少
+`direct` / `proxy` / `local` / `blocked` bucket，以及在 spec 明确保留
+direct evidence 的 routine 中记录了 direct evidence。这些发现只是启发式疑点，
+不是语义层面的定罪。它不会 stage、commit、merge、push、tag、release、
+清理 worktree、派发 session、修改 ledger，也不会声称 runtime proof；这个 MVP 使用
+`local` 或 `blocked` 证据。
 
 一个 delegated task 完成 merge、push、release、cleanup，并不等于整个 loop
 结束。删除任务专属 heartbeat 前，统领必须先检查 ledger / repo truth 和 roadmap
@@ -340,6 +350,7 @@ codex-orchestrator/
 │   ├── database-proof.json
 │   ├── device-proof.json
 │   ├── docs-drift-checker.json
+│   ├── evidence-label-auditor.json
 │   ├── log-proof.json
 │   ├── pr-reviewer.json
 │   ├── release-verifier.json
