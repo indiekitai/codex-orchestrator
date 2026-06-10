@@ -155,13 +155,70 @@ project, not inside the ledger.
 This repository includes a read-only helper:
 
 ```bash
-python3 scripts/ledger_heartbeat.py --ledger examples/ledger.example.json
+python3 scripts/ledger_heartbeat.py observe --ledger examples/ledger.example.json
 ```
 
 It does not create sessions, merge, push, or clean worktrees. It only compares
 the ledger with local git truth and prints the next suggested orchestrator
 action.
 
+For compatibility, the original form still works:
+
+```bash
+python3 scripts/ledger_heartbeat.py --ledger examples/ledger.example.json
+```
+
+## Helper CLI
+
+The helper CLI is intended for the Codex App orchestrator to call from a project
+checkout. It is not another AI agent and it does not replace Codex App session
+dispatch.
+
+Initialize a project-local ledger:
+
+```bash
+python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py init
+```
+
+Record a delegated task after the App orchestrator creates a worker session:
+
+```bash
+python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py record-task \
+  --id API-AUTH-LOCAL \
+  --title "Auth endpoint implementation" \
+  --thread-id optional-thread-id \
+  --worktree /absolute/path/to/worktree \
+  --branch codex/api-auth \
+  --allowed 'src/auth/**' \
+  --allowed 'tests/auth/**' \
+  --forbidden 'src/db/migrations/**' \
+  --gate 'npm test -- --grep auth'
+```
+
+Observe the ledger and local git/worktree truth:
+
+```bash
+python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py observe
+python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py observe --json
+python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py observe \
+  --write-report .codex-orchestrator/heartbeat-report.json
+```
+
+Summarize task states:
+
+```bash
+python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py status
+```
+
+Append an event and optionally update a task:
+
+```bash
+python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py append-event \
+  --task-id API-AUTH-LOCAL \
+  --type review \
+  --status completed-unreviewed \
+  --note "Clean commit exists; orchestrator review required."
+```
+
 Use it as a bridge between v1 and a future daemon: first make state durable,
 then make the heartbeat repeatable, then add safe integrations one at a time.
-

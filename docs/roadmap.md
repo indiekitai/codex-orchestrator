@@ -111,27 +111,25 @@ Future daemon/UI
 - `docs/v2-persistent-ledger-and-heartbeat.md`
 - `examples/ledger.example.json`
 - `scripts/ledger_heartbeat.py`
+- helper CLI 子命令：
+  - `init`
+  - `observe`
+  - `status`
+  - `record-task`
+  - `append-event`
 
 下一步建议：
 
-1. 把 `scripts/ledger_heartbeat.py` 扩成正式 CLI 雏形：
-
-   ```bash
-   codex-orchestrator init
-   codex-orchestrator observe
-   codex-orchestrator status
-   codex-orchestrator record-task
-   codex-orchestrator append-event
-   ```
-
-2. 支持项目内默认路径：
+1. 给 helper CLI 增加 packaging/install 入口，让用户可以运行：
 
    ```text
-   .codex-orchestrator/ledger.json
-   .codex-orchestrator/events.jsonl
+   codex-orchestrator init
+   codex-orchestrator observe
    ```
 
-3. `observe` 输出两种格式：
+2. 补更完整的测试和 fixture。
+
+3. `observe` 输出两种格式已经具备，后续要稳定 schema：
 
    - 人读 summary；
    - 给 App orchestrator 消费的 JSON。
@@ -142,7 +140,7 @@ Future daemon/UI
    observe -> write heartbeat-report.json -> notify user/App
    ```
 
-5. 增加最小测试：
+5. 增加最小测试覆盖：
 
    - missing worktree -> `pending-setup`
    - dirty worktree -> `stale-needs-inspection`
@@ -299,4 +297,3 @@ v4 完成时，应该能做到：
 - 失败案例能沉淀成 eval；
 - 高风险动作有 policy gate；
 - skill/rules 的更新有 evidence-backed proposal，而不是拍脑袋改。
-

@@ -189,6 +189,16 @@ See [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-h
 for the first v2 seed: a durable ledger format and read-only heartbeat checker.
 For the broader v2-v5 plan, see [docs/roadmap.md](docs/roadmap.md).
 
+The v2 helper CLI currently supports:
+
+```bash
+python3 scripts/ledger_heartbeat.py init
+python3 scripts/ledger_heartbeat.py record-task --id TASK --worktree /path/to/wt --branch codex/task
+python3 scripts/ledger_heartbeat.py observe
+python3 scripts/ledger_heartbeat.py status
+python3 scripts/ledger_heartbeat.py append-event --type review --task-id TASK --status completed-unreviewed
+```
+
 ## 🧱 Architecture
 
 The orchestrator operates as a **state machine** over delegated sessions:

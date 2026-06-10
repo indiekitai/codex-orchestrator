@@ -164,6 +164,16 @@ A 和 B 并行运行（写入集不相交）。两者合并后，编排器派发
 [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)：持久 ledger 格式和只读 heartbeat checker。
 完整 v2-v5 演进路线见 [docs/roadmap.md](docs/roadmap.md)。
 
+当前 v2 helper CLI 已支持：
+
+```bash
+python3 scripts/ledger_heartbeat.py init
+python3 scripts/ledger_heartbeat.py record-task --id TASK --worktree /path/to/wt --branch codex/task
+python3 scripts/ledger_heartbeat.py observe
+python3 scripts/ledger_heartbeat.py status
+python3 scripts/ledger_heartbeat.py append-event --type review --task-id TASK --status completed-unreviewed
+```
+
 ## 🧱 架构
 
 编排器作为一个**状态机**管理所有委派会话：
