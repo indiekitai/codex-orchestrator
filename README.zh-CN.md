@@ -204,6 +204,12 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 JSON heartbeat report 会包含 `overallStatus`、按状态聚合的 `counts`，以及
 `reviewPressure`，让统领在 review / stale / blocked / cleanup 队列堆积时暂停派发。
 
+Codex App worktree 派发是 App-first。要用 project worktree session 前，先确认
+这个仓库已经保存为 Codex App project。如果因为 unknown project、没有 saved
+project，或 pending setup 长时间没有变成真实 worktree/thread，就把它当作 setup
+blocker。不要让 fallback worker 直接修改统领自己的 checkout；必须先创建并验证
+隔离 fallback worktree，或者停止并报告 blocker。
+
 `run-routine pr-reviewer` 是第一个可运行的 routine MVP。它只读检查任务
 worktree：读取 ledger task、确认 worktree 和 branch 状态、记录
 `git status --short --branch`、比较 `baseCommit..HEAD`、输出

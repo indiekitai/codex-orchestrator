@@ -235,6 +235,13 @@ The JSON heartbeat report includes `overallStatus`, per-status `counts`, and a
 `reviewPressure` block so an orchestrator can pause dispatch when review,
 stale, blocked, or cleanup queues are saturated.
 
+Codex App worktree dispatch is App-first. Save the repository as a Codex App
+project before relying on project worktree sessions. If dispatch fails because
+the project is unknown, or setup never resolves to a real worktree/thread,
+treat it as a setup blocker. Do not let a fallback worker edit the
+orchestrator's own checkout; first create and verify an isolated fallback
+worktree, or stop and report the blocker.
+
 `run-routine pr-reviewer` is the first runnable routine MVP. It is read-only
 against the task worktree: it loads the ledger task, checks worktree and branch
 state, records `git status --short --branch`, compares `baseCommit..HEAD`,

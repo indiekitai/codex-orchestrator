@@ -221,6 +221,12 @@ worktree" in the task contract with the environment's supported isolated worker
 mechanism. The invariant is isolation plus verifiable repo truth, not a specific
 product surface.
 
+Before dispatching, confirm that the repository is available as a saved Codex
+App project when you intend to use Codex App worktree sessions. If project
+thread creation fails with an unknown `projectId`, missing saved project, or
+pending setup that never resolves, classify it as a setup blocker. Do not treat
+that as an active worker.
+
 The orchestrator should not implement a fresh delegated task just because
 session/worktree dispatch failed. If a new task has not actually started, stay
 in the orchestration layer: report the dispatch/tooling blocker, fix the
@@ -229,6 +235,13 @@ allowed only as a stale same-task takeover when there is already a scoped useful
 diff/commit to rescue, or when the user explicitly asks the orchestrator to do
 the task itself. When taking over, record why takeover was safer than waiting or
 re-dispatching, then keep the write set to the original task contract.
+
+If a fallback worker/subagent path is used after Codex App dispatch fails, the
+fallback must still run in an isolated worktree or another explicitly isolated
+checkout. Never let a fallback worker switch branches, edit files, or commit in
+the orchestrator's integration/local checkout. If you cannot first create and
+verify an isolated fallback checkout (`pwd`, branch, `git status --short
+--branch`), stop and report the setup blocker instead of delegating.
 
 Codex App worktree creation has one important API gotcha: a worktree
 `startingState.branchName` is an existing starting ref, not the new task branch

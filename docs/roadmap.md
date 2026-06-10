@@ -88,7 +88,8 @@ Future daemon/UI
 - anti-shallow-slice gate；
 - direct / proxy / blocked 证据标签；
 - maturity model；
-- Codex App worktree setup 注意事项。
+- Codex App worktree setup 注意事项；
+- fallback worker 必须先有隔离 worktree，不能污染 orchestrator checkout。
 
 仍需改进：
 
