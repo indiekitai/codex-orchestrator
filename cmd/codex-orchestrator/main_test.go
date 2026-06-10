@@ -421,6 +421,141 @@ func TestRecordRoutineRun(t *testing.T) {
 	}
 }
 
+func TestRunPRReviewerRoutineWritesPassedReport(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	reportPath := filepath.Join(root, "reports", "pr-reviewer.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/pr-review", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "PR-REVIEW",
+		"--worktree", worker,
+		"--branch", "codex/pr-review",
+		"--base-commit", base,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "feature.txt"), []byte("feature\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "feature.txt")
+	git(t, worker, "commit", "-q", "-m", "feature")
+
+	if err := cmdRunRoutine([]string{"pr-reviewer", "--ledger", ledger, "--task-id", "PR-REVIEW", "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RoutineRunReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.RoutineID != "pr-reviewer" || report.TaskID != "PR-REVIEW" || report.Status != "passed" {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	joined := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{"Task exists in ledger", "Worktree exists", "git diff --name-status", "A\tfeature.txt", "git diff --check"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, joined)
+		}
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
+		t.Fatalf("expected only local evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunPRReviewerRoutineBlockedWhenTaskMissing(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	report, err := runPRReviewerRoutine(ledger, "UNKNOWN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "blocked" || report.BlockedReason == "" {
+		t.Fatalf("expected blocked missing-task report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "Task not found") {
+		t.Fatalf("expected blocked task evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunPRReviewerRoutineBlockedOnBranchMismatch(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/actual", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "WRONG-BRANCH",
+		"--worktree", worker,
+		"--branch", "codex/expected",
+		"--base-commit", base,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	report, err := runPRReviewerRoutine(ledger, "WRONG-BRANCH")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "blocked" || !strings.Contains(report.BlockedReason, "branch") {
+		t.Fatalf("expected blocked branch report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "Expected branch codex/expected") {
+		t.Fatalf("expected branch mismatch evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunPRReviewerRoutineFailsOnDirtyWorktree(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/dirty-review", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "DIRTY-REVIEW",
+		"--worktree", worker,
+		"--branch", "codex/dirty-review",
+		"--base-commit", base,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "dirty.txt"), []byte("dirty\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report, err := runPRReviewerRoutine(ledger, "DIRTY-REVIEW")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "failed" {
+		t.Fatalf("expected failed dirty report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["local"], "\n"); !strings.Contains(got, "uncommitted changes") {
+		t.Fatalf("expected dirty evidence, got %#v", report.Evidence)
+	}
+}
+
 func TestRecordRoutineRunFromJSONReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

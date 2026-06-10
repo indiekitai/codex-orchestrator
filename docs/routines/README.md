@@ -10,6 +10,22 @@ codex-orchestrator validate-routines --dir routines
 codex-orchestrator validate-routines --dir routines --json
 ```
 
+It can also run the first conservative routine MVP:
+
+```bash
+codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
+codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
+```
+
+`run-routine pr-reviewer` is read-only against the task worktree. It loads the
+ledger task, checks that the worktree exists, verifies the current branch when
+the ledger records one, captures `git status --short --branch`, checks commits
+after `baseCommit`, records `git diff --name-status baseCommit..HEAD`, and runs
+`git diff --check baseCommit..HEAD`. It does not merge, push, delete branches,
+clean worktrees, run task-specific tests, or claim runtime proof. Its report
+uses `local` evidence only unless a future routine actually observes another
+surface.
+
 Routine specs live in [`../../routines`](../../routines). They are JSON so the
 Go helper can validate them without a Python, YAML, or Node dependency.
 

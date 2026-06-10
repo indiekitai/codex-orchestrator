@@ -226,6 +226,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator status
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
+./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -233,6 +234,14 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 The JSON heartbeat report includes `overallStatus`, per-status `counts`, and a
 `reviewPressure` block so an orchestrator can pause dispatch when review,
 stale, blocked, or cleanup queues are saturated.
+
+`run-routine pr-reviewer` is the first runnable routine MVP. It is read-only
+against the task worktree: it loads the ledger task, checks worktree and branch
+state, records `git status --short --branch`, compares `baseCommit..HEAD`,
+captures `git diff --name-status`, and runs `git diff --check`. It writes a
+standard `RoutineRunReport` JSON that can later be recorded with
+`record-routine-run --report-json`. It does not merge, push, delete branches,
+clean worktrees, run task-specific test gates, or claim runtime proof.
 
 ## 🧱 Architecture
 

@@ -196,12 +196,21 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator status
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
+./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
 
 JSON heartbeat report 会包含 `overallStatus`、按状态聚合的 `counts`，以及
 `reviewPressure`，让统领在 review / stale / blocked / cleanup 队列堆积时暂停派发。
+
+`run-routine pr-reviewer` 是第一个可运行的 routine MVP。它只读检查任务
+worktree：读取 ledger task、确认 worktree 和 branch 状态、记录
+`git status --short --branch`、比较 `baseCommit..HEAD`、输出
+`git diff --name-status`，并运行 `git diff --check`。它会写出标准
+`RoutineRunReport` JSON，之后可用 `record-routine-run --report-json` 记录。
+它不会 merge、push、删除 branch、清理 worktree、运行任务专用测试 gate，也不会把
+本地静态证据说成 runtime proof。
 
 ## 🧱 架构
 
