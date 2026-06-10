@@ -21,6 +21,9 @@ more features.
 - WyeWorks, [The Workflow Is the Product](https://www.wyeworks.com/es/blog/2026/05/13/custom-agentic-workflows-for-coding-agents/)
 - Lower-weight trend scans from Reddit, Substack, MindStudio, DX, and X search
   results around "loop engineering", used only to check terminology drift.
+- User-provided Grok/X synthesis covering recent Loop Engineering discussions,
+  examples, criticisms, and related handles. This is useful for trend discovery
+  but treated as second-hand unless linked back to original posts.
 
 ## Working Definition
 
@@ -190,6 +193,39 @@ specific task family:
 That suggests the routine library should be written as workflow contracts, not
 just command aliases.
 
+## What The X/Grok Trend Scan Adds
+
+The user-provided Grok/X synthesis mostly confirms the same pattern, with a few
+extra trend signals:
+
+- The phrase is very recent and practitioner-driven, with conversation peaking
+  around early to mid June 2026.
+- The commonly repeated origin points are Addy Osmani, Peter Steinberger, and
+  Boris Cherny.
+- Real-loop examples mentioned in the scan include:
+  - morning triage loops that read CI/issues/commits and write to `LOOP.md` or
+    Linear;
+  - PR babysitting loops that address review comments, CI failures, and rebase
+    work;
+  - Felix Craft's "Ralph loop" as an earlier related wrapper around planning,
+    execution, tmux/worktrees, validation, and restartable state;
+  - sub-agent review loops with explicit scoring or verifiable stop criteria;
+  - long-running `/goal` or scheduled `/loop` maintenance tasks.
+- Operators often mention always-on machines or VPS-style setups for 24/7
+  loops, but that should be treated as deployment preference, not a requirement
+  for this project.
+- Criticism clusters around:
+  - "is this just rebranded harness/context engineering?";
+  - token costs and token-rich vs token-poor workflows;
+  - quality drift and slop accumulation;
+  - comprehension debt and cognitive surrender;
+  - naming fatigue around prompt/context/harness/loop engineering.
+
+These are not all first-hand claims, but they are useful product-positioning
+constraints. The open-source project should be careful to avoid hype terms like
+"fully autonomous" and should emphasize bounded loops, verification, and human
+review.
+
 ## Current Coverage
 
 `codex-orchestrator` already covers:
@@ -256,6 +292,12 @@ The main gaps are not more task states. They are the deeper loop layers:
    Routine specs should describe the full pipeline for a family of work, not
    just a prompt or command. Without this, V3 could become a collection of
    shortcuts rather than robust loops.
+
+9. **Cost and review-budget accounting**
+
+   Loop Engineering discussions repeatedly warn about token burn and review
+   bandwidth. `codex-orchestrator` should keep low default concurrency and
+   eventually expose cost/review pressure as part of heartbeat status.
 
 ## Roadmap Adjustment
 
@@ -339,6 +381,11 @@ Do not jump directly to v5 or a daemon UI. The highest-leverage next work is:
    - verification sensors,
    - evidence output,
    - escalation rule.
+8. Add lightweight cost/review-budget notes to the orchestrator status model:
+   - active worker count,
+   - review-needed queue length,
+   - stale queue length,
+   - whether dispatch should pause because review bandwidth is saturated.
 
 ## Conclusion
 

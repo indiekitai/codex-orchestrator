@@ -171,6 +171,7 @@ routine library 容易变成任务管理器，而不是可靠 loop。
 - 定义 harness map：feedforward guides、feedback sensors、control boundaries；
 - 给 browser/log/db/device/API proof 各写一个最小 routine spec；
 - 要求每个 routine 都是 workflow contract，而不只是 prompt 或命令别名；
+- 把 cost/review budget 作为 heartbeat 状态的一部分，避免盲目扩大并发；
 - 让 routine 输出可以被 ledger/heartbeat/report 消费；
 - 保持 helper 保守，不自动 merge/push/删除。
 
