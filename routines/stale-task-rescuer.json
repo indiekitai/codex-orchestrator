@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "stale-task-rescuer",
+  "title": "Stale Task Rescuer",
+  "purpose": "Inspect a stale delegated task and decide whether to nudge, take over, abandon, or mark blocked without losing useful work.",
+  "trigger": "Run when observe reports stale-needs-inspection for a delegated task.",
+  "inputs": [
+    "ledger task record",
+    "latest heartbeat report",
+    "git worktree status",
+    "recent worker handoff or thread status",
+    "task branch log and diff"
+  ],
+  "allowedActions": [
+    "inspect the task worktree read-only",
+    "classify useful committed or uncommitted work",
+    "recommend a same-task nudge or takeover",
+    "record blocked evidence in the ledger",
+    "recommend abandon only when there is no useful scoped work"
+  ],
+  "forbiddenActions": [
+    "start second-level subagents",
+    "delete a worktree without an explicit abandon or merged state",
+    "overwrite uncommitted work",
+    "merge or push task branches",
+    "relabel local or proxy evidence as direct proof"
+  ],
+  "gates": [
+    "git status --short --branch in integration checkout",
+    "git status --short --branch in task worktree",
+    "git log --oneline -3 in task worktree",
+    "git diff --name-status main..HEAD when branch exists"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Current git/worktree/thread state inspected directly.",
+      "proxy": "Inferred from stale logs or partial handoff only.",
+      "local": "Local repo evidence only; no runtime proof.",
+      "blocked": "Missing thread, missing worktree, conflict, or human decision required."
+    }
+  },
+  "escalation": [
+    "Ask the human before deleting or abandoning useful work.",
+    "Ask the human if the task requires hardware, payment, production, or private credentials.",
+    "Stop if the stale state cannot be distinguished from a still-running worker."
+  ],
+  "maxRuntimeMinutes": 15
+}

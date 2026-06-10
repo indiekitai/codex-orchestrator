@@ -158,7 +158,7 @@ Future daemon/UI
 
 ## v2.5：Verification routine foundation
 
-状态：下一步优先级最高。
+状态：alpha foundation。已经有 routine contract 目录、首批 JSON specs、harness map，以及 Go helper 的 `validate-routines` 校验命令；还没有自动执行 routine 或后台 daemon。
 
 原因：Loop Engineering 不只是调度任务。Claude Code 访谈和 feedback-loop
 engineering 都强调 agent 必须能运行产品、观察结果、修复并复测。否则
@@ -169,24 +169,31 @@ routine library 容易变成任务管理器，而不是可靠 loop。
 - 定义 routine output schema；
 - 定义 evidence schema；
 - 定义 harness map：feedforward guides、feedback sensors、control boundaries；
-- 给 browser/log/db/device/API proof 各写一个最小 routine spec；
+- 给高频 engineering loop 写最小 routine spec；
 - 要求每个 routine 都是 workflow contract，而不只是 prompt 或命令别名；
 - 把 cost/review budget 作为 heartbeat 状态的一部分，避免盲目扩大并发；
 - 让 routine 输出可以被 ledger/heartbeat/report 消费；
 - 保持 helper 保守，不自动 merge/push/删除。
 
-候选交付物：
+当前交付物：
 
 ```text
 docs/routines/
   README.md
-  browser-runtime-proof.md
-  log-proof.md
-  database-proof.md
-  api-proof.md
-  mobile-device-proof.md
   harness-map.md
+routines/
+  stale-task-rescuer.json
+  pr-reviewer.json
+  ci-fixer.json
+cmd/codex-orchestrator validate-routines --dir routines
 ```
+
+剩余：
+
+- browser/log/db/device/API proof routine specs；
+- routine report examples；
+- ledger event 中记录 routine run outcome；
+- per-routine runtime budget / review budget 与 heartbeat 更深集成。
 
 ## v3：Routine library
 

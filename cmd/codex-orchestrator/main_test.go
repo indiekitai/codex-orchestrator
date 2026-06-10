@@ -320,6 +320,47 @@ func TestBadLedgerAndUnknownTaskErrors(t *testing.T) {
 	}
 }
 
+func TestValidateRoutineSpecs(t *testing.T) {
+	report := validateRoutines(filepath.Join("..", "..", "routines"))
+	if !report.Valid {
+		t.Fatalf("expected bundled routines to validate: %#v", report)
+	}
+	if len(report.Specs) < 3 {
+		t.Fatalf("expected at least three routine specs, got %d", len(report.Specs))
+	}
+}
+
+func TestValidateRoutineSpecRejectsWeakContract(t *testing.T) {
+	issues := validateRoutineSpec(RoutineSpec{
+		SchemaVersion: 1,
+		ID:            "weak",
+		Title:         "Weak",
+		Purpose:       "too weak",
+		Trigger:       "manual",
+		Inputs:        []string{"git status"},
+		AllowedActions: []string{
+			"inspect",
+		},
+		ForbiddenActions: []string{"merge"},
+		Gates:            []string{"git diff --check"},
+		EvidenceLabels:   []string{"direct"},
+		OutputSchema: RoutineOutputSpec{
+			RequiredFields: []string{"status"},
+			StatusValues:   []string{"passed"},
+		},
+		Escalation: []string{"ask human"},
+	})
+	if len(issues) == 0 {
+		t.Fatal("expected weak routine contract to fail validation")
+	}
+	joined := strings.Join(issues, "\n")
+	for _, want := range []string{"evidenceLabels must include blocked", "outputSchema.requiredFields must include evidence", "outputSchema.statusValues must include blocked"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected issue %q in:\n%s", want, joined)
+		}
+	}
+}
+
 func createRepo(t *testing.T, path string) string {
 	t.Helper()
 	if err := os.MkdirAll(path, 0o755); err != nil {

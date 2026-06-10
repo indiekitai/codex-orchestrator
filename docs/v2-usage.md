@@ -179,6 +179,21 @@ Do not let the helper create sessions, merge, push, delete branches, or relabel
 evidence. The Codex App orchestrator owns those decisions.
 ```
 
+## Validate Routine Contracts
+
+V2.5 adds routine contract validation. Routine specs are JSON files under
+`routines/` and describe reusable workflow contracts such as stale rescue, PR
+review, and CI fixing.
+
+```bash
+codex-orchestrator validate-routines --dir routines
+codex-orchestrator validate-routines --dir routines --json
+```
+
+The validator checks that every routine declares inputs, allowed and forbidden
+actions, gates, strict evidence labels, escalation rules, and a common output
+shape. It does not execute the routine or create Codex App sessions.
+
 ## Recovery From A Fresh Session
 
 When a long orchestrator thread gets stale or compressed:

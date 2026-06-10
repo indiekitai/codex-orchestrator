@@ -190,6 +190,7 @@ agent operating system.
 | **v0: Prompting** | Human prompts one agent at a time | The human is the scheduler, reviewer, and recovery loop |
 | **v1: Supervised orchestrator skill** | `codex-orchestrator` today | Worktree isolation, bounded task contracts, heartbeat monitoring, review/merge discipline, evidence labels |
 | **v2: Persistent task ledger** | A real state store behind the loop | Tasks, attempts, worker state, gates, blockers, and outcomes survive across threads and restarts |
+| **v2.5: Verification routine foundation** | Routine contracts become inspectable | Shared output schema, evidence labels, harness map, and validator for reusable routines |
 | **v3: Routine library** | Reusable background routines | PR reviewer, CI fixer, stale-session rescuer, rebase helper, docs drift checker, release verifier |
 | **v4: Eval and safety layer** | Failures become tests and policies | Prompt-injection cases, dangerous-operation classifiers, permission checks, evidence-quality evals |
 | **v5: Agent operating system** | Many routines coordinate continuously | The human talks to loops/routines, while specialized agents execute, review, secure, and report |
@@ -207,6 +208,9 @@ merge.
 See [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)
 for the v2 durable ledger and heartbeat helper design, and
 [docs/v2-usage.md](docs/v2-usage.md) for the Codex App + Go helper workflow.
+See [docs/routines/README.md](docs/routines/README.md) for the v2.5 routine
+contract format and [docs/routines/harness-map.md](docs/routines/harness-map.md)
+for the feedback-loop harness model.
 For a research note on how this maps to Loop Engineering, see
 [docs/research/loop-engineering-alignment.md](docs/research/loop-engineering-alignment.md).
 For the broader v2-v5 plan, see [docs/roadmap.md](docs/roadmap.md).
@@ -221,6 +225,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
+./codex-orchestrator validate-routines --dir routines
 ```
 
 The JSON heartbeat report includes `overallStatus`, per-status `counts`, and a
@@ -285,8 +290,15 @@ codex-orchestrator/
 │       └── main_test.go  # CLI state-machine tests
 ├── docs/
 │   ├── roadmap.md
+│   ├── routines/
+│   │   ├── README.md
+│   │   └── harness-map.md
 │   ├── v2-usage.md
 │   └── v2-persistent-ledger-and-heartbeat.md
+├── routines/
+│   ├── ci-fixer.json
+│   ├── pr-reviewer.json
+│   └── stale-task-rescuer.json
 ├── examples/
 │   └── ledger.example.json
 ├── scripts/

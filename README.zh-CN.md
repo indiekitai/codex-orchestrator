@@ -168,6 +168,7 @@ A 和 B 并行运行（写入集不相交）。两者合并后，编排器派发
 | **v0：人工 Prompt** | 人一次提示一个 Agent | 人负责调度、审查、恢复和合并 |
 | **v1：受监督的 orchestrator skill** | 现在的 `codex-orchestrator` | worktree 隔离、有界任务契约、heartbeat 巡检、review/merge 纪律、证据标签 |
 | **v2：持久任务账本** | loop 背后有真正的状态存储 | task、attempt、worker 状态、gate、blocker、结果能跨 thread 和重启保留 |
+| **v2.5：验证 routine 基础** | routine contract 可检查 | 共享输出 schema、证据标签、harness map、routine validator |
 | **v3：Routine 库** | 可复用的后台 routine | PR reviewer、CI fixer、stale-session rescuer、rebase helper、docs drift checker、release verifier |
 | **v4：Eval 与安全层** | 失败案例沉淀成测试和策略 | prompt injection 样本、危险操作分类器、权限检查、证据质量 eval |
 | **v5：Agent Operating System** | 多个 routine 持续协作 | 人和 loop/routine 对话，由专门 Agent 执行、审查、安全检查和汇报 |
@@ -178,6 +179,8 @@ A 和 B 并行运行（写入集不相交）。两者合并后，编排器派发
 
 V2 持久化状态层见
 [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)：持久 ledger 格式和保守 heartbeat helper。
+V2.5 routine contract 见 [docs/routines/README.md](docs/routines/README.md)，
+feedback-loop harness map 见 [docs/routines/harness-map.md](docs/routines/harness-map.md)。
 Loop Engineering 对齐调研见
 [docs/research/loop-engineering-alignment.md](docs/research/loop-engineering-alignment.md)。
 完整 v2-v5 演进路线见 [docs/roadmap.md](docs/roadmap.md)。
@@ -192,6 +195,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
+./codex-orchestrator validate-routines --dir routines
 ```
 
 JSON heartbeat report 会包含 `overallStatus`、按状态聚合的 `counts`，以及
@@ -255,8 +259,15 @@ codex-orchestrator/
 │       └── main_test.go  # CLI 状态机测试
 ├── docs/
 │   ├── roadmap.md
+│   ├── routines/
+│   │   ├── README.md
+│   │   └── harness-map.md
 │   ├── v2-usage.md
 │   └── v2-persistent-ledger-and-heartbeat.md
+├── routines/
+│   ├── ci-fixer.json
+│   ├── pr-reviewer.json
+│   └── stale-task-rescuer.json
 ├── examples/
 │   └── ledger.example.json
 ├── scripts/

@@ -98,6 +98,43 @@ type ObserveSummary struct {
 	Observations       []Observation    `json:"observations"`
 }
 
+type RoutineSpec struct {
+	SchemaVersion     int               `json:"schemaVersion"`
+	ID                string            `json:"id"`
+	Title             string            `json:"title"`
+	Purpose           string            `json:"purpose"`
+	Trigger           string            `json:"trigger"`
+	Inputs            []string          `json:"inputs"`
+	AllowedActions    []string          `json:"allowedActions"`
+	ForbiddenActions  []string          `json:"forbiddenActions"`
+	Gates             []string          `json:"gates"`
+	EvidenceLabels    []string          `json:"evidenceLabels"`
+	OutputSchema      RoutineOutputSpec `json:"outputSchema"`
+	Escalation        []string          `json:"escalation"`
+	MaxRuntimeMinutes int               `json:"maxRuntimeMinutes,omitempty"`
+}
+
+type RoutineOutputSpec struct {
+	RequiredFields []string          `json:"requiredFields"`
+	StatusValues   []string          `json:"statusValues"`
+	Evidence       map[string]string `json:"evidence,omitempty"`
+}
+
+type RoutineValidationReport struct {
+	Directory string                    `json:"directory"`
+	CheckedAt string                    `json:"checkedAt"`
+	Valid     bool                      `json:"valid"`
+	Specs     []RoutineValidationResult `json:"specs"`
+	Errors    []string                  `json:"errors,omitempty"`
+}
+
+type RoutineValidationResult struct {
+	Path   string   `json:"path"`
+	ID     string   `json:"id,omitempty"`
+	Valid  bool     `json:"valid"`
+	Errors []string `json:"errors,omitempty"`
+}
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -123,6 +160,8 @@ func run(args []string) error {
 		return cmdHeartbeat(args[1:])
 	case "status":
 		return cmdStatus(args[1:])
+	case "validate-routines":
+		return cmdValidateRoutines(args[1:])
 	case "help", "-h", "--help":
 		usage()
 		return nil
@@ -141,6 +180,7 @@ Usage:
   codex-orchestrator observe [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
   codex-orchestrator status [--ledger PATH] [--json]
+  codex-orchestrator validate-routines [--dir routines] [--json]
 
 This helper is conservative: it does not create Codex sessions, merge, push,
 delete branches, or clean worktrees.`)
@@ -498,6 +538,27 @@ func cmdStatus(args []string) error {
 	sort.Strings(keys)
 	for _, key := range keys {
 		fmt.Printf("- %s: %d\n", key, counts[key])
+	}
+	return nil
+}
+
+func cmdValidateRoutines(args []string) error {
+	fs := flag.NewFlagSet("validate-routines", flag.ExitOnError)
+	dir := fs.String("dir", "routines", "routine specs directory")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	report := validateRoutines(*dir)
+	if *jsonOut {
+		if err := printJSON(report); err != nil {
+			return err
+		}
+	} else {
+		printRoutineValidationReport(report)
+	}
+	if !report.Valid {
+		return errors.New("routine validation failed")
 	}
 	return nil
 }
@@ -929,6 +990,139 @@ func printObservations(summary ObserveSummary) {
 	}
 }
 
+func validateRoutines(dir string) RoutineValidationReport {
+	root := expandPath(dir)
+	report := RoutineValidationReport{
+		Directory: root,
+		CheckedAt: nowISO(),
+		Valid:     true,
+		Specs:     []RoutineValidationResult{},
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		report.Valid = false
+		report.Errors = append(report.Errors, err.Error())
+		return report
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		path := filepath.Join(root, entry.Name())
+		result := validateRoutineFile(path)
+		if !result.Valid {
+			report.Valid = false
+		}
+		report.Specs = append(report.Specs, result)
+	}
+	sort.Slice(report.Specs, func(i, j int) bool {
+		return report.Specs[i].Path < report.Specs[j].Path
+	})
+	if len(report.Specs) == 0 {
+		report.Valid = false
+		report.Errors = append(report.Errors, "no routine spec JSON files found")
+	}
+	return report
+}
+
+func validateRoutineFile(path string) RoutineValidationResult {
+	result := RoutineValidationResult{Path: path, Valid: true}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		result.Valid = false
+		result.Errors = append(result.Errors, err.Error())
+		return result
+	}
+	var spec RoutineSpec
+	if err := json.Unmarshal(data, &spec); err != nil {
+		result.Valid = false
+		result.Errors = append(result.Errors, err.Error())
+		return result
+	}
+	result.ID = spec.ID
+	for _, issue := range validateRoutineSpec(spec) {
+		result.Valid = false
+		result.Errors = append(result.Errors, issue)
+	}
+	return result
+}
+
+func validateRoutineSpec(spec RoutineSpec) []string {
+	var issues []string
+	if spec.SchemaVersion != 1 {
+		issues = append(issues, "schemaVersion must be 1")
+	}
+	requiredStrings := map[string]string{
+		"id":      spec.ID,
+		"title":   spec.Title,
+		"purpose": spec.Purpose,
+		"trigger": spec.Trigger,
+	}
+	for key, value := range requiredStrings {
+		if strings.TrimSpace(value) == "" {
+			issues = append(issues, key+" is required")
+		}
+	}
+	requiredLists := map[string][]string{
+		"inputs":           spec.Inputs,
+		"allowedActions":   spec.AllowedActions,
+		"forbiddenActions": spec.ForbiddenActions,
+		"gates":            spec.Gates,
+		"evidenceLabels":   spec.EvidenceLabels,
+		"escalation":       spec.Escalation,
+		"requiredFields":   spec.OutputSchema.RequiredFields,
+		"statusValues":     spec.OutputSchema.StatusValues,
+	}
+	for key, values := range requiredLists {
+		if len(values) == 0 {
+			issues = append(issues, key+" must not be empty")
+		}
+		for index, value := range values {
+			if strings.TrimSpace(value) == "" {
+				issues = append(issues, fmt.Sprintf("%s[%d] must not be empty", key, index))
+			}
+		}
+	}
+	for _, required := range []string{"direct", "proxy", "local", "blocked"} {
+		if !containsString(spec.EvidenceLabels, required) {
+			issues = append(issues, "evidenceLabels must include "+required)
+		}
+	}
+	for _, required := range []string{"status", "evidence", "actionsTaken", "needsHuman", "blockedReason", "nextSuggestedAction"} {
+		if !containsString(spec.OutputSchema.RequiredFields, required) {
+			issues = append(issues, "outputSchema.requiredFields must include "+required)
+		}
+	}
+	for _, required := range []string{"passed", "failed", "blocked"} {
+		if !containsString(spec.OutputSchema.StatusValues, required) {
+			issues = append(issues, "outputSchema.statusValues must include "+required)
+		}
+	}
+	if spec.MaxRuntimeMinutes < 0 {
+		issues = append(issues, "maxRuntimeMinutes cannot be negative")
+	}
+	return issues
+}
+
+func printRoutineValidationReport(report RoutineValidationReport) {
+	fmt.Printf("Routine directory: %s\n", report.Directory)
+	fmt.Printf("Valid: %t\n", report.Valid)
+	for _, issue := range report.Errors {
+		fmt.Printf("Error: %s\n", issue)
+	}
+	for _, spec := range report.Specs {
+		fmt.Println()
+		fmt.Printf("- %s", spec.Path)
+		if spec.ID != "" {
+			fmt.Printf(" (%s)", spec.ID)
+		}
+		fmt.Printf(": valid=%t\n", spec.Valid)
+		for _, issue := range spec.Errors {
+			fmt.Printf("  - %s\n", issue)
+		}
+	}
+}
+
 func defaultBranch(repo string) string {
 	if branch, err := gitOutput(repo, "branch", "--show-current"); err == nil && strings.TrimSpace(branch) != "" {
 		return strings.TrimSpace(branch)
@@ -975,6 +1169,15 @@ func currentBranch(statusOutput string) string {
 		return ""
 	}
 	return branch
+}
+
+func containsString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
 }
 
 func hasDirtyChanges(statusOutput string) bool {

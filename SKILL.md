@@ -105,6 +105,19 @@ The helper is not a session launcher and must not be treated as one. It is a
 state and heartbeat tool. The Codex App orchestrator still owns worker dispatch,
 review, merge, push, and cleanup decisions.
 
+If the repository includes v2.5 routine contracts, validate them before relying
+on routine names in a plan:
+
+```bash
+codex-orchestrator validate-routines --dir routines
+```
+
+Treat routines as workflow contracts, not magic commands. A routine can define
+triggers, inputs, allowed actions, forbidden actions, gates, evidence labels,
+escalation rules, and the output shape expected by the orchestrator. It does not
+create Codex App sessions, merge, push, clean worktrees, or upgrade
+local/proxy evidence into direct proof.
+
 Record:
 
 - task ID and short outcome,
