@@ -126,6 +126,9 @@ codex-orchestrator init
 发布第一个 GitHub release 后，也可以直接下载预构建的
 `codex-orchestrator_<os>_<arch>` 二进制文件并放到 `PATH` 里。
 
+Release assets、shell completion 和 Homebrew formula 草案见
+[docs/distribution-package.md](docs/distribution-package.md)。
+
 接入后，直接让 Codex App 使用 codex-orchestrator；Codex 会在需要时调用已安装的内部 skill：
 
 ```

@@ -22,6 +22,8 @@ clear quickstart.
 - Budget visibility in ledger, observe, and heartbeat reports.
 - Conservative evidence labels: `direct`, `proxy`, `local`, `blocked`.
 - Cross-platform release binary workflow.
+- Shell completion generation for bash, zsh, and fish.
+- Homebrew formula draft for macOS/Linux release assets.
 - Beta usability guide for first-time users.
 
 ## What Changed Since Alpha
@@ -34,6 +36,8 @@ clear quickstart.
 - Documentation now separates the Codex App orchestrator layer from the local
   helper layer.
 - The roadmap explicitly avoids claiming this is a daemon or full agent OS.
+- The distribution package now documents source install, release-asset install,
+  shell completions, and the formula draft.
 
 ## Install
 

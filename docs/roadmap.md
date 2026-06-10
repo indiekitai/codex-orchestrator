@@ -342,7 +342,7 @@ package**：
 
 之后再选择：
 
-- distribution package：Homebrew tap、shell completion、release notes；
+- distribution package：Homebrew tap、shell completion、release assets、release notes；
 - daemon prototype：只读 watcher，运行 `observe` 并写报告，不创建 session 或改 git；
 - deeper policy/eval：把真实失败案例沉淀为 eval fixture。
 

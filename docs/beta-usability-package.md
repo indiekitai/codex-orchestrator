@@ -198,7 +198,8 @@ Use this checklist before `v0.3.0-beta.1`:
 
 - Codex App session creation is still App-provided, not helper-provided.
 - The helper does not run as a daemon.
-- There is no Homebrew tap or npm wrapper yet.
+- There is a Homebrew formula draft, but no dedicated Homebrew tap yet.
+- There is no npm wrapper yet.
 - Routine runners are conservative local/proxy checkers.
 - The release verifier uses GitHub metadata as proxy evidence.
 - Direct proof of production, payment, hardware, or real deployed runtime still
@@ -212,7 +213,8 @@ After the beta usability package, the next large package should be one of:
 
 1. **Real Codex App demo proof**: record the missing App dispatch/merge/cleanup
    evidence from the checklist above.
-2. **Distribution package**: Homebrew tap, shell completions, and release notes.
+2. **Distribution package**: Homebrew tap, shell completions, release assets,
+   and release notes.
 3. **Daemon prototype**: an opt-in read-only watcher that runs `observe` and
    writes reports, without creating sessions or mutating git.
 

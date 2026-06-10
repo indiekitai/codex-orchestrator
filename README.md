@@ -151,6 +151,9 @@ After the first GitHub release, you can also download a prebuilt
 `codex-orchestrator_<os>_<arch>` binary from the Releases page and put it on
 your `PATH`.
 
+For release assets, shell completions, and the Homebrew formula draft, see
+[docs/distribution-package.md](docs/distribution-package.md).
+
 After setup, ask Codex App to use codex-orchestrator. Codex may invoke the
 installed internal skill when appropriate:
 

@@ -223,6 +223,8 @@ func run(args []string) error {
 		return cmdRunRoutine(args[1:])
 	case "record-routine-run":
 		return cmdRecordRoutineRun(args[1:])
+	case "completion":
+		return cmdCompletion(args[1:])
 	case "help", "-h", "--help":
 		usage()
 		return nil
@@ -251,9 +253,184 @@ Usage:
   codex-orchestrator run-routine roadmap-next-task-suggester [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
   codex-orchestrator record-routine-run --report-json PATH
+  codex-orchestrator completion bash|zsh|fish
 
 This helper is conservative: it does not create Codex sessions, merge, push,
 delete branches, or clean worktrees.`)
+}
+
+func cmdCompletion(args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: codex-orchestrator completion bash|zsh|fish")
+	}
+	switch args[0] {
+	case "bash":
+		fmt.Print(completionBash())
+	case "zsh":
+		fmt.Print(completionZsh())
+	case "fish":
+		fmt.Print(completionFish())
+	default:
+		return fmt.Errorf("unsupported shell %q; expected bash, zsh, or fish", args[0])
+	}
+	return nil
+}
+
+func completionBash() string {
+	return `# bash completion for codex-orchestrator
+_codex_orchestrator()
+{
+  local cur prev commands routines
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+  commands="init record-task append-event observe heartbeat status validate-routines run-routine record-routine-run completion help"
+  routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor roadmap-next-task-suggester"
+
+  case "$prev" in
+    codex-orchestrator)
+      COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
+      return 0
+      ;;
+    run-routine)
+      COMPREPLY=( $(compgen -W "$routines" -- "$cur") )
+      return 0
+      ;;
+    completion)
+      COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") )
+      return 0
+      ;;
+  esac
+
+  case "${COMP_WORDS[1]}" in
+    init)
+      COMPREPLY=( $(compgen -W "--ledger --project-root --help" -- "$cur") )
+      ;;
+    record-task)
+      COMPREPLY=( $(compgen -W "--ledger --id --title --thread-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help" -- "$cur") )
+      ;;
+    append-event)
+      COMPREPLY=( $(compgen -W "--ledger --type --task-id --status --note --help" -- "$cur") )
+      ;;
+    observe|status)
+      COMPREPLY=( $(compgen -W "--ledger --json --write-report --write-summary --help" -- "$cur") )
+      ;;
+    heartbeat)
+      COMPREPLY=( $(compgen -W "--ledger --interval --count --write-report --write-summary --help" -- "$cur") )
+      ;;
+    validate-routines)
+      COMPREPLY=( $(compgen -W "--dir --json --help" -- "$cur") )
+      ;;
+    run-routine)
+      COMPREPLY=( $(compgen -W "--ledger --task-id --repo --tag --expected-asset --write-report --json --help" -- "$cur") )
+      ;;
+    record-routine-run)
+      COMPREPLY=( $(compgen -W "--ledger --routine --status --task-id --evidence-local --evidence-proxy --evidence-direct --evidence-blocked --action --next --needs-human --blocked-reason --report-json --help" -- "$cur") )
+      ;;
+  esac
+}
+complete -F _codex_orchestrator codex-orchestrator
+`
+}
+
+func completionZsh() string {
+	return `#compdef codex-orchestrator
+
+local -a commands routines
+commands=(
+  'init:initialize a project-local ledger'
+  'record-task:record a delegated task'
+  'append-event:append a task or heartbeat event'
+  'observe:inspect ledger and worktree state'
+  'heartbeat:run observe on an interval and write reports'
+  'status:print ledger status'
+  'validate-routines:validate routine specs'
+  'run-routine:run a read-only routine'
+  'record-routine-run:record a routine report in the ledger'
+  'completion:print shell completion'
+  'help:show help'
+)
+routines=(
+  'pr-reviewer'
+  'stale-task-rescuer'
+  'ci-fixer'
+  'release-verifier'
+  'docs-drift-checker'
+  'evidence-label-auditor'
+  'roadmap-next-task-suggester'
+)
+
+_arguments -C \
+  '1:command:->command' \
+  '*::arg:->args'
+
+case $state in
+  command)
+    _describe 'command' commands
+    ;;
+  args)
+    case $words[2] in
+      run-routine)
+        if (( CURRENT == 3 )); then
+          _describe 'routine' routines
+        else
+          _values 'options' --ledger --task-id --repo --tag --expected-asset --write-report --json --help
+        fi
+        ;;
+      completion)
+        _values 'shell' bash zsh fish
+        ;;
+      init)
+        _values 'options' --ledger --project-root --help
+        ;;
+      record-task)
+        _values 'options' --ledger --id --title --thread-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help
+        ;;
+      append-event)
+        _values 'options' --ledger --type --task-id --status --note --help
+        ;;
+      observe|status)
+        _values 'options' --ledger --json --write-report --write-summary --help
+        ;;
+      heartbeat)
+        _values 'options' --ledger --interval --count --write-report --write-summary --help
+        ;;
+      validate-routines)
+        _values 'options' --dir --json --help
+        ;;
+      record-routine-run)
+        _values 'options' --ledger --routine --status --task-id --evidence-local --evidence-proxy --evidence-direct --evidence-blocked --action --next --needs-human --blocked-reason --report-json --help
+        ;;
+    esac
+    ;;
+esac
+`
+}
+
+func completionFish() string {
+	return `# fish completion for codex-orchestrator
+complete -c codex-orchestrator -f
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'init' -d 'Initialize a project-local ledger'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-task' -d 'Record a delegated task'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'append-event' -d 'Append a task or heartbeat event'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'observe' -d 'Inspect ledger and worktree state'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'heartbeat' -d 'Run observe on an interval and write reports'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'status' -d 'Print ledger status'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'validate-routines' -d 'Validate routine specs'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'run-routine' -d 'Run a read-only routine'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run' -d 'Record a routine report in the ledger'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor roadmap-next-task-suggester'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
+complete -c codex-orchestrator -l ledger -d 'Ledger path'
+complete -c codex-orchestrator -l json -d 'Print JSON'
+complete -c codex-orchestrator -l write-report -d 'Write JSON report'
+complete -c codex-orchestrator -l write-summary -d 'Write Markdown summary'
+complete -c codex-orchestrator -l task-id -d 'Task id'
+complete -c codex-orchestrator -l repo -d 'Repository path'
+complete -c codex-orchestrator -l tag -d 'Release tag'
+complete -c codex-orchestrator -l expected-asset -d 'Expected release asset'
+`
 }
 
 func cmdInit(args []string) error {

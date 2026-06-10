@@ -96,6 +96,37 @@ func TestLedgerTaskLifecycle(t *testing.T) {
 	}
 }
 
+func TestCompletionScriptsMentionCoreCommands(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+	}{
+		{name: "bash", text: completionBash()},
+		{name: "zsh", text: completionZsh()},
+		{name: "fish", text: completionFish()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, want := range []string{
+				"run-routine",
+				"release-verifier",
+				"roadmap-next-task-suggester",
+				"completion",
+			} {
+				if !strings.Contains(tc.text, want) {
+					t.Fatalf("expected %s completion to mention %q", tc.name, want)
+				}
+			}
+		})
+	}
+}
+
+func TestCompletionRejectsUnknownShell(t *testing.T) {
+	if err := cmdCompletion([]string{"powershell"}); err == nil {
+		t.Fatal("expected unsupported shell to fail")
+	}
+}
+
 func TestObserveClassifications(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
