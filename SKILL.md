@@ -118,6 +118,19 @@ escalation rules, and the output shape expected by the orchestrator. It does not
 create Codex App sessions, merge, push, clean worktrees, or upgrade
 local/proxy evidence into direct proof.
 
+The helper includes a read-only MVP runner for the PR reviewer routine:
+
+```bash
+codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
+```
+
+This runner inspects only local git/static state from the ledger task worktree:
+task existence, worktree existence, expected branch match, git status,
+`git diff --name-status baseCommit..HEAD`, `git diff --check baseCommit..HEAD`,
+and whether commits exist after `baseCommit`. Treat its evidence as `local`,
+not `direct` runtime proof, and record the JSON report separately when the run
+should become durable ledger truth.
+
 After a routine is actually run, record the outcome so future orchestrator
 sessions can resume from ledger truth:
 

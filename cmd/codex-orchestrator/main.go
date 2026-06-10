@@ -187,6 +187,8 @@ func run(args []string) error {
 		return cmdStatus(args[1:])
 	case "validate-routines":
 		return cmdValidateRoutines(args[1:])
+	case "run-routine":
+		return cmdRunRoutine(args[1:])
 	case "record-routine-run":
 		return cmdRecordRoutineRun(args[1:])
 	case "help", "-h", "--help":
@@ -208,6 +210,7 @@ Usage:
   codex-orchestrator heartbeat [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
   codex-orchestrator status [--ledger PATH] [--json]
   codex-orchestrator validate-routines [--dir routines] [--json]
+  codex-orchestrator run-routine pr-reviewer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
   codex-orchestrator record-routine-run --report-json PATH
 
@@ -606,6 +609,183 @@ func cmdValidateRoutines(args []string) error {
 		return errors.New("routine validation failed")
 	}
 	return nil
+}
+
+func cmdRunRoutine(args []string) error {
+	if len(args) == 0 {
+		return errors.New("run-routine requires a routine id")
+	}
+	switch args[0] {
+	case "pr-reviewer":
+		return cmdRunPRReviewerRoutine(args[1:])
+	default:
+		return fmt.Errorf("unsupported routine %q", args[0])
+	}
+}
+
+func cmdRunPRReviewerRoutine(args []string) error {
+	fs := flag.NewFlagSet("run-routine pr-reviewer", flag.ExitOnError)
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	taskID := fs.String("task-id", "", "task id to inspect")
+	writeReport := fs.String("write-report", "", "write routine report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *taskID == "" {
+		return errors.New("run-routine pr-reviewer requires --task-id")
+	}
+	report, err := runPRReviewerRoutine(*ledgerPath, *taskID)
+	if err != nil {
+		return err
+	}
+	if err := validateRoutineRunReport(report); err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote routine report: %s\n", *writeReport)
+	return nil
+}
+
+func runPRReviewerRoutine(ledgerPath string, taskID string) (RoutineRunReport, error) {
+	report := RoutineRunReport{
+		RoutineID: "pr-reviewer",
+		TaskID:    taskID,
+		Status:    "blocked",
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Loaded ledger task record",
+		},
+		NeedsHuman:          false,
+		BlockedReason:       "",
+		NextSuggestedAction: "Fix the blocked routine precondition, then rerun pr-reviewer.",
+	}
+	ledger, err := loadLedger(ledgerPath)
+	if err != nil {
+		return report, err
+	}
+	taskIndex := findTaskIndex(ledger.Tasks, taskID)
+	if taskIndex < 0 {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Task not found in ledger: "+taskID)
+		report.BlockedReason = "task not found in ledger"
+		return report, nil
+	}
+	task := ledger.Tasks[taskIndex]
+	report.Evidence["local"] = append(report.Evidence["local"], "Task exists in ledger: "+task.ID)
+	if task.Worktree == "" {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Ledger task has no worktree path.")
+		report.ActionsTaken = append(report.ActionsTaken, "Checked task worktree path")
+		report.BlockedReason = "task worktree path is missing"
+		return report, nil
+	}
+	worktree := expandPath(task.Worktree)
+	if info, err := os.Stat(worktree); err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Worktree does not exist: %s", worktree))
+		report.ActionsTaken = append(report.ActionsTaken, "Checked task worktree path")
+		report.BlockedReason = "task worktree is missing"
+		return report, nil
+	} else if !info.IsDir() {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Worktree path is not a directory: %s", worktree))
+		report.ActionsTaken = append(report.ActionsTaken, "Checked task worktree path")
+		report.BlockedReason = "task worktree path is not a directory"
+		return report, nil
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Worktree exists: "+worktree)
+	report.ActionsTaken = append(report.ActionsTaken, "Inspected task worktree git state")
+
+	statusOut, err := gitOutput(worktree, "status", "--short", "--branch")
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "git status --short --branch failed: "+err.Error())
+		report.BlockedReason = "could not inspect task worktree git status"
+		return report, nil
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "git status --short --branch:\n"+statusOut)
+
+	branch := currentBranch(statusOut)
+	if task.Branch != "" {
+		if branch == "" {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], "Expected branch "+task.Branch+", but current branch could not be determined.")
+			report.BlockedReason = "could not determine current branch"
+			return report, nil
+		}
+		if branch != task.Branch {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Expected branch %s, found %s.", task.Branch, branch))
+			report.BlockedReason = "task worktree branch does not match ledger branch"
+			return report, nil
+		}
+		report.Evidence["local"] = append(report.Evidence["local"], "Branch matches ledger branch: "+branch)
+	}
+
+	if hasDirtyChanges(statusOut) {
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], "Worktree has uncommitted changes; routine is read-only and did not stage or modify them.")
+		report.NextSuggestedAction = "Return to the same task worker for commit, cleanup, or explicit handoff of the dirty diff."
+		return report, nil
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Worktree is clean.")
+
+	base := strings.TrimSpace(task.BaseCommit)
+	if base == "" || allZeros(base) {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Task has no comparable baseCommit.")
+		report.BlockedReason = "task baseCommit is missing"
+		return report, nil
+	}
+
+	countOut, err := gitOutput(worktree, "rev-list", "--count", base+"..HEAD")
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "git rev-list --count "+base+"..HEAD failed: "+err.Error())
+		report.BlockedReason = "could not compare task branch with baseCommit"
+		return report, nil
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "git rev-list --count "+base+"..HEAD: "+countOut)
+	if strings.TrimSpace(countOut) == "0" {
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], "No commits are present after baseCommit.")
+		report.NextSuggestedAction = "Do not merge; ask the task worker for a committed implementation or mark the task abandoned."
+		return report, nil
+	}
+
+	nameStatusOut, err := gitOutput(worktree, "diff", "--name-status", base+"..HEAD")
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "git diff --name-status "+base+"..HEAD failed: "+err.Error())
+		report.BlockedReason = "could not inspect task branch diff"
+		return report, nil
+	}
+	if nameStatusOut == "" {
+		nameStatusOut = "(no changed files)"
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "git diff --name-status "+base+"..HEAD:\n"+nameStatusOut)
+	report.ActionsTaken = append(report.ActionsTaken, "Checked committed file list against baseCommit")
+
+	diffCheckOut, err := gitOutput(worktree, "diff", "--check", base+"..HEAD")
+	if err != nil {
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], "git diff --check "+base+"..HEAD failed:\n"+err.Error())
+		report.NextSuggestedAction = "Return to the same task worker to fix whitespace/conflict-marker issues, then rerun pr-reviewer."
+		return report, nil
+	}
+	if diffCheckOut == "" {
+		diffCheckOut = "passed with no output"
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "git diff --check "+base+"..HEAD: "+diffCheckOut)
+	report.ActionsTaken = append(report.ActionsTaken, "Ran read-only committed diff checks")
+
+	report.Status = "passed"
+	report.BlockedReason = ""
+	report.NextSuggestedAction = "Review the local/static report and, if sufficient for this task, record it with record-routine-run --report-json before any separate merge decision."
+	return report, nil
 }
 
 func cmdRecordRoutineRun(args []string) error {
