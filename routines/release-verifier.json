@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "release-verifier",
+  "title": "Release Verifier",
+  "purpose": "Verify that a tagged release has the expected local tag, GitHub release metadata, prerelease flag, and published assets without mutating release state.",
+  "trigger": "Run after a release tag is pushed or before announcing a release artifact set.",
+  "inputs": [
+    "release tag",
+    "local git repository",
+    "GitHub release metadata from gh when available",
+    "expected release asset names"
+  ],
+  "allowedActions": [
+    "inspect local git tags read-only",
+    "inspect GitHub release metadata read-only through gh",
+    "compare prerelease flags against semver prerelease tags",
+    "compare published asset names against the expected asset set",
+    "write a concise release verification report"
+  ],
+  "forbiddenActions": [
+    "create, delete, edit, or upload GitHub releases",
+    "create, move, or delete git tags",
+    "stage, commit, merge, push, or clean worktrees",
+    "dispatch sessions or mutate the orchestration ledger",
+    "claim production runtime proof from release metadata"
+  ],
+  "gates": [
+    "git rev-parse --verify refs/tags/TAG^{}",
+    "git cat-file -t refs/tags/TAG",
+    "gh release view TAG --json tagName,isPrerelease,isDraft,url,targetCommitish,assets",
+    "expected asset name comparison"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Reserved for future direct download/runtime proof; the MVP does not emit direct production proof.",
+      "proxy": "GitHub release metadata and asset names observed through gh.",
+      "local": "Local git tag and expected asset contract checks.",
+      "blocked": "Missing repo, unavailable gh, auth/network failure, or unparseable release metadata."
+    }
+  },
+  "escalation": [
+    "Ask a human before creating, deleting, editing, or re-uploading release assets.",
+    "Stop if gh cannot inspect the release and no accepted alternate read-only evidence is available.",
+    "Do not announce a release when expected assets or prerelease flags fail verification."
+  ],
+  "maxRuntimeMinutes": 10
+}

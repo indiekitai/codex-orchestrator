@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -833,6 +834,74 @@ func TestRunCIFixerRoutineBlockedWhenGatesMissing(t *testing.T) {
 	}
 }
 
+func TestRunReleaseVerifierRoutineWritesPassedAlphaReport(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	git(t, project, "tag", "v0.3.0-alpha.1")
+	reportPath := filepath.Join(root, "reports", "release-verifier.json")
+	withFakeGH(t, fakeReleaseViewJSON("v0.3.0-alpha.1", true, defaultReleaseVerifierAssets()))
+
+	if err := cmdRunRoutine([]string{"release-verifier", "--repo", project, "--tag", "v0.3.0-alpha.1", "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RoutineRunReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.RoutineID != "release-verifier" || report.Status != "passed" {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{"Local git tag v0.3.0-alpha.1 resolves", "Expected release assets"} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, local)
+		}
+	}
+	proxy := strings.Join(report.Evidence["proxy"], "\n")
+	for _, want := range []string{"GitHub release exists", "prerelease=true", "codex-orchestrator_windows_amd64.exe.zip"} {
+		if !strings.Contains(proxy, want) {
+			t.Fatalf("expected proxy evidence %q in:\n%s", want, proxy)
+		}
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["blocked"]) != 0 {
+		t.Fatalf("expected only local/proxy evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunReleaseVerifierRoutineFailsWhenAlphaIsNotPrerelease(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	git(t, project, "tag", "v0.3.0-alpha.2")
+	withFakeGH(t, fakeReleaseViewJSON("v0.3.0-alpha.2", false, defaultReleaseVerifierAssets()))
+
+	report := runReleaseVerifierRoutine(project, "v0.3.0-alpha.2", nil)
+	if report.Status != "failed" {
+		t.Fatalf("expected failed report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["proxy"], "\n"); !strings.Contains(got, "prerelease mismatch") {
+		t.Fatalf("expected prerelease mismatch evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunReleaseVerifierRoutineFailsWhenAssetsMissing(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	git(t, project, "tag", "v0.3.0")
+	withFakeGH(t, fakeReleaseViewJSON("v0.3.0", false, []string{"codex-orchestrator_linux_amd64"}))
+
+	report := runReleaseVerifierRoutine(project, "v0.3.0", []string{"codex-orchestrator_linux_amd64", "codex-orchestrator_darwin_arm64.tar.gz"})
+	if report.Status != "failed" {
+		t.Fatalf("expected failed report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["proxy"], "\n"); !strings.Contains(got, "Missing expected release assets: codex-orchestrator_darwin_arm64.tar.gz") {
+		t.Fatalf("expected missing asset evidence, got %#v", report.Evidence)
+	}
+}
+
 func TestRecordRoutineRunFromJSONReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
@@ -947,4 +1016,46 @@ func gitOutputForTest(t *testing.T, cwd string, args ...string) string {
 		t.Fatalf("git %v failed: %v\n%s", args, err, string(out))
 	}
 	return strings.TrimSpace(string(out))
+}
+
+func withFakeGH(t *testing.T, output string) {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	name := "gh"
+	if runtime.GOOS == "windows" {
+		name = "gh.bat"
+	}
+	path := filepath.Join(bin, name)
+	var script string
+	if runtime.GOOS == "windows" {
+		script = "@echo off\r\necho " + output + "\r\n"
+	} else {
+		script = "#!/bin/sh\ncat <<'JSON'\n" + output + "\nJSON\n"
+	}
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func fakeReleaseViewJSON(tag string, prerelease bool, assets []string) string {
+	release := githubReleaseView{
+		TagName:         tag,
+		IsPrerelease:    prerelease,
+		IsDraft:         false,
+		URL:             "https://github.com/example/codex-orchestrator/releases/tag/" + tag,
+		TargetCommitish: "main",
+		Assets:          make([]githubReleaseAsset, 0, len(assets)),
+	}
+	for _, asset := range assets {
+		release.Assets = append(release.Assets, githubReleaseAsset{Name: asset})
+	}
+	data, err := json.Marshal(release)
+	if err != nil {
+		panic(err)
+	}
+	return string(data)
 }

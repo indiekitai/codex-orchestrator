@@ -161,6 +161,19 @@ type RoutineRunReport struct {
 	NextSuggestedAction string              `json:"nextSuggestedAction"`
 }
 
+type githubReleaseView struct {
+	TagName         string               `json:"tagName"`
+	IsPrerelease    bool                 `json:"isPrerelease"`
+	IsDraft         bool                 `json:"isDraft"`
+	URL             string               `json:"url"`
+	TargetCommitish string               `json:"targetCommitish"`
+	Assets          []githubReleaseAsset `json:"assets"`
+}
+
+type githubReleaseAsset struct {
+	Name string `json:"name"`
+}
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -214,6 +227,7 @@ Usage:
   codex-orchestrator run-routine pr-reviewer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine stale-task-rescuer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine ci-fixer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
+  codex-orchestrator run-routine release-verifier --tag TAG [--repo PATH] [--expected-asset NAME] [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
   codex-orchestrator record-routine-run --report-json PATH
 
@@ -625,6 +639,8 @@ func cmdRunRoutine(args []string) error {
 		return cmdRunStaleTaskRescuerRoutine(args[1:])
 	case "ci-fixer":
 		return cmdRunCIFixerRoutine(args[1:])
+	case "release-verifier":
+		return cmdRunReleaseVerifierRoutine(args[1:])
 	default:
 		return fmt.Errorf("unsupported routine %q", args[0])
 	}
@@ -1175,6 +1191,160 @@ func runCIFixerRoutine(ledgerPath string, taskID string) (RoutineRunReport, erro
 	report.BlockedReason = ""
 	report.NextSuggestedAction = "Run orchestrator review/merge flow for the clean task branch; ci-fixer made no automatic code changes."
 	return report, nil
+}
+
+func cmdRunReleaseVerifierRoutine(args []string) error {
+	fs := flag.NewFlagSet("run-routine release-verifier", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path to inspect")
+	tag := fs.String("tag", "", "release tag to verify")
+	writeReport := fs.String("write-report", "", "write routine report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	var expectedAssets stringList
+	fs.Var(&expectedAssets, "expected-asset", "expected release asset name, repeatable; defaults to this repo's Go CLI release assets")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *tag == "" {
+		return errors.New("run-routine release-verifier requires --tag")
+	}
+	report := runReleaseVerifierRoutine(*repo, *tag, []string(expectedAssets))
+	if err := validateRoutineRunReport(report); err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote routine report: %s\n", *writeReport)
+	return nil
+}
+
+func runReleaseVerifierRoutine(repo string, tag string, expectedAssets []string) RoutineRunReport {
+	report := RoutineRunReport{
+		RoutineID: "release-verifier",
+		Status:    "blocked",
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Inspected local git tag state read-only",
+		},
+		NeedsHuman:          false,
+		BlockedReason:       "",
+		NextSuggestedAction: "Fix the blocked release-verifier precondition, then rerun the routine.",
+	}
+	repo = expandPath(repo)
+	if repo == "" {
+		repo = "."
+	}
+	if info, err := os.Stat(repo); err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path does not exist: %s", repo))
+		report.BlockedReason = "repository path is missing"
+		return report
+	} else if !info.IsDir() {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path is not a directory: %s", repo))
+		report.BlockedReason = "repository path is not a directory"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Repository exists: "+repo)
+
+	commit, err := gitOutput(repo, "rev-parse", "--verify", "refs/tags/"+tag+"^{}")
+	if err != nil {
+		if isGitRepositoryError(err.Error()) {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], "git rev-parse --verify refs/tags/"+tag+"^{} failed: "+err.Error())
+			report.BlockedReason = "could not inspect local git repository"
+			return report
+		}
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], "git rev-parse --verify refs/tags/"+tag+"^{} failed: "+err.Error())
+		report.NextSuggestedAction = "Create or fetch the expected tag, then rerun release-verifier before trusting the release."
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Local git tag %s resolves to commit %s.", tag, strings.TrimSpace(commit)))
+
+	tagType, err := gitOutput(repo, "cat-file", "-t", "refs/tags/"+tag)
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "git cat-file -t refs/tags/"+tag+" failed: "+err.Error())
+		report.BlockedReason = "could not inspect local tag object type"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Local git tag object type: "+strings.TrimSpace(tagType))
+
+	expected := nonEmptyStrings(expectedAssets)
+	if len(expected) == 0 {
+		expected = defaultReleaseVerifierAssets()
+	}
+	sort.Strings(expected)
+	report.Evidence["local"] = append(report.Evidence["local"], "Expected release assets: "+strings.Join(expected, ", "))
+	report.ActionsTaken = append(report.ActionsTaken, "Compared GitHub release metadata through gh when available")
+
+	if _, err := exec.LookPath("gh"); err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "gh executable not found on PATH; GitHub release and asset state were not inspected.")
+		report.BlockedReason = "gh is unavailable"
+		report.NextSuggestedAction = "Install/authenticate gh or provide another read-only GitHub release evidence source, then rerun release-verifier."
+		return report
+	}
+
+	out, err := commandOutput(repo, "gh", "release", "view", tag, "--json", "tagName,isPrerelease,isDraft,url,targetCommitish,assets")
+	if err != nil {
+		if isNotFoundError(err.Error()) {
+			report.Status = "failed"
+			report.Evidence["proxy"] = append(report.Evidence["proxy"], "gh release view "+tag+" failed: "+err.Error())
+			report.NextSuggestedAction = "Publish the GitHub release for the local tag, then rerun release-verifier."
+			return report
+		}
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "gh release view "+tag+" failed: "+err.Error())
+		report.BlockedReason = "could not inspect GitHub release metadata"
+		report.NextSuggestedAction = "Resolve gh authentication/network/repository access, then rerun release-verifier."
+		return report
+	}
+	var release githubReleaseView
+	if err := json.Unmarshal([]byte(out), &release); err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not parse gh release view JSON: "+err.Error())
+		report.BlockedReason = "could not parse GitHub release metadata"
+		return report
+	}
+	report.Evidence["proxy"] = append(report.Evidence["proxy"], fmt.Sprintf("GitHub release exists for %s: url=%s targetCommitish=%s draft=%t prerelease=%t", release.TagName, release.URL, release.TargetCommitish, release.IsDraft, release.IsPrerelease))
+
+	failed := false
+	if release.TagName != "" && release.TagName != tag {
+		failed = true
+		report.Evidence["proxy"] = append(report.Evidence["proxy"], fmt.Sprintf("GitHub release tag mismatch: expected %s, got %s.", tag, release.TagName))
+	}
+	if release.IsDraft {
+		failed = true
+		report.Evidence["proxy"] = append(report.Evidence["proxy"], "GitHub release is still a draft.")
+	}
+	expectedPrerelease := isPrereleaseTag(tag)
+	if release.IsPrerelease != expectedPrerelease {
+		failed = true
+		report.Evidence["proxy"] = append(report.Evidence["proxy"], fmt.Sprintf("GitHub prerelease mismatch for %s: expected %t, got %t.", tag, expectedPrerelease, release.IsPrerelease))
+	}
+
+	actualAssets := releaseAssetNames(release.Assets)
+	report.Evidence["proxy"] = append(report.Evidence["proxy"], "GitHub release assets: "+formatStringList(actualAssets))
+	missing := missingStrings(expected, actualAssets)
+	if len(missing) > 0 {
+		failed = true
+		report.Evidence["proxy"] = append(report.Evidence["proxy"], "Missing expected release assets: "+strings.Join(missing, ", "))
+	}
+
+	if failed {
+		report.Status = "failed"
+		report.NextSuggestedAction = "Fix the GitHub release metadata/assets without mutating state from this routine, then rerun release-verifier."
+		return report
+	}
+	report.Status = "passed"
+	report.BlockedReason = ""
+	report.NextSuggestedAction = "Record this routine report if the local/proxy release evidence is sufficient; perform any separate runtime/download smoke before claiming production proof."
+	return report
 }
 
 func cmdRecordRoutineRun(args []string) error {
@@ -2056,6 +2226,20 @@ func shellOutput(cwd string, timeout time.Duration, command string) (string, err
 	return output, nil
 }
 
+func commandOutput(cwd string, name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = cwd
+	out, err := cmd.CombinedOutput()
+	output := strings.TrimSpace(string(out))
+	if err != nil {
+		if output == "" {
+			return "", err
+		}
+		return "", fmt.Errorf("%s", output)
+	}
+	return output, nil
+}
+
 func currentBranch(statusOutput string) string {
 	lines := strings.Split(statusOutput, "\n")
 	if len(lines) == 0 || !strings.HasPrefix(lines[0], "## ") {
@@ -2067,6 +2251,67 @@ func currentBranch(statusOutput string) string {
 		return ""
 	}
 	return branch
+}
+
+func defaultReleaseVerifierAssets() []string {
+	return []string{
+		"codex-orchestrator_darwin_amd64",
+		"codex-orchestrator_darwin_amd64.tar.gz",
+		"codex-orchestrator_darwin_arm64",
+		"codex-orchestrator_darwin_arm64.tar.gz",
+		"codex-orchestrator_linux_amd64",
+		"codex-orchestrator_linux_amd64.tar.gz",
+		"codex-orchestrator_linux_arm64",
+		"codex-orchestrator_linux_arm64.tar.gz",
+		"codex-orchestrator_windows_amd64.exe",
+		"codex-orchestrator_windows_amd64.exe.zip",
+	}
+}
+
+func isPrereleaseTag(tag string) bool {
+	return strings.Contains(tag, "-alpha") || strings.Contains(tag, "-beta") || strings.Contains(tag, "-rc")
+}
+
+func releaseAssetNames(assets []githubReleaseAsset) []string {
+	names := make([]string, 0, len(assets))
+	for _, asset := range assets {
+		if strings.TrimSpace(asset.Name) != "" {
+			names = append(names, asset.Name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func missingStrings(expected []string, actual []string) []string {
+	actualSet := map[string]bool{}
+	for _, value := range actual {
+		actualSet[value] = true
+	}
+	var missing []string
+	for _, value := range expected {
+		if !actualSet[value] {
+			missing = append(missing, value)
+		}
+	}
+	return missing
+}
+
+func formatStringList(values []string) string {
+	if len(values) == 0 {
+		return "(none)"
+	}
+	return strings.Join(values, ", ")
+}
+
+func isNotFoundError(value string) bool {
+	lower := strings.ToLower(value)
+	return strings.Contains(lower, "not found") || strings.Contains(lower, "release not found") || strings.Contains(lower, "could not resolve to a release")
+}
+
+func isGitRepositoryError(value string) bool {
+	lower := strings.ToLower(value)
+	return strings.Contains(lower, "not a git repository") || strings.Contains(lower, "not a git repo")
 }
 
 func containsString(values []string, needle string) bool {

@@ -230,6 +230,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
 ./codex-orchestrator run-routine stale-task-rescuer --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
 ./codex-orchestrator run-routine ci-fixer --task-id TASK --write-report /tmp/ci-fixer-report.json
+./codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -278,6 +279,18 @@ same-task takeover. Missing gates, missing `baseCommit`, branch mismatches, or
 git inspection failures return `blocked`. It does not stage, commit, merge,
 push, clean worktrees, modify ledger status, or claim direct/proxy runtime
 proof; MVP evidence is `local` or `blocked` only.
+
+`run-routine release-verifier` is the fourth runnable routine MVP. It is
+read-only and does not load or update the ledger. It verifies a supplied local
+git tag, reads GitHub release metadata through `gh release view` when `gh` is
+available, checks alpha/beta/rc prerelease flags, and compares release asset
+names against this repo's default Go CLI asset set or repeated
+`--expected-asset` overrides. Missing tags, missing releases, drafts,
+prerelease mismatches, and missing assets return `failed`; unavailable `gh`,
+auth/network failures, or unparseable release metadata return `blocked`. It
+does not create or edit releases, move tags, upload assets, stage, commit,
+merge, push, clean, dispatch, mutate the ledger, or claim production/runtime
+proof; MVP evidence is `local`, `proxy`, or `blocked`.
 
 When a delegated task is merged, pushed, released, and cleaned, the
 task-specific heartbeat is not automatically the end of the loop. Before

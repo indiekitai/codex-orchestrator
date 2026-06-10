@@ -200,6 +200,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
 ./codex-orchestrator run-routine stale-task-rescuer --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
 ./codex-orchestrator run-routine ci-fixer --task-id TASK --write-report /tmp/ci-fixer-report.json
+./codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -242,6 +243,16 @@ task 已记录的 gate 命令，且带本地超时。gate 通过且 `baseCommit`
 `baseCommit`、分支不匹配或 git 检查失败时返回 `blocked`。它不会 stage、
 commit、merge、push、清理 worktree、修改 ledger status，也不会把证据说成
 direct/proxy runtime proof；这个 MVP 只使用 `local` 或 `blocked` 证据。
+
+`run-routine release-verifier` 是第四个可运行 routine MVP。它只读检查 release
+状态，不读取或修改 ledger。它验证传入的本地 git tag，通过 `gh release view`
+读取 GitHub release 元数据（如果 `gh` 可用），检查 alpha/beta/rc tag 是否标为
+prerelease，并把 release asset 名称与本仓库默认 Go CLI 资产集合或重复传入的
+`--expected-asset` 覆盖项对比。缺少 tag、缺少 release、draft、prerelease
+不匹配或缺少 asset 时返回 `failed`；`gh` 不可用、认证/网络失败或 release 元数据
+无法解析时返回 `blocked`。它不会创建或编辑 release、移动 tag、上传 asset、stage、
+commit、merge、push、清理、派发任务、修改 ledger，也不会声称 production/runtime
+proof；这个 MVP 使用 `local`、`proxy` 或 `blocked` 证据。
 
 一个 delegated task 完成 merge、push、release、cleanup，并不等于整个 loop
 结束。删除任务专属 heartbeat 前，统领必须先检查 ledger / repo truth 和 roadmap

@@ -16,6 +16,7 @@ It can also run the conservative routine MVPs:
 codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
 codex-orchestrator run-routine stale-task-rescuer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/stale-task-rescuer-report.json
 codex-orchestrator run-routine ci-fixer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/ci-fixer-report.json
+codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ```
 
@@ -51,6 +52,22 @@ same-task takeover recommendation. Missing gates, missing `baseCommit`, branch
 mismatches, and git inspection failures block. It does not stage, commit,
 merge, push, clean, dispatch, update ledger status, or claim direct/proxy
 runtime proof; this MVP emits only `local` or `blocked` evidence.
+
+`run-routine release-verifier` is a read-only release-state checker. It does
+not load or update the ledger. It requires a supplied `--tag`, verifies the
+local git tag resolves to a commit, records the local tag object type, and when
+`gh` is available reads GitHub release metadata with `gh release view`. It
+checks alpha/beta/rc tags are marked as prereleases, stable tags are not marked
+as prereleases, the release is not a draft, and the release asset names contain
+the expected set. By default, the expected assets match this repo's current Go
+CLI release workflow: darwin amd64/arm64, linux amd64/arm64, and windows amd64,
+including both raw binaries and archive files. Override the set with repeated
+`--expected-asset NAME` flags. Missing tags, missing releases, prerelease
+mismatches, drafts, or missing assets fail. Missing `gh`, auth/network errors,
+or unparseable release metadata block. It does not create or edit releases,
+move tags, upload assets, stage, commit, merge, push, clean, dispatch, mutate
+the ledger, or claim production/runtime proof; this MVP emits `local`, `proxy`,
+or `blocked` evidence.
 
 Routine specs live in [`../../routines`](../../routines). They are JSON so the
 Go helper can validate them without a Python, YAML, or Node dependency.
@@ -98,6 +115,8 @@ Do not turn `local` or `proxy` evidence into `direct` proof in the final report.
 - `pr-reviewer`: review a completed task branch before merge.
 - `ci-fixer`: classify failing CI/local gates and route the task back for a
   same-worker fix; the runnable MVP does not edit code.
+- `release-verifier`: verify local tag, GitHub release metadata, prerelease
+  flag, and expected Go CLI assets without mutating release state.
 - `browser-runtime-proof`: verify browser-visible behavior through a browser
   harness.
 - `log-proof`: verify behavior through current runtime logs.
