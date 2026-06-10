@@ -46,3 +46,6 @@ temp/
 # Local v2 ledgers created inside this repository during experiments.
 .codex-orchestrator/ledger.json
 .codex-orchestrator/events.jsonl
+.codex-orchestrator/heartbeat-report.*
+.codex-orchestrator/*.tmp
+.codex-orchestrator/*.local.json

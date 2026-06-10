@@ -162,6 +162,7 @@ A 和 B 并行运行（写入集不相交）。两者合并后，编排器派发
 
 第一步 v2 seed 见
 [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)：持久 ledger 格式和只读 heartbeat checker。
+完整 v2-v5 演进路线见 [docs/roadmap.md](docs/roadmap.md)。
 
 ## 🧱 架构
 
@@ -214,6 +215,7 @@ codex-orchestrator/
 ├── agents/
 │   └── openai.yaml       # Agent 接口定义
 ├── docs/
+│   ├── roadmap.md
 │   └── v2-persistent-ledger-and-heartbeat.md
 ├── examples/
 │   └── ledger.example.json

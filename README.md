@@ -187,6 +187,7 @@ merge.
 
 See [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)
 for the first v2 seed: a durable ledger format and read-only heartbeat checker.
+For the broader v2-v5 plan, see [docs/roadmap.md](docs/roadmap.md).
 
 ## 🧱 Architecture
 
@@ -239,6 +240,7 @@ codex-orchestrator/
 ├── agents/
 │   └── openai.yaml       # Agent interface definition
 ├── docs/
+│   ├── roadmap.md
 │   └── v2-persistent-ledger-and-heartbeat.md
 ├── examples/
 │   └── ledger.example.json
