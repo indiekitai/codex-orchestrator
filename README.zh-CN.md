@@ -70,7 +70,7 @@
 
 开源场景下建议先在可丢弃仓库或功能分支上 dry run。自动 push 应保持关闭，直到你确认 review gate 和项目分支保护策略可靠。
 
-核心 skill 本身不依赖 Python。v2 helper 现在已有 Go CLI seed，可以构建成单文件二进制。Python helper 会先保留，作为开发原型和兼容参考。
+核心 skill 本身不依赖 Python。v2 helper 现在是 Go CLI，可以构建成单文件二进制。Python helper 会先保留，作为开发原型和兼容参考。
 
 ## 🚫 这不是什么
 
@@ -85,6 +85,13 @@
 ```bash
 # 复制到 Codex skills 目录
 cp -r codex-orchestrator ~/.codex/skills/delegated-session-orchestrator
+```
+
+可选：安装 v2 Go helper：
+
+```bash
+scripts/install.sh
+codex-orchestrator init
 ```
 
 ### 2. 在 Codex 中使用
@@ -112,6 +119,10 @@ cp -r codex-orchestrator ~/.codex/skills/delegated-session-orchestrator
 4. 审查并合并完成的会话
 5. 收割卡住会话的可用 commit
 6. 有空位时派发下一批任务
+
+安装 v2 helper 后，它还可以把任务状态持久化到
+`.codex-orchestrator/ledger.json`，并写出 heartbeat report，让新的统领
+session 能从 repo/ledger truth 恢复现场。
 
 ## 📋 使用示例
 
@@ -162,8 +173,8 @@ A 和 B 并行运行（写入集不相交）。两者合并后，编排器派发
 
 它不宣称一个 Codex skill 已经等于完整 loop runtime。它要先把第一个有用的 loop 做具体：有界任务、隔离执行、心跳巡检、诚实证据标签，以及合并前审查。
 
-第一步 v2 seed 见
-[docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)：持久 ledger 格式和只读 heartbeat checker。
+V2 持久化状态层见
+[docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)：持久 ledger 格式和保守 heartbeat helper。
 完整 v2-v5 演进路线见 [docs/roadmap.md](docs/roadmap.md)。
 
 当前 v2 helper CLI 已支持：
@@ -173,6 +184,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
 ./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task
 ./codex-orchestrator observe
+./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ```
@@ -227,15 +239,20 @@ codex-orchestrator/
 ├── SKILL.md              # 编排器 skill（复制到 ~/.codex/skills/）
 ├── agents/
 │   └── openai.yaml       # Agent 接口定义
+├── .github/workflows/
+│   └── release.yml       # 多平台 release binary workflow
 ├── cmd/
 │   └── codex-orchestrator/
-│       └── main.go       # Go helper CLI seed
+│       ├── main.go       # Go helper CLI
+│       └── main_test.go  # CLI 状态机测试
 ├── docs/
 │   ├── roadmap.md
+│   ├── v2-usage.md
 │   └── v2-persistent-ledger-and-heartbeat.md
 ├── examples/
 │   └── ledger.example.json
 ├── scripts/
+│   ├── install.sh
 │   └── ledger_heartbeat.py
 ├── go.mod
 ├── README.md             # 英文说明

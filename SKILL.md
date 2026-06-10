@@ -90,6 +90,21 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
 
 After dispatching or discovering a delegated session, keep a compact ledger in the orchestrator thread or current status note. Do not rely on memory or stale automation text.
 
+If the repository has the v2 helper installed, prefer a durable project-local
+ledger over chat-only state:
+
+```bash
+codex-orchestrator init
+codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch codex/task
+codex-orchestrator observe --json
+codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json --write-summary .codex-orchestrator/heartbeat-summary.md
+codex-orchestrator append-event --task-id TASK --type review --status completed-unreviewed --note "Ready for orchestrator review."
+```
+
+The helper is not a session launcher and must not be treated as one. It is a
+state and heartbeat tool. The Codex App orchestrator still owns worker dispatch,
+review, merge, push, and cleanup decisions.
+
 Record:
 
 - task ID and short outcome,

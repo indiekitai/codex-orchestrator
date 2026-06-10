@@ -65,13 +65,23 @@ type Observation struct {
 	GitStatus string `json:"gitStatus,omitempty"`
 }
 
+type IntegrationState struct {
+	Path      string `json:"path"`
+	Dirty     bool   `json:"dirty"`
+	GitStatus string `json:"gitStatus,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
 type ObserveSummary struct {
-	Ledger        string        `json:"ledger"`
-	Version       int           `json:"version"`
-	ProjectRoot   string        `json:"projectRoot"`
-	DefaultBranch string        `json:"defaultBranch"`
-	ObservedAt    string        `json:"observedAt"`
-	Observations  []Observation `json:"observations"`
+	Ledger             string           `json:"ledger"`
+	Version            int              `json:"version"`
+	ProjectRoot        string           `json:"projectRoot"`
+	DefaultBranch      string           `json:"defaultBranch"`
+	ObservedAt         string           `json:"observedAt"`
+	OverallStatus      string           `json:"overallStatus"`
+	RecommendedActions []string         `json:"recommendedActions"`
+	Integration        IntegrationState `json:"integration"`
+	Observations       []Observation    `json:"observations"`
 }
 
 func main() {
@@ -95,6 +105,8 @@ func run(args []string) error {
 		return cmdAppendEvent(args[1:])
 	case "observe":
 		return cmdObserve(args[1:])
+	case "heartbeat":
+		return cmdHeartbeat(args[1:])
 	case "status":
 		return cmdStatus(args[1:])
 	case "help", "-h", "--help":
@@ -112,7 +124,8 @@ Usage:
   codex-orchestrator init [--ledger PATH] [--project-root PATH]
   codex-orchestrator record-task --id ID --worktree PATH --branch BRANCH [--allowed PATH] [--forbidden PATH] [--gate CMD]
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--note TEXT]
-  codex-orchestrator observe [--ledger PATH] [--json] [--write-report PATH]
+  codex-orchestrator observe [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
+  codex-orchestrator heartbeat [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
   codex-orchestrator status [--ledger PATH] [--json]
 
 This helper is conservative: it does not create Codex sessions, merge, push,
@@ -341,10 +354,12 @@ func cmdObserve(args []string) error {
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
 	jsonOut := fs.Bool("json", false, "print JSON")
 	writeReport := fs.String("write-report", "", "write JSON report")
+	writeSummary := fs.String("write-summary", "", "write Markdown summary")
+	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale threshold")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	summary, err := observe(*ledgerPath)
+	summary, err := observeWithOptions(*ledgerPath, *staleAfter)
 	if err != nil {
 		return err
 	}
@@ -353,11 +368,81 @@ func cmdObserve(args []string) error {
 			return err
 		}
 	}
+	if *writeSummary != "" {
+		if err := writeText(*writeSummary, renderSummary(summary)); err != nil {
+			return err
+		}
+	}
 	if *jsonOut {
 		return printJSON(summary)
 	}
 	printObservations(summary)
 	return nil
+}
+
+func cmdHeartbeat(args []string) error {
+	fs := flag.NewFlagSet("heartbeat", flag.ExitOnError)
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	eventsPath := fs.String("events", "", "events path")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	writeReport := fs.String("write-report", "", "write latest JSON report")
+	writeSummary := fs.String("write-summary", "", "write latest Markdown summary")
+	interval := fs.Duration("interval", 5*time.Minute, "heartbeat interval")
+	count := fs.Int("count", 1, "number of checks; 0 runs forever")
+	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale threshold")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *count < 0 {
+		return errors.New("heartbeat --count cannot be negative")
+	}
+	if *interval < 0 {
+		return errors.New("heartbeat --interval cannot be negative")
+	}
+	resolvedEvents := *eventsPath
+	if resolvedEvents == "" {
+		resolvedEvents = eventsPathForLedger(*ledgerPath)
+	}
+	iteration := 0
+	for {
+		iteration++
+		summary, err := observeWithOptions(*ledgerPath, *staleAfter)
+		if err != nil {
+			return err
+		}
+		if *writeReport != "" {
+			if err := writeJSON(*writeReport, summary); err != nil {
+				return err
+			}
+		}
+		if *writeSummary != "" {
+			if err := writeText(*writeSummary, renderSummary(summary)); err != nil {
+				return err
+			}
+		}
+		if err := appendEvent(resolvedEvents, map[string]any{
+			"at":     summary.ObservedAt,
+			"type":   "heartbeat",
+			"status": summary.OverallStatus,
+			"note":   strings.Join(summary.RecommendedActions, " | "),
+		}); err != nil {
+			return err
+		}
+		if *jsonOut {
+			if err := printJSON(summary); err != nil {
+				return err
+			}
+		} else {
+			printObservations(summary)
+		}
+		if *count > 0 && iteration >= *count {
+			return nil
+		}
+		if *interval == 0 {
+			return nil
+		}
+		time.Sleep(*interval)
+	}
 }
 
 func cmdStatus(args []string) error {
@@ -404,25 +489,34 @@ func cmdStatus(args []string) error {
 }
 
 func observe(ledgerPath string) (ObserveSummary, error) {
+	return observeWithOptions(ledgerPath, 15*time.Minute)
+}
+
+func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSummary, error) {
 	ledger, err := loadLedger(ledgerPath)
 	if err != nil {
 		return ObserveSummary{}, err
 	}
 	observations := make([]Observation, 0, len(ledger.Tasks))
 	for _, task := range ledger.Tasks {
-		observations = append(observations, inspectTask(task))
+		observations = append(observations, inspectTask(task, staleAfter))
 	}
+	integration := inspectIntegration(ledger.ProjectRoot)
+	overall, actions := summarizeObservations(integration, observations, ledger.MaxConcurrency)
 	return ObserveSummary{
-		Ledger:        ledgerPath,
-		Version:       ledger.Version,
-		ProjectRoot:   ledger.ProjectRoot,
-		DefaultBranch: ledger.DefaultBranch,
-		ObservedAt:    nowISO(),
-		Observations:  observations,
+		Ledger:             ledgerPath,
+		Version:            ledger.Version,
+		ProjectRoot:        ledger.ProjectRoot,
+		DefaultBranch:      ledger.DefaultBranch,
+		ObservedAt:         nowISO(),
+		OverallStatus:      overall,
+		RecommendedActions: actions,
+		Integration:        integration,
+		Observations:       observations,
 	}, nil
 }
 
-func inspectTask(task Task) Observation {
+func inspectTask(task Task, staleAfter time.Duration) Observation {
 	if task.Worktree == "" {
 		return Observation{
 			ID:     task.ID,
@@ -433,11 +527,19 @@ func inspectTask(task Task) Observation {
 	}
 	worktree := expandPath(task.Worktree)
 	if _, err := os.Stat(worktree); err != nil {
+		statusValue := "pending-setup"
+		action := "verify setup or mark stale if expired"
+		note := fmt.Sprintf("Worktree does not exist: %s", worktree)
+		if isTaskStale(task, staleAfter) {
+			statusValue = "stale-needs-inspection"
+			action = "inspect pending setup and decide whether to re-dispatch or abandon"
+			note = fmt.Sprintf("Worktree does not exist and the last observation is older than %s: %s", staleAfter, worktree)
+		}
 		return Observation{
 			ID:     task.ID,
-			Status: "pending-setup",
-			Action: "verify setup or mark stale if expired",
-			Note:   fmt.Sprintf("Worktree does not exist: %s", worktree),
+			Status: statusValue,
+			Action: action,
+			Note:   note,
 		}
 	}
 	status, err := gitOutput(worktree, "status", "--short", "--branch")
@@ -483,11 +585,29 @@ func inspectTask(task Task) Observation {
 		if statusValue == "" {
 			statusValue = "active"
 		}
+		if statusValue == "active" && isTaskStale(task, staleAfter) {
+			return Observation{
+				ID:        task.ID,
+				Status:    "stale-needs-inspection",
+				Action:    "inspect manually",
+				Note:      fmt.Sprintf("Task has no comparable baseCommit and the last observation is older than %s.", staleAfter),
+				GitStatus: status,
+			}
+		}
 		return Observation{
 			ID:        task.ID,
 			Status:    statusValue,
 			Action:    "inspect manually",
 			Note:      "Could not compare baseCommit; ledger may be a template or base is missing.",
+			GitStatus: status,
+		}
+	}
+	if task.Status == "active" && isTaskStale(task, staleAfter) {
+		return Observation{
+			ID:        task.ID,
+			Status:    "stale-needs-inspection",
+			Action:    "inspect recent thread messages or nudge same worker",
+			Note:      fmt.Sprintf("Clean worktree has no commits after baseCommit, and last observation is older than %s.", staleAfter),
 			GitStatus: status,
 		}
 	}
@@ -529,6 +649,69 @@ func findTaskIndex(tasks []Task, id string) int {
 	return -1
 }
 
+func inspectIntegration(projectRoot string) IntegrationState {
+	root := expandPath(projectRoot)
+	if root == "" {
+		root = "."
+	}
+	state := IntegrationState{Path: root}
+	status, err := gitOutput(root, "status", "--short", "--branch")
+	if err != nil {
+		state.Error = err.Error()
+		return state
+	}
+	state.GitStatus = status
+	state.Dirty = hasDirtyChangesIgnoringStateDir(status)
+	return state
+}
+
+func isTaskStale(task Task, threshold time.Duration) bool {
+	if threshold <= 0 {
+		return false
+	}
+	at := task.LastObservation["at"]
+	if at == "" && len(task.History) > 0 {
+		at = task.History[len(task.History)-1]["at"]
+	}
+	if at == "" {
+		return false
+	}
+	observed, err := time.Parse(time.RFC3339, at)
+	if err != nil {
+		return false
+	}
+	return time.Since(observed) > threshold
+}
+
+func summarizeObservations(integration IntegrationState, observations []Observation, maxConcurrency int) (string, []string) {
+	if integration.Error != "" {
+		return "blocked", []string{"Inspect integration checkout git state before dispatching or merging."}
+	}
+	if integration.Dirty {
+		return "blocked", []string{"Integration checkout is dirty; classify local changes before dispatching or merging."}
+	}
+	counts := map[string]int{}
+	for _, observation := range observations {
+		counts[observation.Status]++
+	}
+	switch {
+	case counts["blocked"] > 0:
+		return "blocked", []string{"Resolve blocked task setup/state before dispatching new work."}
+	case counts["completed-unreviewed"] > 0:
+		return "review-needed", []string{"Review completed task commits, run gates, then merge or reject."}
+	case counts["stale-needs-inspection"] > 0:
+		return "stale", []string{"Inspect stale task worktrees and either nudge, take over, abandon, or mark blocked."}
+	}
+	active := counts["active"] + counts["pending-setup"] + counts["reviewing"]
+	if maxConcurrency <= 0 {
+		maxConcurrency = 2
+	}
+	if active < maxConcurrency {
+		return "dispatch-possible", []string{"Capacity is available; dispatch the next safe roadmap task if one exists."}
+	}
+	return "quiet", []string{"Active tasks are within concurrency limit; continue monitoring."}
+}
+
 func writeJSON(path string, value any) error {
 	target := expandPath(path)
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -540,6 +723,17 @@ func writeJSON(path string, value any) error {
 	}
 	data = append(data, '\n')
 	return os.WriteFile(target, data, 0o644)
+}
+
+func writeText(path string, value string) error {
+	target := expandPath(path)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	if !strings.HasSuffix(value, "\n") {
+		value += "\n"
+	}
+	return os.WriteFile(target, []byte(value), 0o644)
 }
 
 func appendEvent(path string, event map[string]any) error {
@@ -559,6 +753,38 @@ func appendEvent(path string, event map[string]any) error {
 	defer f.Close()
 	_, err = f.Write(data)
 	return err
+}
+
+func renderSummary(summary ObserveSummary) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# codex-orchestrator heartbeat\n\n")
+	fmt.Fprintf(&b, "- observedAt: `%s`\n", summary.ObservedAt)
+	fmt.Fprintf(&b, "- overallStatus: `%s`\n", summary.OverallStatus)
+	fmt.Fprintf(&b, "- ledger: `%s`\n", summary.Ledger)
+	fmt.Fprintf(&b, "- projectRoot: `%s`\n", summary.ProjectRoot)
+	fmt.Fprintf(&b, "- defaultBranch: `%s`\n", summary.DefaultBranch)
+	fmt.Fprintf(&b, "- integrationDirty: `%t`\n", summary.Integration.Dirty)
+	if summary.Integration.Error != "" {
+		fmt.Fprintf(&b, "- integrationError: `%s`\n", summary.Integration.Error)
+	}
+	if len(summary.RecommendedActions) > 0 {
+		fmt.Fprintf(&b, "\n## Recommended Actions\n\n")
+		for _, action := range summary.RecommendedActions {
+			fmt.Fprintf(&b, "- %s\n", action)
+		}
+	}
+	fmt.Fprintf(&b, "\n## Tasks\n\n")
+	if len(summary.Observations) == 0 {
+		fmt.Fprintf(&b, "- No tasks recorded.\n")
+		return b.String()
+	}
+	for _, item := range summary.Observations {
+		fmt.Fprintf(&b, "- `%s`: `%s` - %s\n", item.ID, item.Status, item.Action)
+		if item.Note != "" {
+			fmt.Fprintf(&b, "  - note: %s\n", item.Note)
+		}
+	}
+	return b.String()
 }
 
 func compactEvent(event map[string]any) map[string]string {
@@ -595,6 +821,15 @@ func printJSON(value any) error {
 func printObservations(summary ObserveSummary) {
 	fmt.Printf("Ledger: %s\n", summary.Ledger)
 	fmt.Printf("Project: %s default=%s\n", summary.ProjectRoot, summary.DefaultBranch)
+	fmt.Printf("Overall: %s\n", summary.OverallStatus)
+	if summary.Integration.Error != "" {
+		fmt.Printf("Integration: blocked (%s)\n", summary.Integration.Error)
+	} else {
+		fmt.Printf("Integration dirty: %t\n", summary.Integration.Dirty)
+	}
+	for _, action := range summary.RecommendedActions {
+		fmt.Printf("Action: %s\n", action)
+	}
 	for _, item := range summary.Observations {
 		fmt.Println()
 		fmt.Printf("- %s: %s\n", item.ID, item.Status)
@@ -662,6 +897,22 @@ func hasDirtyChanges(statusOutput string) bool {
 		if line != "" && !strings.HasPrefix(line, "## ") {
 			return true
 		}
+	}
+	return false
+}
+
+func hasDirtyChangesIgnoringStateDir(statusOutput string) bool {
+	for _, line := range strings.Split(statusOutput, "\n") {
+		if line == "" || strings.HasPrefix(line, "## ") {
+			continue
+		}
+		if strings.HasPrefix(line, "?? "+defaultStateDir+"/") || strings.HasPrefix(line, "?? "+defaultStateDir) {
+			continue
+		}
+		if strings.Contains(line, " "+defaultStateDir+"/") {
+			continue
+		}
+		return true
 	}
 	return false
 }

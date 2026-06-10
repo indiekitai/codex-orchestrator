@@ -51,5 +51,6 @@ temp/
 .codex-orchestrator/ledger.json
 .codex-orchestrator/events.jsonl
 .codex-orchestrator/heartbeat-report.*
+.codex-orchestrator/heartbeat-summary.*
 .codex-orchestrator/*.tmp
 .codex-orchestrator/*.local.json

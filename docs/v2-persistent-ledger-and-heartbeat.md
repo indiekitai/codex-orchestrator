@@ -16,8 +16,9 @@ v2 should provide:
 - deterministic stale-task classification,
 - explicit merge/review states,
 - enough repo truth to resume orchestration from a fresh session,
-- and a safe read-only heartbeat checker that can be run by cron, launchd, or a
-  Codex automation.
+- and a conservative heartbeat helper that can be run by cron, launchd, or a
+  Codex automation without creating sessions, merging, pushing, or deleting
+  worktrees.
 
 v2 should not initially:
 
@@ -150,33 +151,44 @@ The ledger should keep short events rather than full logs:
 Long artifacts, screenshots, logs, and review docs should live in the target
 project, not inside the ledger.
 
-## First Implementation Step
+## Implementation Status
 
-This repository includes a read-only helper:
-
-```bash
-python3 scripts/ledger_heartbeat.py observe --ledger examples/ledger.example.json
-```
-
-It does not create sessions, merge, push, or clean worktrees. It only compares
-the ledger with local git truth and prints the next suggested orchestrator
-action.
-
-The core skill does not require Python. This repository now includes a Go CLI
-seed for machines that should not depend on `python3`:
+This repository includes a conservative Go helper CLI:
 
 ```bash
 go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
 ./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task
 ./codex-orchestrator observe --ledger examples/ledger.example.json
+./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ```
 
-The Python helper remains as a prototype and compatibility reference. If neither
-helper is available, use the same ledger schema manually and let the Codex App
-orchestrator inspect `git status`, `git worktree list`, and task worktrees
-directly.
+It does not create sessions, merge, push, or clean worktrees. It compares the
+ledger with local git truth, writes heartbeat reports, appends heartbeat events,
+and prints the next suggested orchestrator action.
+
+The Go helper supports:
+
+- `init`
+- `record-task`
+- `append-event`
+- `observe`
+- `heartbeat`
+- `status`
+
+It emits `overallStatus` values suitable for a Codex App orchestrator:
+
+- `quiet`
+- `dispatch-possible`
+- `review-needed`
+- `stale`
+- `blocked`
+
+The Python helper remains as a prototype and compatibility reference. If
+neither helper is available, use the same ledger schema manually and let the
+Codex App orchestrator inspect `git status`, `git worktree list`, and task
+worktrees directly.
 
 For compatibility, the original form still works:
 
@@ -193,13 +205,13 @@ dispatch.
 Initialize a project-local ledger:
 
 ```bash
-python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py init
+codex-orchestrator init
 ```
 
 Record a delegated task after the App orchestrator creates a worker session:
 
 ```bash
-python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py record-task \
+codex-orchestrator record-task \
   --id API-AUTH-LOCAL \
   --title "Auth endpoint implementation" \
   --thread-id optional-thread-id \
@@ -214,22 +226,22 @@ python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py record-task \
 Observe the ledger and local git/worktree truth:
 
 ```bash
-python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py observe
-python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py observe --json
-python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py observe \
+codex-orchestrator observe
+codex-orchestrator observe --json
+codex-orchestrator observe \
   --write-report .codex-orchestrator/heartbeat-report.json
 ```
 
 Summarize task states:
 
 ```bash
-python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py status
+codex-orchestrator status
 ```
 
 Append an event and optionally update a task:
 
 ```bash
-python3 /path/to/codex-orchestrator/scripts/ledger_heartbeat.py append-event \
+codex-orchestrator append-event \
   --task-id API-AUTH-LOCAL \
   --type review \
   --status completed-unreviewed \

@@ -80,8 +80,8 @@ For open-source use, start with a dry run on a disposable repository or feature
 branch. Keep automatic push disabled until you trust the review gates and your
 project's branch protection policy.
 
-The core skill does not require Python. The v2 helper now has a Go CLI seed that
-can be built as a single binary. The Python helper remains as a prototype and
+The core skill does not require Python. The v2 helper is a Go CLI that can be
+built as a single binary. The Python helper remains as a prototype and
 compatibility reference.
 
 ## 🚫 What This Is Not
@@ -102,6 +102,13 @@ evidence, and deciding what should ship.
 ```bash
 # Copy to your Codex skills directory
 cp -r codex-orchestrator ~/.codex/skills/delegated-session-orchestrator
+```
+
+Optional: install the v2 Go helper:
+
+```bash
+scripts/install.sh
+codex-orchestrator init
 ```
 
 ### 2. Use it in Codex
@@ -131,6 +138,10 @@ The orchestrator will:
 4. Review and merge completed sessions
 5. Rescue stuck sessions by harvesting their commits
 6. Dispatch the next batch when slots open up
+
+With the v2 helper installed, it can also persist task state in
+`.codex-orchestrator/ledger.json` and write heartbeat reports that a fresh
+orchestrator session can resume from.
 
 ## 📋 Real Example
 
@@ -190,7 +201,8 @@ isolated execution, heartbeat inspection, honest proof labels, and review before
 merge.
 
 See [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)
-for the first v2 seed: a durable ledger format and read-only heartbeat checker.
+for the v2 durable ledger and heartbeat helper design, and
+[docs/v2-usage.md](docs/v2-usage.md) for the Codex App + Go helper workflow.
 For the broader v2-v5 plan, see [docs/roadmap.md](docs/roadmap.md).
 
 The v2 helper CLI currently supports:
@@ -200,6 +212,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
 ./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task
 ./codex-orchestrator observe
+./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ```
@@ -254,15 +267,20 @@ codex-orchestrator/
 ├── SKILL.md              # The orchestrator skill (copy to ~/.codex/skills/)
 ├── agents/
 │   └── openai.yaml       # Agent interface definition
+├── .github/workflows/
+│   └── release.yml       # Cross-platform release binary workflow
 ├── cmd/
 │   └── codex-orchestrator/
-│       └── main.go       # Go helper CLI seed
+│       ├── main.go       # Go helper CLI
+│       └── main_test.go  # CLI state-machine tests
 ├── docs/
 │   ├── roadmap.md
+│   ├── v2-usage.md
 │   └── v2-persistent-ledger-and-heartbeat.md
 ├── examples/
 │   └── ledger.example.json
 ├── scripts/
+│   ├── install.sh
 │   └── ledger_heartbeat.py
 ├── go.mod
 ├── README.md             # This file

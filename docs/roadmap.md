@@ -97,7 +97,7 @@ Future daemon/UI
 
 ## v2：Persistent task ledger + heartbeat helper
 
-状态：已开始 seed。
+状态：alpha 已完成，可用于 App-first orchestration 的持久 ledger 和保守 heartbeat；还不是自动创建 session / 自动合并的后台系统。
 
 目标：
 
@@ -109,7 +109,9 @@ Future daemon/UI
 已具备：
 
 - `docs/v2-persistent-ledger-and-heartbeat.md`
+- `docs/v2-usage.md`
 - `examples/ledger.example.json`
+- `cmd/codex-orchestrator` Go helper CLI
 - `scripts/ledger_heartbeat.py`
 - helper CLI 子命令：
   - `init`
@@ -117,42 +119,33 @@ Future daemon/UI
   - `status`
   - `record-task`
   - `append-event`
+  - `heartbeat`
+- integration checkout dirty/error 检查；
+- per-task `pending-setup` / `stale-needs-inspection` / `completed-unreviewed` / `blocked` 分类；
+- `overallStatus` 和 recommended actions；
+- JSON report 和 Markdown summary；
+- Go 单测覆盖核心状态机；
+- `scripts/install.sh` 本地安装入口；
+- GitHub Actions release binary workflow。
 
 下一步建议：
 
-1. 完善 Go helper CLI，避免要求用户机器一定有 `python3`。当前 Go helper 已覆盖 `init` / `record-task` / `append-event` / `observe` / `status` 的基础能力，下一步是补 Go 测试、fixtures 和安装分发。可选分发方向：
+1. 发布第一个 tag，验证 GitHub release artifacts。
 
-   - Go 单文件二进制；
-   - npm 包；
-   - Homebrew tap；
-   - 继续保留 Python 脚本作为开发原型。
+2. 视用户反馈补 Homebrew tap 或 npm wrapper。
 
-   最终用户应该能运行：
+3. 继续扩展 heartbeat policy：
 
-   ```text
-   codex-orchestrator init
-   codex-orchestrator observe
-   ```
+   - stale timeout 更丰富的 per-task 配置；
+   - merged/cleanup ownership 检查；
+   - forbidden-path 和 evidence-label audit；
+   - routine library 接口。
 
-2. 补更完整的测试和 fixture。
-
-3. `observe` 输出两种格式已经具备，后续要稳定 schema：
-
-   - 人读 summary；
-   - 给 App orchestrator 消费的 JSON。
-
-4. 添加 launchd/cron 示例，但保持只读：
+4. 添加 launchd/cron 示例，但保持保守：
 
    ```text
    observe -> write heartbeat-report.json -> notify user/App
    ```
-
-5. 增加最小测试覆盖：
-
-   - missing worktree -> `pending-setup`
-   - dirty worktree -> `stale-needs-inspection`
-   - clean commit after base -> `completed-unreviewed`
-   - branch mismatch -> `blocked`
 
 边界：
 
