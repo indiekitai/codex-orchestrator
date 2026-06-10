@@ -143,6 +143,23 @@ A 和 B 并行运行（写入集不相交）。两者合并后，编排器派发
 
 半夜，心跳发现会话 C 在第 22 分钟卡住了，但有一个干净的 commit。编排器直接审查该 commit，合并，继续——无需人工干预。
 
+## 🪜 Loop Engineering 成熟度模型
+
+`codex-orchestrator` 是一个实用的 **v1 loop**，不是 Agentic 软件开发的终局形态。它处在“人工逐条 prompt”和“完整持久化 Agent 操作系统”之间。
+
+| 阶段 | 形态 | 变化 |
+|------|------|------|
+| **v0：人工 Prompt** | 人一次提示一个 Agent | 人负责调度、审查、恢复和合并 |
+| **v1：受监督的 orchestrator skill** | 现在的 `codex-orchestrator` | worktree 隔离、有界任务契约、heartbeat 巡检、review/merge 纪律、证据标签 |
+| **v2：持久任务账本** | loop 背后有真正的状态存储 | task、attempt、worker 状态、gate、blocker、结果能跨 thread 和重启保留 |
+| **v3：Routine 库** | 可复用的后台 routine | PR reviewer、CI fixer、stale-session rescuer、rebase helper、docs drift checker、release verifier |
+| **v4：Eval 与安全层** | 失败案例沉淀成测试和策略 | prompt injection 样本、危险操作分类器、权限检查、证据质量 eval |
+| **v5：Agent Operating System** | 多个 routine 持续协作 | 人和 loop/routine 对话，由专门 Agent 执行、审查、安全检查和汇报 |
+
+这个仓库刻意从 v1 开始，因为这是大多数团队今天就能落地的一层：不需要先写 daemon，也不需要重做整个研发平台。后续真正难的是持久状态、routine 组合、安全分类和 eval 驱动改进。
+
+它不宣称一个 Codex skill 已经等于完整 loop runtime。它要先把第一个有用的 loop 做具体：有界任务、隔离执行、心跳巡检、诚实证据标签，以及合并前审查。
+
 ## 🧱 架构
 
 编排器作为一个**状态机**管理所有委派会话：

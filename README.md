@@ -160,6 +160,31 @@ Session D: codex/api-rate-limit
 
 Overnight, the heartbeat catches Session C stuck at minute 22 with a clean commit. The orchestrator reviews the commit directly, merges it, and moves on — no human intervention needed.
 
+## 🪜 Loop Engineering Maturity Model
+
+`codex-orchestrator` is a practical **v1 loop**, not the final form of agentic
+software development. It sits between manual prompting and a fully persistent
+agent operating system.
+
+| Level | Shape | What changes |
+|-------|-------|--------------|
+| **v0: Prompting** | Human prompts one agent at a time | The human is the scheduler, reviewer, and recovery loop |
+| **v1: Supervised orchestrator skill** | `codex-orchestrator` today | Worktree isolation, bounded task contracts, heartbeat monitoring, review/merge discipline, evidence labels |
+| **v2: Persistent task ledger** | A real state store behind the loop | Tasks, attempts, worker state, gates, blockers, and outcomes survive across threads and restarts |
+| **v3: Routine library** | Reusable background routines | PR reviewer, CI fixer, stale-session rescuer, rebase helper, docs drift checker, release verifier |
+| **v4: Eval and safety layer** | Failures become tests and policies | Prompt-injection cases, dangerous-operation classifiers, permission checks, evidence-quality evals |
+| **v5: Agent operating system** | Many routines coordinate continuously | The human talks to loops/routines, while specialized agents execute, review, secure, and report |
+
+This repository intentionally starts at v1 because that is the layer most teams
+can adopt today without running a custom daemon or changing their whole
+development platform. The next hard problems are durable state, routine
+composition, safety classification, and eval-driven improvement.
+
+The ambition is not to claim that a Codex skill is already a complete loop
+runtime. The ambition is to make the first useful loop concrete: bounded work,
+isolated execution, heartbeat inspection, honest proof labels, and review before
+merge.
+
 ## 🧱 Architecture
 
 The orchestrator operates as a **state machine** over delegated sessions:
