@@ -89,10 +89,13 @@ docs, routine specs, routine report JSON files, and ledger-shaped JSON for
 obvious evidence-label issues: weak evidence labels near overstated proof
 wording, RoutineRunReport JSON missing the required evidence buckets, and
 direct evidence recorded for routines whose specs explicitly reserve direct
-evidence. Findings are heuristics and are reported as local/static suspicions,
-not semantic proof. It does not stage, commit, merge, push, tag, release, clean
-worktrees, dispatch sessions, mutate the ledger, or claim runtime proof; this
-MVP emits `local` or `blocked` evidence.
+evidence. It applies deterministic named policy/eval rules (`ELA001`-`ELA009`),
+skips glossary/prohibition/blocked-definition wording that should stay allowed,
+and includes local rule-hit summaries when findings are present. Findings are
+heuristics and are reported as local/static suspicions, not semantic proof. It
+does not stage, commit, merge, push, tag, release, clean worktrees, dispatch
+sessions, mutate the ledger, or claim runtime proof; this MVP emits `local` or
+`blocked` evidence.
 
 `run-routine roadmap-next-task-suggester` is a read-only local planning
 assistant. It reads `docs/roadmap.md`, compares the remaining v3 and explicit

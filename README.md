@@ -55,7 +55,7 @@ Running one Codex session at a time is fine for small tasks. But for anything la
 | **5-minute heartbeat** | Periodic check reconciles thread status with actual git state — no silent overnight stalls |
 | **Stuck session recovery** | If a session is idle >15 min: has a clean commit → review and merge directly; has uncommitted useful changes → send a targeted nudge to continue; no useful diff → mark abandoned |
 | **Anti-shallow-slice gate** | Rejects "another placeholder page" tasks. Forces vertical completion, runtime proof, or blocker removal |
-| **Evidence discipline** | Labels proof as `direct`, `proxy`, or `blocked`. No upgrading unit tests into production proof |
+| **Evidence discipline** | Labels proof as `direct`, `proxy`, `local`, or `blocked`. No upgrading unit tests into production proof |
 | **Self-review enforcement** | Every session must review its own diff before handoff. The orchestrator re-reviews before merging |
 | **Feature-package planning** | When a domain has multiple partial closures, promotes work to a coherent milestone instead of more tiny slices |
 | **Continuous operation** | Doesn't stop after one feature — reads roadmap, picks the next buildable feature, dispatches, repeats. Designed for overnight/unattended multi-feature runs |
@@ -312,10 +312,13 @@ docs, routine specs, routine report JSON files, and ledger-shaped JSON for
 obvious evidence-label issues: weak evidence wording near strong proof wording,
 RoutineRunReport JSON missing the `direct` / `proxy` / `local` / `blocked`
 buckets, and direct evidence recorded for routines whose specs explicitly
-reserve direct evidence. Findings are heuristic suspicions, not proof of
-wrongdoing. It does not stage, commit, merge, push, tag, release, clean
-worktrees, dispatch sessions, mutate the ledger, or claim runtime proof; MVP
-evidence is `local` or `blocked`.
+reserve direct evidence. It applies deterministic named policy/eval rules
+(`ELA001`-`ELA009`), treats glossary/prohibition/blocked-definition wording as
+allowed negatives, and reports local rule-hit summaries when findings are
+present. Findings are heuristic suspicions, not proof of wrongdoing. It does
+not stage, commit, merge, push, tag, release, clean worktrees, dispatch
+sessions, mutate the ledger, or claim runtime proof; MVP evidence is `local`
+or `blocked`.
 
 `run-routine roadmap-next-task-suggester` is the seventh runnable routine MVP.
 It is read-only and does not mutate the ledger. It parses remaining candidate
@@ -361,7 +364,7 @@ dispatch → active → completed-unreviewed → merged
 | **Stuck sessions** | You notice (eventually) and intervene | Auto-detected at 15 min, commit harvested |
 | **Merge conflicts** | Discovered at merge time | Prevented by disjoint write-set enforcement |
 | **Shallow work** | Sessions produce placeholder pages | Anti-shallow-slice gate rejects or rewrites |
-| **Evidence honesty** | Trust the session's self-report | `direct`/`proxy`/`blocked` labels enforced |
+| **Evidence honesty** | Trust the session's self-report | `direct`/`proxy`/`local`/`blocked` labels enforced |
 | **Overnight runs** | You wake up to a mess | You wake up to merged branches |
 | **Concurrency** | YOLO parallelism | Serialized contracts, max 2-3 with rules |
 
@@ -376,7 +379,7 @@ These parameters are tunable in the skill or per-dispatch:
 | Heartbeat interval | 5 min | How often the orchestrator checks all sessions |
 | Branch prefix | `codex/` | Namespace for task branches |
 | Push policy | Project-specific | Push only when normal for the repository or explicitly requested |
-| Evidence labels | `direct`, `proxy`, `blocked` | Required classification for hardware/deploy/payment proof |
+| Evidence labels | `direct`, `proxy`, `local`, `blocked` | Required classification for local, hardware, deploy, or payment proof |
 | Anti-shallow-slice | Enforced | Tasks must be classified before dispatch |
 
 ## 📂 File Structure
