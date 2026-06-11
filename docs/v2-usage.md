@@ -247,6 +247,16 @@ codex-orchestrator run-routine roadmap-next-task-suggester
 codex-orchestrator run-routine budget-policy-report
 ```
 
+`pr-reviewer` includes the automated review checklist surface for merge review
+of a ledger task. It stays read-only and local/static: it verifies task,
+worktree, branch, dirty status, commits after `baseCommit`, `git diff
+--name-status`, `git diff --check`, ledger allowed/forbidden path boundaries
+when `writeSet` is recorded, locally detectable review/self-review/artifact/
+evidence-label filename signals, and suggested narrow gates from the ledger
+task. The checklist can fail clear path-boundary violations and warn on missing
+local signals, but it does not merge, push, clean, dispatch, or replace human
+review.
+
 The budget-policy report surface is now runnable:
 
 ```bash

@@ -1250,6 +1250,111 @@ func TestRunPRReviewerRoutineFailsOnDirtyWorktree(t *testing.T) {
 	}
 }
 
+func TestRunPRReviewerRoutineChecksAllowedWriteSetAndSignals(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/checklist", worker, "HEAD")
+	if err := os.MkdirAll(filepath.Join(worker, "docs", "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "CHECKLIST",
+		"--worktree", worker,
+		"--branch", "codex/checklist",
+		"--base-commit", base,
+		"--allowed", "docs/reviews/**",
+		"--forbidden", "secrets/**",
+		"--gate", "go test ./...",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reviewPath := filepath.Join(worker, "docs", "reviews", "self-review-evidence.md")
+	if err := os.WriteFile(reviewPath, []byte("Self-review: local evidence only.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "docs/reviews/self-review-evidence.md")
+	git(t, worker, "commit", "-q", "-m", "add review evidence")
+
+	report, err := runPRReviewerRoutine(ledger, "CHECKLIST")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "passed" {
+		t.Fatalf("expected passed checklist report, got %#v", report)
+	}
+	joined := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"Automated review checklist: ledger writeSet",
+		"all changed paths fit the ledger allowed writeSet",
+		"no changed paths matched the ledger forbidden writeSet",
+		"review artifact signal found",
+		"self-review or handoff filename signal found",
+		"suggested narrow gate(s) from ledger task: go test ./...",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected checklist evidence %q in:\n%s", want, joined)
+		}
+	}
+	if report.NeedsHuman {
+		t.Fatalf("expected no checklist warning requiring human for complete local signals, got %#v", report)
+	}
+}
+
+func TestRunPRReviewerRoutineFailsOnForbiddenWriteSet(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/forbidden", worker, "HEAD")
+	if err := os.MkdirAll(filepath.Join(worker, "secrets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "FORBIDDEN",
+		"--worktree", worker,
+		"--branch", "codex/forbidden",
+		"--base-commit", base,
+		"--allowed", "docs/**",
+		"--forbidden", "secrets/**",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "secrets", "token.txt"), []byte("placeholder\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "secrets/token.txt")
+	git(t, worker, "commit", "-q", "-m", "touch forbidden path")
+
+	report, err := runPRReviewerRoutine(ledger, "FORBIDDEN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "failed" {
+		t.Fatalf("expected failed forbidden-path report, got %#v", report)
+	}
+	joined := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"changed path(s) outside ledger allowed writeSet: secrets/token.txt",
+		"changed path(s) match ledger forbidden writeSet: secrets/token.txt",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected forbidden checklist evidence %q in:\n%s", want, joined)
+		}
+	}
+}
+
 func TestRunStaleTaskRescuerRoutineWritesPassedReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

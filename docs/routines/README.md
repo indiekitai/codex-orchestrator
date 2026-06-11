@@ -32,10 +32,17 @@ codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ledger task, checks that the worktree exists, verifies the current branch when
 the ledger records one, captures `git status --short --branch`, checks commits
 after `baseCommit`, records `git diff --name-status baseCommit..HEAD`, and runs
-`git diff --check baseCommit..HEAD`. It does not merge, push, delete branches,
-clean worktrees, run task-specific tests, or claim runtime proof. Its report
-uses `local` evidence only unless a future routine actually observes another
-surface.
+`git diff --check baseCommit..HEAD`. It also emits a conservative automated
+review checklist from local/static evidence: changed paths against ledger
+`writeSet.allowed`/`writeSet.forbidden` when present, review artifact filename
+signals, artifact/report filename signals, worker self-review or handoff
+filename signals, evidence-label filename signals, and suggested narrow gates
+from the ledger task. Forbidden-path hits and allowed-path misses fail the
+routine; missing locally detectable review/self-review/artifact/evidence
+signals are warnings that require human/orchestrator review. It does not merge,
+push, delete branches, clean worktrees, run task-specific tests, or claim
+runtime proof. Its report uses `local` evidence only unless a future routine
+actually observes another surface.
 
 `run-routine stale-task-rescuer` is also read-only against the task worktree. It
 loads the ledger task by id, records ledger status, last observation, and recent

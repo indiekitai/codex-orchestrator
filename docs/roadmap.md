@@ -439,11 +439,19 @@ roadmap。优先级如下：
    - 边界：这仍然是 local/static helper evidence，不查询 Codex App runtime，不创建
      session，不 merge/push/delete/cleanup。
 
-3. Automated review checklist。
+3. Automated review checklist：已补。
    - 目标：在 merge 前自动生成 reviewer checklist，而不是只靠统领手工记得查。
    - 检查 allowed/forbidden paths、diff name-status、`git diff --check`、review doc、
      artifact、worker self-review、evidence labels、docs drift 和 required gates。
-   - 边界：它可以 block/warn，但不自动 merge。
+   - 当前落地：`run-routine pr-reviewer` 复用已有 ledger/task/worktree/git 检查，并补
+     local/static 自动 review checklist。它会检查 task/worktree/branch/dirty 状态、
+     `baseCommit..HEAD` 提交、`git diff --name-status`、`git diff --check`、
+     ledger `writeSet.allowed`/`writeSet.forbidden` 路径边界、本地可检测的
+     review/self-review/artifact/evidence-label 文件名信号，以及 ledger 记录的窄
+     gates 建议。明确 forbidden path 命中或 allowed path 越界会 fail；缺少本地可检测
+     review/self-review/artifact/evidence 信号会作为 warning/needs-human 进入报告。
+   - 边界：它可以 block/warn，但不自动 merge，不 push，不 cleanup，不 dispatch，也不把
+     local/static checklist 当作 direct runtime proof。
 
 4. Evidence-label linter。
    - 目标：把 TastyFuture 里最危险的证据升级问题变成机器可检查规则。
