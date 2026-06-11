@@ -137,7 +137,7 @@ Future daemon/UI
 下一步建议：
 
 1. 发布第一个 tag，验证 GitHub release artifacts。已完成到
-   `v0.3.0-beta.2`。
+   `v0.3.0-beta.3`。
 
 2. 继续打磨 Codex App-first install UX。Homebrew tap 或 npm wrapper 只有在
    用户明确想用包管理器维护 helper binary 时才值得做。

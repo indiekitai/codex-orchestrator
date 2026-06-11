@@ -1,9 +1,9 @@
-# v0.3.0-beta.2 Release Notes Draft
+# v0.3.0-beta.3 Release Notes Draft
 
-`v0.3.0-beta.2` should be the first release positioned for external users to
-try from source/tag, not just inspect. It should package the current App-first
-orchestration skill, durable helper, routine contracts, and read-only routine
-runners behind a clear quickstart.
+`v0.3.0-beta.3` tightens the public Codex App-first positioning after the
+first beta package. It keeps the same helper/routine package, but makes the
+entrypoint easier to understand: `codex-orchestrator` is the product, repo,
+Codex App skill, and helper CLI name.
 
 ## Highlights
 
@@ -27,6 +27,10 @@ runners behind a clear quickstart.
 
 ## What Changed Since Alpha
 
+- The public skill name is now `codex-orchestrator`; users no longer need to
+  learn a second skill name.
+- README and docs now describe the project as a supervised Codex App outer
+  loop, not a complete Loop Engineering runtime or standalone daemon.
 - The helper is now a Go CLI suitable for single-binary distribution.
 - Ledger observation distinguishes terminal statuses such as `merged`,
   `released`, and `cleaned` from active/pending work.

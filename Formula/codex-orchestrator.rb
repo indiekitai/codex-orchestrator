@@ -2,7 +2,7 @@ class CodexOrchestrator < Formula
   desc "Codex App-first orchestration helper for supervised multi-session development"
   homepage "https://github.com/indiekitai/codex-orchestrator"
   url "https://github.com/indiekitai/codex-orchestrator.git",
-      tag: "v0.3.0-beta.2"
+      tag: "v0.3.0-beta.3"
   license "MIT"
 
   depends_on "go" => :build
