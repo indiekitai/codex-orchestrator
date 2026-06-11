@@ -226,6 +226,8 @@ func run(args []string) error {
 		return cmdPolicy(args[1:])
 	case "eval":
 		return cmdEval(args[1:])
+	case "rules":
+		return cmdRules(args[1:])
 	case "record-routine-run":
 		return cmdRecordRoutineRun(args[1:])
 	case "completion":
@@ -260,6 +262,7 @@ Usage:
   codex-orchestrator policy check [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval run [--suite orchestration-policy-auditor] [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval add-failure --id ID --text TEXT --expect OPA001=1 [--file README.md] [--suite orchestration-policy-auditor] [--repo PATH]
+  codex-orchestrator rules propose (--from-review PATH | --text TEXT | --text-file PATH) [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
   codex-orchestrator record-routine-run --report-json PATH
   codex-orchestrator completion bash|zsh|fish
@@ -293,7 +296,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init record-task append-event observe heartbeat status validate-routines run-routine policy eval record-routine-run completion help"
+  commands="init record-task append-event observe heartbeat status validate-routines run-routine policy eval rules record-routine-run completion help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester"
 
   case "$prev" in
@@ -349,6 +352,13 @@ _codex_orchestrator()
         COMPREPLY=( $(compgen -W "run add-failure" -- "$cur") )
       fi
       ;;
+    rules)
+      if [[ ${COMP_WORDS[2]} == "propose" ]]; then
+        COMPREPLY=( $(compgen -W "--from-review --text --text-file --write-report --json --help" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "propose" -- "$cur") )
+      fi
+      ;;
     record-routine-run)
       COMPREPLY=( $(compgen -W "--ledger --routine --status --task-id --evidence-local --evidence-proxy --evidence-direct --evidence-blocked --action --next --needs-human --blocked-reason --report-json --help" -- "$cur") )
       ;;
@@ -373,6 +383,7 @@ commands=(
   'run-routine:run a read-only routine'
   'policy:run policy and eval checks'
   'eval:run local eval fixtures'
+  'rules:propose review-only rule updates'
   'record-routine-run:record a routine report in the ledger'
   'completion:print shell completion'
   'help:show help'
@@ -421,6 +432,13 @@ case $state in
           _values 'options' --suite --repo --eval-dir --write-report --json --help
         fi
         ;;
+      rules)
+        if (( CURRENT == 3 )); then
+          _values 'subcommand' propose
+        else
+          _values 'options' --from-review --text --text-file --write-report --json --help
+        fi
+        ;;
       completion)
         _values 'shell' bash zsh fish
         ;;
@@ -464,11 +482,13 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'validate-routines'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'run-routine' -d 'Run a read-only routine'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'policy' -d 'Run policy and eval checks'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'eval' -d 'Run local eval fixtures'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'rules' -d 'Propose review-only rule updates'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run' -d 'Record a routine report in the ledger'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run add-failure'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from rules' -a 'propose'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 complete -c codex-orchestrator -l ledger -d 'Ledger path'
 complete -c codex-orchestrator -l json -d 'Print JSON'
@@ -946,6 +966,18 @@ func cmdEval(args []string) error {
 	}
 }
 
+func cmdRules(args []string) error {
+	if len(args) == 0 {
+		return errors.New("rules requires a subcommand: propose")
+	}
+	switch args[0] {
+	case "propose":
+		return cmdRulesPropose(args[1:])
+	default:
+		return fmt.Errorf("unsupported rules subcommand %q", args[0])
+	}
+}
+
 func cmdEvalRun(args []string) error {
 	fs := flag.NewFlagSet("eval run", flag.ExitOnError)
 	suite := fs.String("suite", "orchestration-policy-auditor", "eval suite id")
@@ -970,6 +1002,203 @@ func cmdEvalRun(args []string) error {
 	}
 	fmt.Printf("Wrote eval run report: %s\n", *writeReport)
 	return nil
+}
+
+func cmdRulesPropose(args []string) error {
+	fs := flag.NewFlagSet("rules propose", flag.ExitOnError)
+	fromReview := fs.String("from-review", "", "read local review text from a Markdown/text file")
+	text := fs.String("text", "", "inline local evidence text")
+	textFile := fs.String("text-file", "", "read local evidence text from a file")
+	writeReport := fs.String("write-report", "", "write rule proposal report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	report := runRulesPropose(*fromReview, *text, *textFile)
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut {
+		return printJSON(report)
+	}
+	if *writeReport == "" {
+		fmt.Print(renderRuleProposalReport(report))
+		return nil
+	}
+	fmt.Printf("Wrote rules proposal report: %s\n", *writeReport)
+	return nil
+}
+
+func runRulesPropose(fromReview string, text string, textFile string) RuleProposalReport {
+	report := RuleProposalReport{
+		SchemaVersion:    1,
+		Command:          "rules propose",
+		GeneratedAt:      nowISO(),
+		Status:           "blocked",
+		Source:           RuleSource{},
+		EvidenceLabel:    "blocked",
+		NeedsHumanReview: true,
+		Proposals:        []RuleProposal{},
+		Evidence:         []string{},
+		BlockedReason:    "insufficient local input",
+		NextAction:       "Provide --from-review, --text, or --text-file with local evidence, then rerun rules propose.",
+	}
+	body, source, err := readRulesProposalInput(fromReview, text, textFile)
+	report.Source = source
+	if err != nil {
+		report.Evidence = append(report.Evidence, "Blocked: "+err.Error())
+		report.BlockedReason = err.Error()
+		return report
+	}
+	if len(strings.Fields(body)) < 4 {
+		report.Evidence = append(report.Evidence, "Blocked: local input is too short to support a reviewable rule proposal.")
+		report.BlockedReason = "local input is too short"
+		return report
+	}
+
+	sourceName := source.Path
+	if sourceName == "" {
+		sourceName = "inline text"
+	}
+	findings := auditOrchestrationPolicyText(sourceName, body)
+	ruleCounts := countPolicyAuditFindings(findings)
+	report.Status = "passed"
+	report.EvidenceLabel = "local"
+	report.BlockedReason = ""
+	report.Evidence = append(report.Evidence, fmt.Sprintf("Read local rule proposal input from %s.", sourceName))
+	if len(findings) > 0 {
+		report.Evidence = append(report.Evidence, fmt.Sprintf("Applied existing OPA policy heuristics read-only: %s.", formatRuleCounts(ruleCounts)))
+	} else {
+		report.Evidence = append(report.Evidence, "Existing OPA policy heuristics produced no named rule hit; generated one generic review-only proposal from local text.")
+	}
+	report.Proposals = buildRuleProposals(sourceName, findings)
+	report.Evidence = append(report.Evidence, fmt.Sprintf("Generated %d review-only proposal(s); no rule, skill, README, policy, AGENTS, or CLAUDE file was edited.", len(report.Proposals)))
+	report.NextAction = "A human reviewer should accept, rewrite, or reject these proposed rule updates before editing any live rules."
+	return report
+}
+
+func readRulesProposalInput(fromReview string, text string, textFile string) (string, RuleSource, error) {
+	fromReview = strings.TrimSpace(fromReview)
+	text = strings.TrimSpace(text)
+	textFile = strings.TrimSpace(textFile)
+	count := 0
+	for _, value := range []string{fromReview, text, textFile} {
+		if value != "" {
+			count++
+		}
+	}
+	if count == 0 {
+		return "", RuleSource{}, errors.New("rules propose requires one of --from-review, --text, or --text-file")
+	}
+	if count > 1 {
+		return "", RuleSource{}, errors.New("use only one of --from-review, --text, or --text-file")
+	}
+	if fromReview != "" {
+		data, err := os.ReadFile(expandPath(fromReview))
+		if err != nil {
+			return "", RuleSource{Kind: "review", Path: fromReview}, err
+		}
+		return strings.TrimSpace(string(data)), RuleSource{Kind: "review", Path: fromReview}, nil
+	}
+	if textFile != "" {
+		data, err := os.ReadFile(expandPath(textFile))
+		if err != nil {
+			return "", RuleSource{Kind: "text-file", Path: textFile}, err
+		}
+		return strings.TrimSpace(string(data)), RuleSource{Kind: "text-file", Path: textFile}, nil
+	}
+	return text, RuleSource{Kind: "text"}, nil
+}
+
+func buildRuleProposals(sourceName string, findings []policyAuditFinding) []RuleProposal {
+	ruleIDs := make([]string, 0, len(findings))
+	seen := map[string]bool{}
+	for _, finding := range findings {
+		if seen[finding.RuleID] {
+			continue
+		}
+		seen[finding.RuleID] = true
+		ruleIDs = append(ruleIDs, finding.RuleID)
+	}
+	sort.Strings(ruleIDs)
+	if len(ruleIDs) == 0 {
+		return []RuleProposal{{
+			Title:            "Review local orchestration rule update",
+			Body:             "Consider adding or tightening a project rule only after a human confirms this local evidence represents a repeated orchestration failure. Keep the accepted rule specific, testable, and paired with the verification evidence it requires.",
+			Source:           sourceName,
+			EvidenceLabel:    "local",
+			NeedsHumanReview: true,
+		}}
+	}
+	proposals := make([]RuleProposal, 0, len(ruleIDs))
+	for _, ruleID := range ruleIDs {
+		title, proposalBody := proposalForPolicyRule(ruleID)
+		proposals = append(proposals, RuleProposal{
+			Title:            title,
+			Body:             proposalBody,
+			Source:           sourceName,
+			EvidenceLabel:    "local",
+			NeedsHumanReview: true,
+			RuleIDs:          []string{ruleID},
+		})
+	}
+	return proposals
+}
+
+func proposalForPolicyRule(ruleID string) (string, string) {
+	switch ruleID {
+	case policyRuleDryRunBarrier:
+		return "Require explicit approval before dispatch after dry run", "Proposed rule: after any dry-run or planning-only pass, do not dispatch workers or mutate task state until the user explicitly approves live execution. Verification should cite the approval text or mark the dispatch path blocked."
+	case policyRuleMainFallbackGuard:
+		return "Block main-checkout fallback after worker setup failure", "Proposed rule: if a delegated worktree or branch cannot be created, stop and report setup failure instead of implementing in the orchestrator checkout or another unapproved path. Verification should include the failed setup evidence and the exact input needed to continue."
+	case policyRuleContinuationGuard:
+		return "Continue the parent queue after one child task completes", "Proposed rule: completing one delegated task is not completion for the parent orchestration unless the parent objective is fully verified. After each child closes, reread the queue, classify remaining safe work, and record whether the parent continues, blocks, or completes."
+	case policyRuleWorkerBoundary:
+		return "Require delegated worker boundary instructions", "Proposed rule: every delegated worker prompt must name its allowed paths, forbidden paths, branch/worktree boundary, verification gates, and the prohibition on nested delegation unless the user explicitly requests it."
+	case policyRuleEvidenceBoundary:
+		return "Prevent local or proxy evidence from becoming direct proof", "Proposed rule: local, static, fixture, or proxy checks must stay labeled as local or proxy evidence. Only the routine that directly observes the target runtime, device, deployment, or external surface may record direct evidence."
+	default:
+		return "Review local orchestration rule update", "Proposed rule: convert the confirmed repeated failure into a narrow, reviewable rule with an explicit trigger, forbidden action, verification surface, and blocked-stop condition."
+	}
+}
+
+func renderRuleProposalReport(report RuleProposalReport) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# codex-orchestrator rules proposal\n\n")
+	fmt.Fprintf(&b, "- status: `%s`\n", report.Status)
+	fmt.Fprintf(&b, "- generatedAt: `%s`\n", report.GeneratedAt)
+	fmt.Fprintf(&b, "- sourceKind: `%s`\n", report.Source.Kind)
+	if report.Source.Path != "" {
+		fmt.Fprintf(&b, "- sourcePath: `%s`\n", report.Source.Path)
+	}
+	fmt.Fprintf(&b, "- evidenceLabel: `%s`\n", report.EvidenceLabel)
+	fmt.Fprintf(&b, "- needsHumanReview: `%t`\n", report.NeedsHumanReview)
+	if report.BlockedReason != "" {
+		fmt.Fprintf(&b, "- blockedReason: %s\n", report.BlockedReason)
+	}
+	if len(report.Evidence) > 0 {
+		fmt.Fprintf(&b, "\n## Evidence\n\n")
+		for _, item := range report.Evidence {
+			fmt.Fprintf(&b, "- %s\n", item)
+		}
+	}
+	if len(report.Proposals) > 0 {
+		fmt.Fprintf(&b, "\n## Proposals\n\n")
+		for _, proposal := range report.Proposals {
+			fmt.Fprintf(&b, "### %s\n\n", proposal.Title)
+			fmt.Fprintf(&b, "- source: `%s`\n", proposal.Source)
+			fmt.Fprintf(&b, "- evidenceLabel: `%s`\n", proposal.EvidenceLabel)
+			fmt.Fprintf(&b, "- needsHumanReview: `%t`\n", proposal.NeedsHumanReview)
+			if len(proposal.RuleIDs) > 0 {
+				fmt.Fprintf(&b, "- ruleIds: `%s`\n", strings.Join(proposal.RuleIDs, ", "))
+			}
+			fmt.Fprintf(&b, "\n%s\n\n", proposal.Body)
+		}
+	}
+	fmt.Fprintf(&b, "## Next Action\n\n%s\n", report.NextAction)
+	return b.String()
 }
 
 func cmdEvalAddFailure(args []string) error {
@@ -3495,6 +3724,34 @@ type evalAddFailureResult struct {
 	ExpectedRuleHits map[string]int `json:"expectedRuleHits"`
 	ActualRuleHits   map[string]int `json:"actualRuleHits"`
 	Overwritten      bool           `json:"overwritten"`
+}
+
+type RuleProposalReport struct {
+	SchemaVersion    int            `json:"schemaVersion"`
+	Command          string         `json:"command"`
+	GeneratedAt      string         `json:"generatedAt"`
+	Status           string         `json:"status"`
+	Source           RuleSource     `json:"source"`
+	EvidenceLabel    string         `json:"evidenceLabel"`
+	NeedsHumanReview bool           `json:"needsHumanReview"`
+	Proposals        []RuleProposal `json:"proposals"`
+	Evidence         []string       `json:"evidence"`
+	BlockedReason    string         `json:"blockedReason,omitempty"`
+	NextAction       string         `json:"nextAction"`
+}
+
+type RuleSource struct {
+	Kind string `json:"kind"`
+	Path string `json:"path,omitempty"`
+}
+
+type RuleProposal struct {
+	Title            string   `json:"title"`
+	Body             string   `json:"body"`
+	Source           string   `json:"source"`
+	EvidenceLabel    string   `json:"evidenceLabel"`
+	NeedsHumanReview bool     `json:"needsHumanReview"`
+	RuleIDs          []string `json:"ruleIds,omitempty"`
 }
 
 const (

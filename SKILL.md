@@ -161,6 +161,7 @@ codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/r
 codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 codex-orchestrator eval run --write-report /tmp/eval-run-report.json
 codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
+codex-orchestrator rules propose --from-review docs/reviews/example.md --write-report /tmp/rules-proposal-report.json
 ```
 
 The PR reviewer runner inspects only local git/static state from the ledger task worktree:
@@ -260,6 +261,12 @@ case to the fixture suite. The MVP requires explicit `--text` or `--text-file`
 and at least one `--expect RULE=N`. It validates the text against the current
 rules before writing JSON and refuses to overwrite existing fixtures unless
 `--force` is supplied.
+
+Use `codex-orchestrator rules propose` to turn local evidence text or a review
+file into a review-only rule proposal report. It accepts `--from-review`,
+`--text`, or `--text-file`, writes only a proposal report via `--write-report`,
+and does not edit live skills, README files, AGENTS/CLAUDE instructions, policy
+files, or project rules. Every proposal is marked as needing human review.
 
 The roadmap next-task suggester runner is read-only and does not mutate the
 ledger. It parses remaining candidate tasks from `docs/roadmap.md`, compares

@@ -164,6 +164,7 @@ func TestCompletionScriptsMentionCoreCommands(t *testing.T) {
 				"run-routine",
 				"release-verifier",
 				"roadmap-next-task-suggester",
+				"rules",
 				"completion",
 			} {
 				if !strings.Contains(tc.text, want) {
@@ -1554,6 +1555,86 @@ func TestRunOrchestrationPolicyAuditorRoutineBlockedWhenNoInputs(t *testing.T) {
 	}
 	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "Could not collect orchestration policy audit paths") {
 		t.Fatalf("expected input collection blocked evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRulesProposeFromTextProducesReviewOnlyProposal(t *testing.T) {
+	text := strings.Join([]string{
+		"Dry run mode can dispatch workers immediately.",
+		"",
+		"Local proxy smoke counts as direct proof.",
+	}, "\n")
+
+	report := runRulesPropose("", text, "")
+	if report.Status != "passed" {
+		t.Fatalf("expected passed rules proposal report, got %#v", report)
+	}
+	if !report.NeedsHumanReview || report.EvidenceLabel != "local" {
+		t.Fatalf("expected local human-review report, got %#v", report)
+	}
+	if len(report.Proposals) != 2 {
+		t.Fatalf("expected two rule proposals, got %#v", report.Proposals)
+	}
+	got := report.Proposals[0].Title + "\n" + report.Proposals[1].Title
+	for _, want := range []string{
+		"Require explicit approval before dispatch after dry run",
+		"Prevent local or proxy evidence from becoming direct proof",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected proposal %q in:\n%s", want, got)
+		}
+	}
+	for _, proposal := range report.Proposals {
+		if !proposal.NeedsHumanReview || proposal.EvidenceLabel != "local" || proposal.Source != "inline text" {
+			t.Fatalf("expected review-only local proposal, got %#v", proposal)
+		}
+	}
+	if gotEvidence := strings.Join(report.Evidence, "\n"); !strings.Contains(gotEvidence, "no rule, skill, README, policy, AGENTS, or CLAUDE file was edited") {
+		t.Fatalf("expected no-mutation evidence, got:\n%s", gotEvidence)
+	}
+}
+
+func TestRulesProposeBlockedWithoutInput(t *testing.T) {
+	report := runRulesPropose("", "", "")
+	if report.Status != "blocked" || report.BlockedReason == "" {
+		t.Fatalf("expected blocked report, got %#v", report)
+	}
+	if len(report.Proposals) != 0 {
+		t.Fatalf("expected no proposals without input, got %#v", report.Proposals)
+	}
+	if !strings.Contains(report.BlockedReason, "requires one of") {
+		t.Fatalf("expected clear blocked reason, got %q", report.BlockedReason)
+	}
+}
+
+func TestCmdRulesProposeWritesReportOnly(t *testing.T) {
+	root := t.TempDir()
+	reviewPath := filepath.Join(root, "review.md")
+	reportPath := filepath.Join(root, "rules-proposal.json")
+	if err := os.WriteFile(reviewPath, []byte("If worktree setup failed, fallback to the main checkout and implement the task there.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cmdRules([]string{"propose", "--from-review", reviewPath, "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RuleProposalReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "passed" || len(report.Proposals) != 1 {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	proposal := report.Proposals[0]
+	if proposal.Title != "Block main-checkout fallback after worker setup failure" {
+		t.Fatalf("unexpected proposal: %#v", proposal)
+	}
+	if !proposal.NeedsHumanReview || proposal.EvidenceLabel != "local" || proposal.Source != reviewPath {
+		t.Fatalf("expected review-only local proposal from review file, got %#v", proposal)
 	}
 }
 
