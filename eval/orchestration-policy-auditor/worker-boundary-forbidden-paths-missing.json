@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "worker-boundary-forbidden-paths-missing",
+  "description": "Delegated worker prompts that claim execution boundaries must state forbidden paths as well as isolation, no-subagent/Paseo, self-review, and no-merge/push guards.",
+  "files": {
+    "docs/reviews/local-worker-prompt-review.md": "codex_delegation worker prompt: work only in your isolated worktree branch. Do not use subagents, do not use Paseo, and do not create nested delegation. Run a final self-review. Do not merge and do not push. The prompt lists allowed paths but provides no disallowed-path list."
+  },
+  "expectedRuleHits": {
+    "OPA004": 1
+  }
+}
