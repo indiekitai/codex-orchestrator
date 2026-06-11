@@ -228,7 +228,7 @@ cmd/codex-orchestrator eval add-failure
 cmd/codex-orchestrator rules propose
 cmd/codex-orchestrator record-routine-run --routine ... --status ...
 cmd/codex-orchestrator record-task --max-runtime-minutes ... --review-budget-minutes ...
-cmd/codex-orchestrator observe / heartbeat budgetSummary
+cmd/codex-orchestrator observe / heartbeat budgetSummary / budgetPressure
 examples/routine-reports/
   pr-reviewer.passed.json
   api-proof.blocked.json
@@ -262,9 +262,15 @@ local/proxy/weak 证据升级为 direct。
 needs human review 报告；只有 `--write-report` 会写出报告文件，不会自动修改
 SKILL、README、AGENTS、CLAUDE、policy 文件或项目规则。
 
+已完成一层保守的 budget pressure helper：`observe`、`status` 和 heartbeat report
+会展示 task/routine spec budget summary；`observe` 和 heartbeat JSON/Markdown 会用
+本地 ledger timestamp 输出缺失预算、runtime near/exceeded、review near/exceeded 或
+review timestamp unknown warnings。这些都是 local/static helper evidence，不会调度、
+排序、kill 进程或强制执行预算。
+
 剩余：
 
-- 更深的 per-routine budget 策略、排序、告警或调度联动；当前 helper 只记录和展示预算元数据，不执行预算。
+- 更深的 per-routine budget 策略、排序或调度联动；当前 helper 只记录、展示并告警预算元数据，不执行预算。
 
 ## v3：Routine library
 

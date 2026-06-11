@@ -303,10 +303,13 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ```
 
 The JSON heartbeat report includes `overallStatus`, per-status `counts`, a
-`reviewPressure` block, and a read-only `budgetSummary` when task budget
-metadata exists. Per-task runtime/review budgets recorded with `record-task`
-are surfaced in `observe` and heartbeat summaries for visibility only; the
-helper does not kill processes, schedule sessions, or enforce budgets.
+`reviewPressure` block, read-only `budgetSummary`, and additive
+`budgetPressure` warnings. Per-task runtime/review budgets recorded with
+`record-task` are surfaced in `observe`, `status`, and heartbeat summaries for
+visibility only. Runtime pressure is computed from local ledger timestamps;
+review pressure is computed only when a review-ready timestamp is recorded.
+Missing or indeterminate budget data is labeled as local/static helper evidence.
+The helper does not kill processes, schedule sessions, or enforce budgets.
 
 Codex App worktree dispatch is App-first. Save the repository as a Codex App
 project before relying on project worktree sessions. If dispatch fails because

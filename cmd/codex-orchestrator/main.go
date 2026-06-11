@@ -77,6 +77,7 @@ type Observation struct {
 	GitStatus         string          `json:"gitStatus,omitempty"`
 	PendingWorktreeID string          `json:"pendingWorktreeId,omitempty"`
 	Budget            *BudgetMetadata `json:"budget,omitempty"`
+	BudgetPressure    *BudgetPressure `json:"budgetPressure,omitempty"`
 }
 
 type IntegrationState struct {
@@ -99,26 +100,50 @@ type ReviewPressure struct {
 }
 
 type BudgetSummary struct {
-	TasksWithBudget          int `json:"tasksWithBudget"`
-	TasksMissingBudget       int `json:"tasksMissingBudget"`
-	TotalMaxRuntimeMinutes   int `json:"totalMaxRuntimeMinutes,omitempty"`
-	TotalReviewBudgetMinutes int `json:"totalReviewBudgetMinutes,omitempty"`
+	TasksWithBudget           int `json:"tasksWithBudget"`
+	TasksMissingBudget        int `json:"tasksMissingBudget"`
+	TotalMaxRuntimeMinutes    int `json:"totalMaxRuntimeMinutes,omitempty"`
+	TotalReviewBudgetMinutes  int `json:"totalReviewBudgetMinutes,omitempty"`
+	RoutineSpecsWithBudget    int `json:"routineSpecsWithBudget,omitempty"`
+	RoutineSpecsMissingBudget int `json:"routineSpecsMissingBudget,omitempty"`
+}
+
+type BudgetPressure struct {
+	Status                 string   `json:"status"`
+	EvidenceLabel          string   `json:"evidenceLabel"`
+	Warnings               []string `json:"warnings,omitempty"`
+	RuntimeElapsedMinutes  int      `json:"runtimeElapsedMinutes,omitempty"`
+	RuntimeBudgetMinutes   int      `json:"runtimeBudgetMinutes,omitempty"`
+	ReviewElapsedMinutes   int      `json:"reviewElapsedMinutes,omitempty"`
+	ReviewBudgetMinutes    int      `json:"reviewBudgetMinutes,omitempty"`
+	ReviewTimestampMissing bool     `json:"reviewTimestampMissing,omitempty"`
+}
+
+type BudgetPressureSummary struct {
+	EvidenceLabel              string   `json:"evidenceLabel"`
+	Warnings                   []string `json:"warnings,omitempty"`
+	TasksMissingBudget         int      `json:"tasksMissingBudget"`
+	TasksNearLimit             int      `json:"tasksNearLimit"`
+	TasksExceeded              int      `json:"tasksExceeded"`
+	TasksWithUnknownReviewTime int      `json:"tasksWithUnknownReviewTime"`
+	RoutineSpecsMissingBudget  int      `json:"routineSpecsMissingBudget,omitempty"`
 }
 
 type ObserveSummary struct {
-	Ledger             string           `json:"ledger"`
-	Version            int              `json:"version"`
-	ProjectRoot        string           `json:"projectRoot"`
-	DefaultBranch      string           `json:"defaultBranch"`
-	ObservedAt         string           `json:"observedAt"`
-	OverallStatus      string           `json:"overallStatus"`
-	RecommendedActions []string         `json:"recommendedActions"`
-	Counts             map[string]int   `json:"counts"`
-	ReviewPressure     ReviewPressure   `json:"reviewPressure"`
-	BudgetSummary      BudgetSummary    `json:"budgetSummary"`
-	Integration        IntegrationState `json:"integration"`
-	Observations       []Observation    `json:"observations"`
-	RecentRoutineRuns  []RoutineRun     `json:"recentRoutineRuns,omitempty"`
+	Ledger             string                `json:"ledger"`
+	Version            int                   `json:"version"`
+	ProjectRoot        string                `json:"projectRoot"`
+	DefaultBranch      string                `json:"defaultBranch"`
+	ObservedAt         string                `json:"observedAt"`
+	OverallStatus      string                `json:"overallStatus"`
+	RecommendedActions []string              `json:"recommendedActions"`
+	Counts             map[string]int        `json:"counts"`
+	ReviewPressure     ReviewPressure        `json:"reviewPressure"`
+	BudgetSummary      BudgetSummary         `json:"budgetSummary"`
+	BudgetPressure     BudgetPressureSummary `json:"budgetPressure"`
+	Integration        IntegrationState      `json:"integration"`
+	Observations       []Observation         `json:"observations"`
+	RecentRoutineRuns  []RoutineRun          `json:"recentRoutineRuns,omitempty"`
 }
 
 type RoutineSpec struct {
@@ -904,6 +929,8 @@ func cmdStatus(args []string) error {
 		}
 		counts[status]++
 	}
+	budgetSummary := summarizeTaskBudgets(ledger.Tasks)
+	addRoutineBudgetSummary(&budgetSummary, filepath.Join(expandPath(ledger.ProjectRoot), "routines"))
 	result := map[string]any{
 		"ledger":            resolvedLedger,
 		"projectRoot":       ledger.ProjectRoot,
@@ -911,6 +938,7 @@ func cmdStatus(args []string) error {
 		"taskCount":         len(ledger.Tasks),
 		"routineRunCount":   len(ledger.RoutineRuns),
 		"counts":            counts,
+		"budgetSummary":     budgetSummary,
 		"tasks":             ledger.Tasks,
 		"recentRoutineRuns": recentRoutineRuns(ledger.RoutineRuns, 5),
 	}
@@ -921,6 +949,12 @@ func cmdStatus(args []string) error {
 	fmt.Printf("Project: %s default=%s\n", ledger.ProjectRoot, ledger.DefaultBranch)
 	fmt.Printf("Tasks: %d\n", len(ledger.Tasks))
 	fmt.Printf("Routine runs: %d\n", len(ledger.RoutineRuns))
+	fmt.Printf("Budget: tasksWithBudget=%d tasksMissingBudget=%d routineSpecsWithBudget=%d routineSpecsMissingBudget=%d\n",
+		budgetSummary.TasksWithBudget,
+		budgetSummary.TasksMissingBudget,
+		budgetSummary.RoutineSpecsWithBudget,
+		budgetSummary.RoutineSpecsMissingBudget,
+	)
 	keys := make([]string, 0, len(counts))
 	for key := range counts {
 		keys = append(keys, key)
@@ -2711,6 +2745,7 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	if err != nil {
 		return ObserveSummary{}, err
 	}
+	observedAt := time.Now()
 	observations := make([]Observation, 0, len(ledger.Tasks))
 	for _, task := range ledger.Tasks {
 		observations = append(observations, inspectTask(task, staleAfter))
@@ -2719,18 +2754,21 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	counts := countObservationStatuses(observations)
 	pressure := calculateReviewPressure(counts, ledger.MaxConcurrency)
 	budget := summarizeTaskBudgets(ledger.Tasks)
+	addRoutineBudgetSummary(&budget, filepath.Join(expandPath(ledger.ProjectRoot), "routines"))
+	budgetPressure := calculateBudgetPressure(ledger.Tasks, observations, observedAt, budget.RoutineSpecsMissingBudget)
 	overall, actions := summarizeObservations(integration, counts, pressure)
 	return ObserveSummary{
 		Ledger:             ledgerPath,
 		Version:            ledger.Version,
 		ProjectRoot:        ledger.ProjectRoot,
 		DefaultBranch:      ledger.DefaultBranch,
-		ObservedAt:         nowISO(),
+		ObservedAt:         observedAt.Format(time.RFC3339),
 		OverallStatus:      overall,
 		RecommendedActions: actions,
 		Counts:             counts,
 		ReviewPressure:     pressure,
 		BudgetSummary:      budget,
+		BudgetPressure:     budgetPressure,
 		Integration:        integration,
 		Observations:       observations,
 		RecentRoutineRuns:  recentRoutineRuns(ledger.RoutineRuns, 5),
@@ -2761,6 +2799,165 @@ func summarizeTaskBudgets(tasks []Task) BudgetSummary {
 		summary.TotalReviewBudgetMinutes += task.Budget.ReviewBudgetMinutes
 	}
 	return summary
+}
+
+func addRoutineBudgetSummary(summary *BudgetSummary, dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		var spec RoutineSpec
+		if err := json.Unmarshal(data, &spec); err != nil {
+			continue
+		}
+		if spec.MaxRuntimeMinutes > 0 || spec.ReviewBudgetMinutes > 0 {
+			summary.RoutineSpecsWithBudget++
+		} else {
+			summary.RoutineSpecsMissingBudget++
+		}
+	}
+}
+
+func calculateBudgetPressure(tasks []Task, observations []Observation, observedAt time.Time, routineSpecsMissingBudget int) BudgetPressureSummary {
+	summary := BudgetPressureSummary{EvidenceLabel: "local/static"}
+	for index := range tasks {
+		pressure := taskBudgetPressure(tasks[index], observations[index].Status, observedAt)
+		observations[index].BudgetPressure = pressure
+		if pressure == nil {
+			continue
+		}
+		switch pressure.Status {
+		case "missing":
+			summary.TasksMissingBudget++
+		case "near-limit":
+			summary.TasksNearLimit++
+		case "exceeded":
+			summary.TasksExceeded++
+		case "unknown":
+			if pressure.ReviewTimestampMissing {
+				summary.TasksWithUnknownReviewTime++
+			}
+		}
+		summary.Warnings = append(summary.Warnings, pressure.Warnings...)
+	}
+	if routineSpecsMissingBudget > 0 {
+		summary.RoutineSpecsMissingBudget = routineSpecsMissingBudget
+		summary.Warnings = append(summary.Warnings, fmt.Sprintf("%d routine spec(s) are missing local budget metadata.", routineSpecsMissingBudget))
+	}
+	return summary
+}
+
+func taskBudgetPressure(task Task, observedStatus string, observedAt time.Time) *BudgetPressure {
+	if isTerminalStatus(observedStatus) {
+		return nil
+	}
+	if task.Budget == nil {
+		return &BudgetPressure{
+			Status:        "missing",
+			EvidenceLabel: "local/static",
+			Warnings:      []string{fmt.Sprintf("Task %s is missing runtime/review budget metadata.", task.ID)},
+		}
+	}
+	pressure := &BudgetPressure{
+		Status:        "ok",
+		EvidenceLabel: "local/static",
+	}
+	if task.Budget.MaxRuntimeMinutes > 0 {
+		if startedAt, ok := taskRecordedAt(task); ok {
+			elapsed := elapsedMinutes(startedAt, observedAt)
+			pressure.RuntimeElapsedMinutes = elapsed
+			pressure.RuntimeBudgetMinutes = task.Budget.MaxRuntimeMinutes
+			addBudgetLimitWarning(pressure, task.ID, "runtime", elapsed, task.Budget.MaxRuntimeMinutes)
+		}
+	}
+	if task.Budget.ReviewBudgetMinutes > 0 && observedStatus == "completed-unreviewed" {
+		pressure.ReviewBudgetMinutes = task.Budget.ReviewBudgetMinutes
+		if reviewAt, ok := taskReviewReadyAt(task); ok {
+			elapsed := elapsedMinutes(reviewAt, observedAt)
+			pressure.ReviewElapsedMinutes = elapsed
+			addBudgetLimitWarning(pressure, task.ID, "review", elapsed, task.Budget.ReviewBudgetMinutes)
+		} else {
+			pressure.Status = worstBudgetStatus(pressure.Status, "unknown")
+			pressure.ReviewTimestampMissing = true
+			pressure.Warnings = append(pressure.Warnings, fmt.Sprintf("Task %s is review-ready but has no recorded review-ready timestamp; review budget elapsed time is unknown.", task.ID))
+		}
+	}
+	if len(pressure.Warnings) == 0 {
+		return nil
+	}
+	return pressure
+}
+
+func addBudgetLimitWarning(pressure *BudgetPressure, taskID string, kind string, elapsed int, limit int) {
+	if limit <= 0 {
+		return
+	}
+	switch {
+	case elapsed >= limit:
+		pressure.Status = worstBudgetStatus(pressure.Status, "exceeded")
+		pressure.Warnings = append(pressure.Warnings, fmt.Sprintf("Task %s %s budget exceeded: %dm elapsed of %dm.", taskID, kind, elapsed, limit))
+	case elapsed*100 >= limit*80:
+		pressure.Status = worstBudgetStatus(pressure.Status, "near-limit")
+		pressure.Warnings = append(pressure.Warnings, fmt.Sprintf("Task %s %s budget near limit: %dm elapsed of %dm.", taskID, kind, elapsed, limit))
+	}
+}
+
+func worstBudgetStatus(current string, next string) string {
+	rank := map[string]int{"ok": 0, "unknown": 1, "missing": 2, "near-limit": 3, "exceeded": 4}
+	if rank[next] > rank[current] {
+		return next
+	}
+	return current
+}
+
+func taskRecordedAt(task Task) (time.Time, bool) {
+	return firstTaskTimestamp(task, func(event map[string]string) bool {
+		return event["type"] == "record-task" || event["at"] != ""
+	})
+}
+
+func taskReviewReadyAt(task Task) (time.Time, bool) {
+	return firstTaskTimestamp(task, func(event map[string]string) bool {
+		return event["status"] == "completed-unreviewed" || event["result"] == "completed-unreviewed"
+	})
+}
+
+func firstTaskTimestamp(task Task, match func(map[string]string) bool) (time.Time, bool) {
+	var best time.Time
+	found := false
+	events := append([]map[string]string{}, task.History...)
+	if len(task.LastObservation) > 0 {
+		events = append(events, task.LastObservation)
+	}
+	for _, event := range events {
+		if !match(event) || event["at"] == "" {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339, event["at"])
+		if err != nil {
+			continue
+		}
+		if !found || at.Before(best) {
+			best = at
+			found = true
+		}
+	}
+	return best, found
+}
+
+func elapsedMinutes(start time.Time, end time.Time) int {
+	if end.Before(start) {
+		return 0
+	}
+	return int(end.Sub(start).Minutes())
 }
 
 func taskObservation(task Task, status string, action string, note string, gitStatus string) Observation {
@@ -3201,8 +3398,21 @@ func renderSummary(summary ObserveSummary) string {
 	if summary.BudgetSummary.TotalReviewBudgetMinutes > 0 {
 		fmt.Fprintf(&b, "- totalReviewBudgetMinutes: `%d`\n", summary.BudgetSummary.TotalReviewBudgetMinutes)
 	}
+	if summary.BudgetSummary.RoutineSpecsWithBudget > 0 || summary.BudgetSummary.RoutineSpecsMissingBudget > 0 {
+		fmt.Fprintf(&b, "- routineSpecsWithBudget: `%d`\n", summary.BudgetSummary.RoutineSpecsWithBudget)
+		fmt.Fprintf(&b, "- routineSpecsMissingBudget: `%d`\n", summary.BudgetSummary.RoutineSpecsMissingBudget)
+	}
+	if len(summary.BudgetPressure.Warnings) > 0 {
+		fmt.Fprintf(&b, "- budgetPressure: `%s`\n", summary.BudgetPressure.EvidenceLabel)
+	}
 	if summary.Integration.Error != "" {
 		fmt.Fprintf(&b, "- integrationError: `%s`\n", summary.Integration.Error)
+	}
+	if len(summary.BudgetPressure.Warnings) > 0 {
+		fmt.Fprintf(&b, "\n## Budget Pressure\n\n")
+		for _, warning := range summary.BudgetPressure.Warnings {
+			fmt.Fprintf(&b, "- %s\n", warning)
+		}
 	}
 	if len(summary.RecommendedActions) > 0 {
 		fmt.Fprintf(&b, "\n## Recommended Actions\n\n")
@@ -3224,6 +3434,16 @@ func renderSummary(summary ObserveSummary) string {
 			}
 			if budget := formatBudget(item.Budget); budget != "" {
 				fmt.Fprintf(&b, "  - budget: %s\n", budget)
+			}
+			if item.BudgetPressure != nil {
+				fmt.Fprintf(&b, "  - budgetPressure: %s", item.BudgetPressure.Status)
+				if item.BudgetPressure.RuntimeBudgetMinutes > 0 {
+					fmt.Fprintf(&b, " runtime=%dm/%dm", item.BudgetPressure.RuntimeElapsedMinutes, item.BudgetPressure.RuntimeBudgetMinutes)
+				}
+				if item.BudgetPressure.ReviewBudgetMinutes > 0 {
+					fmt.Fprintf(&b, " review=%dm/%dm", item.BudgetPressure.ReviewElapsedMinutes, item.BudgetPressure.ReviewBudgetMinutes)
+				}
+				fmt.Fprintf(&b, " evidence=%s\n", item.BudgetPressure.EvidenceLabel)
 			}
 		}
 	}
@@ -3303,6 +3523,15 @@ func printObservations(summary ObserveSummary) {
 		summary.BudgetSummary.TotalMaxRuntimeMinutes,
 		summary.BudgetSummary.TotalReviewBudgetMinutes,
 	)
+	if summary.BudgetSummary.RoutineSpecsWithBudget > 0 || summary.BudgetSummary.RoutineSpecsMissingBudget > 0 {
+		fmt.Printf("Routine budgets: specsWithBudget=%d specsMissingBudget=%d\n",
+			summary.BudgetSummary.RoutineSpecsWithBudget,
+			summary.BudgetSummary.RoutineSpecsMissingBudget,
+		)
+	}
+	for _, warning := range summary.BudgetPressure.Warnings {
+		fmt.Printf("Budget pressure (%s): %s\n", summary.BudgetPressure.EvidenceLabel, warning)
+	}
 	if summary.Integration.Error != "" {
 		fmt.Printf("Integration: blocked (%s)\n", summary.Integration.Error)
 	} else {
@@ -3321,6 +3550,9 @@ func printObservations(summary ObserveSummary) {
 		}
 		if budget := formatBudget(item.Budget); budget != "" {
 			fmt.Printf("  budget: %s\n", budget)
+		}
+		if item.BudgetPressure != nil {
+			fmt.Printf("  budgetPressure: %s evidence=%s\n", item.BudgetPressure.Status, item.BudgetPressure.EvidenceLabel)
 		}
 		if item.GitStatus != "" {
 			fmt.Println("  git:")

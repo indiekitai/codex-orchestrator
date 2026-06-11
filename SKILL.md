@@ -153,9 +153,12 @@ Do not keep pending setup state only in the heartbeat prompt, chat memory, or an
 automation description. Once the real worktree/thread/branch appears, reconcile
 the ledger record instead of dispatching a duplicate same-task worker.
 
-Optional task runtime/review budget metadata is visibility-only. `observe` and
-`heartbeat` can surface recorded budgets, but the helper must not kill
-processes, schedule sessions, or enforce budget decisions.
+Optional task runtime/review budget metadata is visibility-only. `observe`,
+`status`, and `heartbeat` can surface recorded budgets plus local/static
+`budgetPressure` warnings for missing budget metadata, near/exceeded runtime or
+review budgets, and unknown review elapsed time. Treat those warnings as
+coordinator attention signals only; the helper must not kill processes,
+schedule sessions, prioritize tasks, or enforce budget decisions.
 
 If the repository includes v2.5 routine contracts, validate them before relying
 on routine names in a plan:

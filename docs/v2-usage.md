@@ -126,7 +126,15 @@ The report includes:
 - `overallStatus`,
 - per-status `counts`,
 - `reviewPressure` with active/review/stale/blocked/cleanup queues,
+- `budgetSummary` and local/static `budgetPressure` warnings,
 - recommended next actions for the orchestrator.
+
+Budget pressure is helper-level evidence only. Missing task budgets and missing
+routine spec budgets become warnings. Runtime budget pressure is computed from
+recorded task timestamps in the local ledger. Review budget pressure is computed
+only when the ledger records a `completed-unreviewed`/review-ready timestamp; if
+the task is review-ready but that timestamp is absent, the report says the
+review elapsed time is unknown instead of inventing it.
 
 Important statuses:
 
@@ -163,6 +171,10 @@ codex-orchestrator heartbeat \
 
 `--count 0` means forever. Use your normal process manager, terminal multiplexer,
 `launchd`, cron, or a Codex automation to run it.
+
+Heartbeat Markdown and JSON include the same local/static budget pressure
+warnings as `observe`. These warnings are for coordinator attention; they do not
+start, stop, prioritize, or reschedule work by themselves.
 
 ## Record Review/Merge/Cleanup Outcomes
 
