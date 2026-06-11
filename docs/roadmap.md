@@ -254,8 +254,8 @@ examples/routine-reports/
 `orchestration-policy-auditor` 启动了 V4 policy/eval 层的第一块：命名规则
 `OPA001`-`OPA008` 覆盖 dry-run 派发屏障、主工作区 fallback guard、heartbeat
 continuation guard、push-confirmation stop guard、worker 边界、证据升级边界、
-heartbeat target 绑定 guard、pending worktree ledger guard，以及 budget-policy
-证据/控制边界漂移。它同样是只读、本地、静态的保守检查器，
+heartbeat target / lifecycle guard、pending worktree ledger guard，以及
+budget-policy 证据/控制边界漂移。它同样是只读、本地、静态的保守检查器，
 输出的是可复核疑点，不是语义定罪。
 
 `policy check` 把 `orchestration-policy-auditor` 和
@@ -265,7 +265,9 @@ heartbeat target 绑定 guard、pending worktree ledger guard，以及 budget-po
 local/proxy/weak 证据升级为 direct、heartbeat target 绑定错误、pending setup
 未写入 ledger、pending setup 被误当作 running worker、heartbeat 绑定 stale fixed
 task id、已验收提交造成 default branch ahead 后删 heartbeat 等用户确认 push/继续、
-setup 失败后统领自己写 worker 实现代码，以及 budget-policy helper 控制或证据夸大。
+前台 sleep/轮询替代 Codex App heartbeat、重复创建 heartbeat、创建后未验证
+persisted automation truth、setup 失败后统领自己写 worker 实现代码，以及
+budget-policy helper 控制或证据夸大。
 
 `eval run` 单独运行 fixture suite，不扫描当前仓库文本。它适合在修改
 `OPA001`-`OPA008` 规则时做确定性回归检查。

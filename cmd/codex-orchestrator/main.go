@@ -8605,7 +8605,9 @@ func shouldSkipPolicyParagraph(text string) bool {
 		"expectedRuleHits",
 		"cover the failures",
 		"covers the failures",
+		"corrected rule",
 		"initial fixtures",
+		"incident",
 		"第一批 fixture",
 		"覆盖真实编排失败类别",
 		"真实踩过的编排问题",
@@ -8812,6 +8814,9 @@ func violatesHeartbeatBindingGuard(text string) bool {
 	if !containsAnyFold(text, []string{"heartbeat", "automation", "target_thread_id", "targetThreadId", "定时", "心跳"}) {
 		return false
 	}
+	if violatesHeartbeatLifecycleGuard(text) {
+		return true
+	}
 	lower := strings.ToLower(text)
 	if strings.Contains(lower, "not correctly bound") || strings.Contains(lower, "must be a real thread id") {
 		return false
@@ -8827,6 +8832,45 @@ func violatesHeartbeatBindingGuard(text string) bool {
 			containsAnyFold(text, []string{"wait for that task", "check that task", "watch that task", "only watch", "keep watching", "stale until"})) ||
 		(containsAnyFold(text, []string{"every 5 minutes check", "every five minutes check", "5-minute heartbeat", "heartbeat instruction"}) &&
 			containsAnyFold(text, []string{"TF-OLD", "TASK-OLD", "stale task", "old queue"}))
+}
+
+func violatesHeartbeatLifecycleGuard(text string) bool {
+	return violatesForegroundSleepWait(text) ||
+		violatesDuplicateHeartbeatCreate(text) ||
+		violatesUnverifiedHeartbeatCreate(text)
+}
+
+func violatesForegroundSleepWait(text string) bool {
+	if !containsAnyFold(text, []string{
+		"foreground sleep",
+		"shell sleep",
+		"sleep 60",
+		"sleep 300",
+		"sleep 5m",
+		"same turn",
+		"current turn",
+		"前台 sleep",
+		"同一个 turn",
+		"当前 turn",
+		"等待窗口",
+	}) {
+		return false
+	}
+	return containsAnyFold(text, []string{"worker", "observe", "poll", "polling", "wait", "waiting", "heartbeat", "automation", "线程", "定时", "心跳", "等待", "轮询"})
+}
+
+func violatesDuplicateHeartbeatCreate(text string) bool {
+	if !containsAnyFold(text, []string{"existing", "already", "duplicate", "again", "recreate", "create another", "已有", "已经有", "重复", "再次", "重建", "再创建"}) {
+		return false
+	}
+	return containsAnyFold(text, []string{"create heartbeat", "created heartbeat", "create automation", "created automation", "创建 heartbeat", "创建心跳", "创建定时", "创建 automation", "重建 heartbeat"})
+}
+
+func violatesUnverifiedHeartbeatCreate(text string) bool {
+	if !containsAnyFold(text, []string{"create heartbeat", "created heartbeat", "create automation", "created automation", "创建 heartbeat", "创建心跳", "创建定时", "创建 automation"}) {
+		return false
+	}
+	return containsAnyFold(text, []string{"only relied", "relied only", "skipped verification", "skipped persisted", "no persisted truth", "no automation truth", "只依赖", "只相信", "跳过验证", "未验证持久化", "没有验证持久化"})
 }
 
 func violatesPendingLedgerGuard(text string) bool {
@@ -9245,6 +9289,10 @@ func evidenceNegationTerms() []string {
 		"does not",
 		"don't",
 		"must not",
+		"should not",
+		"not use",
+		"not a replacement",
+		"not a codex app automation",
 		"not claim",
 		"not direct",
 		"not production",

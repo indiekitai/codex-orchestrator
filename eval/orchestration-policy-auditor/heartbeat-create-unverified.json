@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "heartbeat-create-unverified",
+  "description": "A heartbeat create call must be followed by persisted automation truth verification, not only the create response.",
+  "files": {
+    "docs/reviews/local-heartbeat-create-unverified.md": "The orchestrator created heartbeat and only relied on create response; skipped persisted automation truth verification for kind, status, schedule, and real target thread."
+  },
+  "expectedRuleHits": {
+    "OPA006": 1
+  }
+}

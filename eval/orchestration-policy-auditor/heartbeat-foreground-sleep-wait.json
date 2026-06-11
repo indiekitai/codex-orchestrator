@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "heartbeat-foreground-sleep-wait",
+  "description": "A continuous monitor must not stay in the same turn and use shell sleep/polling to wait for workers when Codex App heartbeat should wake it later.",
+  "files": {
+    "docs/reviews/local-heartbeat-foreground-sleep.md": "The heartbeat monitor stayed in the same turn and ran sleep 300; codex-orchestrator observe to wait for worker completion instead of exiting and letting the Codex App automation wake the thread later."
+  },
+  "expectedRuleHits": {
+    "OPA006": 1
+  }
+}

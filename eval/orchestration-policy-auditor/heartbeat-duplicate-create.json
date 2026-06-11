@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "heartbeat-duplicate-create",
+  "description": "A continuous orchestrator should update or reuse an existing heartbeat monitor instead of creating duplicate same-purpose heartbeat automations.",
+  "files": {
+    "docs/reviews/local-heartbeat-duplicate-create.md": "An existing heartbeat automation already exists for this thread. The orchestrator created heartbeat again for the same queue monitor instead of inspecting and updating the existing automation truth."
+  },
+  "expectedRuleHits": {
+    "OPA006": 1
+  }
+}

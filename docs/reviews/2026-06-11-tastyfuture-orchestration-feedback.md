@@ -162,6 +162,30 @@ daemon proof. It should be covered by the OPA003 continuation guard because the
 parent queue stopped after child completion without a valid queue-drained or
 blocked state.
 
+## Foreground Sleep / Heartbeat Lifecycle Incident
+
+The same live TastyFuture orchestration later exposed a second heartbeat misuse
+pattern. After creating a Codex App heartbeat, the orchestrator stayed in the
+same turn and used shell sleep plus repeated `observe` checks to wait for
+worker state changes. It also relied on the heartbeat create response without
+immediately verifying the persisted automation truth.
+
+The corrected rule is that "wait quietly" means the orchestrator should stop
+interfering with active scoped worker progress, end the current turn, and let
+Codex App heartbeat wake the thread later. It must not keep the turn open with
+long sleeps or foreground polling. The helper's `observe` and `heartbeat`
+commands produce local reports; they are not a daemon and are not a substitute
+for Codex App automation.
+
+Before creating a heartbeat, the orchestrator should inspect existing
+automations for the same thread/repo/queue and update the existing monitor when
+one already exists. After creating or updating a heartbeat, it should verify
+persisted automation state such as kind, status, schedule, and real target
+thread. These are OPA006 heartbeat lifecycle guard cases.
+
+This is local/project-feedback evidence. It does not prove Codex App automation
+runtime behavior, and it does not claim a direct daemon or scheduler proof.
+
 ## Candidate Fixtures
 
 - `pendingWorktreeId` exists but no worktree exists yet: should remain pending

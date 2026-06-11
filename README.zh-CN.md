@@ -476,8 +476,9 @@ orchestration policy auditor，同时运行 `eval/orchestration-policy-auditor/`
 dry-run 后未明确批准就派发、worktree setup 失败后回退到主工作区实现、一个子任务
 完成后停止整个队列、delegated worker prompt 缺少核心边界、把 local/proxy 证据
 升级成 direct、heartbeat 绑定到字面量 `current` 占位符或 stale fixed task id、
-pending worktree id 只留在 prompt/chat 而没有进入 ledger 或在 setup 确认前被算作
-running worker、setup 失败后由统领自己写 delegated worker 实现代码，以及
+用前台 sleep/轮询替代 Codex App heartbeat 唤醒、重复创建 heartbeat、创建后未验证
+持久化 automation truth、pending worktree id 只留在 prompt/chat 而没有进入 ledger
+或在 setup 确认前被算作 running worker、setup 失败后由统领自己写 delegated worker 实现代码，以及
 budget-policy helper 控制或证据夸大。它不会派发 Codex session、修改 git、更新
 ledger，也不会声称 runtime proof；结果只是本地静态 policy 证据。MVP 不解析私有
 transcript；transcript-shaped fixtures 是脱敏的本地静态重建。
@@ -544,6 +545,12 @@ heartbeat。
 并合并的提交，这不是新的人工确认点。项目策略允许时，应把 push 当作正常收口的一
 部分继续完成；如果 push/auth/remote policy 卡住，则保留 heartbeat 并报告具体
 blocker，不能删掉 monitor 后等用户追问。
+
+当 worker 只是 active 或有 scoped dirty progress 时，统领应该结束当前 turn，等待
+Codex App heartbeat 下次唤醒；不能用 shell `sleep`、前台轮询，或 helper 的
+`heartbeat` report 命令替代 App automation。创建 monitor 前要先检查是否已有同一
+thread/repo/queue 的 heartbeat，能 update 就不要重复 create；创建后必须验证持久化的
+automation truth，不能只信 create 返回。
 
 ## 🧱 架构
 

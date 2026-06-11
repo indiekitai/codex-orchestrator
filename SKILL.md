@@ -99,7 +99,10 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
    of embedding the current task IDs as a long-lived watchdog. The generic
    monitor should:
    - reconcile pending setup to real worktree/branch when setup completes,
-   - wait quietly for active scoped worker progress,
+   - wait quietly for active scoped worker progress by ending the current turn
+     and letting the Codex App heartbeat wake the thread later; do not use
+     shell `sleep`, foreground polling, or helper loops as a replacement for
+     the App heartbeat,
    - review/merge/push/clean completed task branches,
    - after cleanup, run observe/roadmap checks and dispatch the next safe
      bounded task when capacity is available.
@@ -129,6 +132,13 @@ The `target_thread_id` must be a real thread id, not the literal placeholder
 `"current"`. If the persisted target is missing, stale, or equal to `"current"`,
 delete/recreate or update the automation correctly and report the binding
 blocker; do not pretend the queue is being monitored.
+
+Before creating a heartbeat, inspect existing automations for the same thread,
+repository, or queue monitor. Prefer updating the existing heartbeat over
+creating a duplicate. A helper command such as `codex-orchestrator observe` or
+`codex-orchestrator heartbeat` is a local status/reporting tool; it is not a
+Codex App automation, daemon, or permission to keep the current turn open with
+long sleeps while waiting for workers.
 
 ## Orchestrator State Ledger
 
@@ -629,13 +639,16 @@ with no progress beyond the stale threshold is `stale-needs-inspection`, not a
 reason to wait forever. Do not edit code or touch shared hardware unless taking
 over a stale same-task worktree under the stale-session policy. Notify only on
 material progress, stale takeover, blocker, completion, cleanup, or conflict.
+If workers are active with scoped progress and no blocker, end this turn and let
+the existing Codex App heartbeat wake the thread later; do not run shell sleep
+or foreground polling in the orchestrator thread.
 
 If no active/pending/unreviewed tasks remain and the default branch is clean, choose the next batch from the current roadmap. Default max concurrency is 2; allow 3 only after shared contracts are merged, no hardware/production/payment task is active, and all write sets are plainly disjoint. Serialize shared contracts and hardware. Require self-review in every new prompt.
 ```
 
 Keep task IDs in the conversation/session records, not in the persistent automation prompt. If a temporary watchlist is useful, treat it as disposable and update it immediately after completion.
 
-If the task set changes materially, update the automation prompt. If the heartbeat is obsolete, delete it instead of letting it keep waking the thread with stale instructions. Prefer the Codex App automation tool over hand-written recurring prompt text when creating, updating, viewing, or deleting automations.
+If the task set changes materially, update the automation prompt. If the heartbeat is obsolete, delete it instead of letting it keep waking the thread with stale instructions. Prefer the Codex App automation tool over hand-written recurring prompt text when creating, updating, viewing, or deleting automations. If an appropriate heartbeat already exists, update and verify it rather than creating another one.
 
 When the user cancels an automation or starts work manually again, report how to
 restart the same orchestration mode naturally: open a fresh orchestrator session,

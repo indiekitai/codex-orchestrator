@@ -551,8 +551,11 @@ dry-run dispatch without explicit approval, main-checkout fallback after
 worktree setup failure, stopping the larger queue after one child task,
 delegated worker prompts missing core boundaries, local/proxy evidence
 promotion, heartbeat automation bound to the literal `current` placeholder or
-a stale fixed task id, pending worktree ids kept only in prompt/chat state or
-counted as running before setup is confirmed, setup-failure cases where the
+a stale fixed task id, foreground sleep/polling used instead of Codex App
+heartbeat wakeups, duplicate heartbeat creation, heartbeat creation without
+persisted automation truth verification, pending worktree ids kept only in
+prompt/chat state or counted as running before setup is confirmed,
+setup-failure cases where the
 orchestrator writes delegated worker implementation code itself, and
 budget-policy helper control or evidence overclaims. It does not dispatch
 Codex sessions, mutate git, update the ledger, or claim runtime proof; the
@@ -636,6 +639,14 @@ only because of reviewed orchestrator-owned commits is not a reason to stop and
 ask whether to push or continue. Push as part of the normal project closeout
 when policy allows it. If push/auth/remote policy blocks the closeout, keep the
 heartbeat active and report the blocker instead of deleting the monitor.
+
+When workers are merely active or have scoped dirty progress, the orchestrator
+should finish the current turn and let Codex App heartbeat wake the thread
+later. It should not use shell `sleep`, foreground polling, or the helper's
+`heartbeat` report command as a replacement for App automation. Before creating
+a monitor, inspect existing automations and update the existing heartbeat when
+one already covers the same thread/repo/queue. After creation, verify persisted
+automation truth instead of trusting only the create response.
 
 ## 🧱 Architecture
 
