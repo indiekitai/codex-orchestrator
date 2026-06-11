@@ -40,6 +40,9 @@ dry-run orchestration plan before doing mutating work.
 
 When durable state is useful, Codex can use the `codex-orchestrator` helper
 binary for a local ledger, `observe`, heartbeat reports, and routine checks.
+Users do not install this through Homebrew, npm, or another package-manager
+route. The product route is: give the GitHub repository to Codex App, then let
+Codex install/read/use the skill and helper only if needed.
 
 Naming note: **codex-orchestrator** is the product name, repository name,
 Codex App skill name, and helper CLI name.
@@ -153,7 +156,8 @@ codex-orchestrator init
 
 You can also download a prebuilt `codex-orchestrator_<os>_<arch>` binary from
 the Releases page and put it on your `PATH`, but that is an advanced/helper
-path. Most users should start by asking Codex App to read this repository.
+path, not a package-manager distribution channel. Most users should start by
+asking Codex App to read this repository.
 
 For release assets and shell completions, see
 [docs/distribution-package.md](docs/distribution-package.md).
@@ -528,8 +532,6 @@ codex-orchestrator/
 │   ├── install.sh
 │   ├── ledger_heartbeat.py
 │   └── publish-release.sh
-├── Formula/
-│   └── codex-orchestrator.rb
 ├── go.mod
 ├── README.md             # This file
 ├── README.zh-CN.md       # Chinese README

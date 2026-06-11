@@ -19,9 +19,9 @@ trust, not new orchestration features.
 The beta is not a claim of a fully autonomous agent runtime. It is a packaged
 Codex App orchestration workflow with a conservative local helper.
 
-It is also not a CLI-first install flow. Users should not need to install
-Homebrew, learn the helper CLI, or download a binary before asking Codex App to
-inspect the repository and produce a dry run.
+It is also not a CLI-first or package-manager install flow. Users should not
+need Homebrew, npm, the helper CLI, or a downloaded binary before asking Codex
+App to inspect the repository and produce a dry run.
 
 ## Quickstart For A New User
 
@@ -208,10 +208,9 @@ Use this checklist before `v0.3.0-beta.4`:
 
 - Codex App session creation is still App-provided, not helper-provided.
 - The helper does not run as a daemon.
-- There are GitHub prerelease assets and a Homebrew formula draft, but no
-  dedicated Homebrew tap yet. This is not a beta blocker because normal use
-  starts from Codex App.
-- There is no npm wrapper yet.
+- There are GitHub prerelease assets for optional helper binaries, but
+  Homebrew, npm wrappers, taps, and package-manager distribution are out of
+  scope for the current product route.
 - Routine runners are conservative local/proxy checkers.
 - The release verifier uses GitHub metadata as proxy evidence.
 - Direct proof of production, payment, hardware, or real deployed runtime still
@@ -228,8 +227,9 @@ After the beta usability package, the next large package should be one of:
    installation.
 2. **Daemon prototype**: an opt-in read-only watcher that runs `observe` and
    writes reports, without creating sessions or mutating git.
-3. **Optional package-manager convenience**: only add a Homebrew tap if users
-   explicitly want helper binaries managed that way.
+3. **Codex App bootstrap proof**: keep the GitHub-repo-to-Codex-App flow
+   exercised and documented, including when Codex chooses not to install the
+   helper.
 
 Do not add more tiny routines just to increase the count. Add a routine only
 when it removes a named beta blocker or proves a common real workflow.
