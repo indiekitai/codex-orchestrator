@@ -111,7 +111,7 @@ Future daemon/UI
 
 ## v2：Persistent task ledger + heartbeat helper
 
-状态：alpha-plus。可用于 App-first orchestration 的持久 ledger 和保守 heartbeat，已补 release hardening 测试与 review-pressure 输出；还不是自动创建 session / 自动合并的后台系统。
+状态：alpha-plus。可用于 App-first orchestration 的持久 ledger 和保守 heartbeat，已补 release hardening、pending worktree setup ID 记录、review-pressure 输出；还不是自动创建 session / 自动合并的后台系统。
 
 目标：
 
@@ -138,6 +138,8 @@ Future daemon/UI
 - per-task `pending-setup` / `stale-needs-inspection` / `completed-unreviewed` / `blocked` / `cleanup-needed` 分类；
 - `overallStatus`、recommended actions、counts 和 reviewPressure；
 - JSON report 和 Markdown summary；
+- 可在 Codex App 只返回 `pendingWorktreeId` 时先记录 `pending-setup`
+  task，之后通过事件补入实际 worktree/branch；
 - Go 单测覆盖核心状态机、dirty integration、bad ledger、unknown task、stale timeout、cleanup-needed 和 review queue saturation；
 - `scripts/install.sh` 本地安装入口；
 - GitHub Actions release binary workflow。

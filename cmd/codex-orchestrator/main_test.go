@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -229,6 +230,150 @@ func TestObserveClassifications(t *testing.T) {
 	}
 	if summary.ReviewPressure.Blocked != 1 {
 		t.Fatalf("expected one blocked task, got %#v", summary.ReviewPressure)
+	}
+}
+
+func TestPendingWorktreeIDTaskLifecycle(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "PENDING",
+		"--title", "Pending setup",
+		"--thread-id", "thread_123",
+		"--pending-worktree-id", "pwt_123",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	stored, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Tasks) != 1 {
+		t.Fatalf("expected one task, got %d", len(stored.Tasks))
+	}
+	task := stored.Tasks[0]
+	if task.PendingWorktreeID != "pwt_123" {
+		t.Fatalf("expected pending worktree id, got %#v", task)
+	}
+	if task.Worktree != "" || task.Branch != "" {
+		t.Fatalf("expected no worktree or branch before setup completes, got %#v", task)
+	}
+	if task.Status != "pending-setup" {
+		t.Fatalf("expected pending-setup ledger status, got %q", task.Status)
+	}
+
+	statusJSON := captureStdout(t, func() error {
+		return cmdStatus([]string{"--ledger", ledger, "--json"})
+	})
+	var statusPayload struct {
+		Tasks []Task `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(statusJSON), &statusPayload); err != nil {
+		t.Fatalf("expected status JSON, got %q: %v", statusJSON, err)
+	}
+	if len(statusPayload.Tasks) != 1 || statusPayload.Tasks[0].PendingWorktreeID != "pwt_123" {
+		t.Fatalf("expected status JSON to expose pendingWorktreeId, got %#v", statusPayload.Tasks)
+	}
+
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := summary.Observations[0].Status; got != "pending-setup" {
+		t.Fatalf("expected pending setup observation, got %q", got)
+	}
+	if got := summary.Observations[0].PendingWorktreeID; got != "pwt_123" {
+		t.Fatalf("expected observation pendingWorktreeId, got %q", got)
+	}
+	if summary.ReviewPressure.PendingSetup != 1 || summary.ReviewPressure.Blocked != 0 {
+		t.Fatalf("expected pending setup pressure without blocker, got %#v", summary.ReviewPressure)
+	}
+
+	worker := filepath.Join(root, "worker")
+	git(t, project, "worktree", "add", "-q", "-b", "codex/pending", worker, "HEAD")
+	if err := cmdAppendEvent([]string{
+		"--ledger", ledger,
+		"--type", "setup-complete",
+		"--task-id", "PENDING",
+		"--status", "active",
+		"--worktree", worker,
+		"--branch", "codex/pending",
+		"--note", "Codex App worktree setup completed.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reconciled, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reconciled.Tasks[0].Worktree != worker || reconciled.Tasks[0].Branch != "codex/pending" {
+		t.Fatalf("expected reconciled worktree and branch, got %#v", reconciled.Tasks[0])
+	}
+	if reconciled.Tasks[0].PendingWorktreeID != "pwt_123" {
+		t.Fatalf("expected opaque pending id to remain recorded, got %#v", reconciled.Tasks[0])
+	}
+	summary, err = observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := summary.Observations[0].Status; got != "active" {
+		t.Fatalf("expected active after worktree reconciliation, got %q", got)
+	}
+}
+
+func TestLegacyLedgerWithoutPendingWorktreeIDStillLoads(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	worker := filepath.Join(root, "worker")
+	git(t, project, "worktree", "add", "-q", "-b", "codex/legacy", worker, "HEAD")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	now := nowISO()
+	legacy := map[string]any{
+		"version":        1,
+		"projectRoot":    project,
+		"defaultBranch":  "master",
+		"remote":         "origin",
+		"pushPolicy":     "manual",
+		"maxConcurrency": 2,
+		"createdAt":      now,
+		"updatedAt":      now,
+		"tasks": []map[string]any{{
+			"id":         "LEGACY",
+			"title":      "Legacy task",
+			"worktree":   worker,
+			"branch":     "codex/legacy",
+			"baseCommit": base,
+			"status":     "active",
+			"lastObservation": map[string]string{
+				"at":     now,
+				"result": "active",
+			},
+		}},
+	}
+	if err := writeJSON(ledger, legacy); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Tasks[0].PendingWorktreeID != "" {
+		t.Fatalf("expected missing pendingWorktreeId to load as empty, got %#v", loaded.Tasks[0])
+	}
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := summary.Observations[0].Status; got != "active" {
+		t.Fatalf("expected legacy task to remain active, got %q", got)
 	}
 }
 
@@ -1988,6 +2133,32 @@ func gitOutputForTest(t *testing.T, cwd string, args ...string) string {
 		t.Fatalf("git %v failed: %v\n%s", args, err, string(out))
 	}
 	return strings.TrimSpace(string(out))
+}
+
+func captureStdout(t *testing.T, fn func() error) string {
+	t.Helper()
+	old := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = writer
+	runErr := fn()
+	os.Stdout = old
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data, readErr := io.ReadAll(reader)
+	if err := reader.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if runErr != nil {
+		t.Fatal(runErr)
+	}
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	return string(data)
 }
 
 func withFakeGH(t *testing.T, output string) {

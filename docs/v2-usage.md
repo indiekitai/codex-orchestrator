@@ -76,6 +76,37 @@ codex-orchestrator record-task \
 The helper records the current integration `HEAD` as `baseCommit` unless
 `--base-commit` is provided.
 
+If Codex App returns an opaque pending worktree setup ID before the worktree
+exists, record the task immediately without inventing a path:
+
+```bash
+codex-orchestrator record-task \
+  --id API-AUTH-LOCAL \
+  --title "Auth endpoint implementation" \
+  --thread-id optional-thread-id \
+  --pending-worktree-id pending-worktree-id-from-codex-app \
+  --allowed 'src/auth/**' \
+  --forbidden 'src/db/migrations/**' \
+  --gate 'npm test -- --grep auth' \
+  --evidence local
+```
+
+The helper stores `pendingWorktreeId` as an opaque string only. It does not
+query Codex App, create sessions, create worktrees, merge, push, or clean up.
+
+After the actual worktree and branch are known, reconcile the same task with an
+event:
+
+```bash
+codex-orchestrator append-event \
+  --task-id API-AUTH-LOCAL \
+  --type setup-complete \
+  --status active \
+  --worktree /absolute/path/to/worktree \
+  --branch codex/api-auth \
+  --note "Codex App worktree setup completed."
+```
+
 ## Observe State
 
 Use `observe` for one-shot reconciliation:
@@ -103,6 +134,7 @@ Important statuses:
 |--------|---------|
 | `quiet` | Keep monitoring; active work is within concurrency limit |
 | `dispatch-possible` | Capacity is free and the repo is clean |
+| `pending-setup` | Codex App has a pending setup ID or the expected worktree path does not exist yet |
 | `review-needed` | A worker has a clean commit after `baseCommit` |
 | `cleanup-needed` | A terminal task still has a worktree/branch that should be cleaned |
 | `stale` | A task needs inspection or same-task nudge |
@@ -168,7 +200,10 @@ and git/worktree truth as durable state, not stale chat memory.
 
 For each new worker session, record it with `codex-orchestrator record-task`
 including task ID, thread ID if available, worktree, branch, base commit,
-allowed/forbidden write set, gates, and evidence label expectations.
+allowed/forbidden write set, gates, and evidence label expectations. If Codex
+App only returns a pending worktree setup ID, record `--pending-worktree-id`
+immediately, then append a setup event with `--worktree` and `--branch` after
+the setup completes.
 
 During monitoring, use `codex-orchestrator heartbeat --count 1` or
 `codex-orchestrator observe --json` to classify tasks. Review completed branches
