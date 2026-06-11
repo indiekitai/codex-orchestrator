@@ -1607,6 +1607,104 @@ func TestCmdPolicyCheckWritesReport(t *testing.T) {
 	}
 }
 
+func TestEvalRunPassesWithEvalFixtures(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	fixtureDir := filepath.Join(project, "eval", "orchestration-policy-auditor")
+	writePolicyEvalFixture(t, fixtureDir, policyEvalFixture{
+		SchemaVersion: 1,
+		ID:            "safe-orchestrator-prompt",
+		Files: map[string]string{
+			"README.md": "Dry run must output a plan and wait for explicit user confirmation before dispatching workers.",
+		},
+		ExpectedRuleHits: map[string]int{},
+	})
+	writePolicyEvalFixture(t, fixtureDir, policyEvalFixture{
+		SchemaVersion: 1,
+		ID:            "worker-boundary-missing",
+		Files: map[string]string{
+			"README.md": "Worker prompt: use a worktree branch for this task.",
+		},
+		ExpectedRuleHits: map[string]int{"OPA004": 1},
+	})
+
+	report := runEvalSuite(project, "orchestration-policy-auditor", "")
+	if report.RoutineID != "eval-run" || report.Status != "passed" {
+		t.Fatalf("expected passed eval-run report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"Eval suite: orchestration-policy-auditor",
+		"Ran 2 orchestration policy eval fixture(s)",
+		"Policy eval fixtures: passed.",
+	} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, local)
+		}
+	}
+}
+
+func TestEvalRunFailsOnFixtureMismatch(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	fixtureDir := filepath.Join(project, "eval", "orchestration-policy-auditor")
+	writePolicyEvalFixture(t, fixtureDir, policyEvalFixture{
+		SchemaVersion: 1,
+		ID:            "mismatched-fixture",
+		Files: map[string]string{
+			"README.md": "Local proxy smoke counts as direct proof.",
+		},
+		ExpectedRuleHits: map[string]int{},
+	})
+
+	report := runEvalSuite(project, "orchestration-policy-auditor", "")
+	if report.Status != "failed" {
+		t.Fatalf("expected failed eval-run report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	if !strings.Contains(local, "mismatched-fixture: expected none, got OPA005=1.") {
+		t.Fatalf("expected fixture mismatch evidence, got:\n%s", local)
+	}
+}
+
+func TestCmdEvalRunWritesReport(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	fixtureDir := filepath.Join(project, "eval", "orchestration-policy-auditor")
+	writePolicyEvalFixture(t, fixtureDir, policyEvalFixture{
+		SchemaVersion: 1,
+		ID:            "safe-orchestrator-prompt",
+		Files: map[string]string{
+			"README.md": "Do not promote local or proxy evidence to direct proof.",
+		},
+		ExpectedRuleHits: map[string]int{},
+	})
+	reportPath := filepath.Join(root, "reports", "eval-run.json")
+	if err := cmdEval([]string{"run", "--repo", project, "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RoutineRunReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.RoutineID != "eval-run" || report.Status != "passed" {
+		t.Fatalf("unexpected eval report: %#v", report)
+	}
+}
+
+func TestEvalRunBlocksUnsupportedSuite(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	report := runEvalSuite(project, "unknown-suite", "")
+	if report.Status != "blocked" || report.BlockedReason != "unsupported eval suite" {
+		t.Fatalf("expected unsupported suite block, got %#v", report)
+	}
+}
+
 func TestRecordRoutineRunFromJSONReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

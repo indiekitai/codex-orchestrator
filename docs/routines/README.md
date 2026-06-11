@@ -22,6 +22,7 @@ codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/eviden
 codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 codex-orchestrator policy check --write-report /tmp/policy-check-report.json
+codex-orchestrator eval run --write-report /tmp/eval-run-report.json
 codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ```
 
@@ -121,6 +122,11 @@ The wrapper emits a normal `RoutineRunReport` with `routineId=policy-check`.
 It does not stage, commit, merge, push, tag, release, clean worktrees, dispatch
 sessions, mutate the ledger, or claim runtime proof; this command emits
 `local` or `blocked` evidence.
+
+`eval run` runs the fixture suite without scanning the current repository text.
+Use it while changing policy rules to catch regressions in known good and bad
+cases. The default suite is `orchestration-policy-auditor`, backed by
+`eval/orchestration-policy-auditor/`.
 
 `run-routine roadmap-next-task-suggester` is a read-only local planning
 assistant. It reads `docs/roadmap.md`, compares the remaining v3 and explicit

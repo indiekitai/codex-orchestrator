@@ -159,6 +159,7 @@ codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/eviden
 codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 codex-orchestrator policy check --write-report /tmp/policy-check-report.json
+codex-orchestrator eval run --write-report /tmp/eval-run-report.json
 ```
 
 The PR reviewer runner inspects only local git/static state from the ledger task worktree:
@@ -247,6 +248,11 @@ larger queue after one child task, delegated worker prompts missing mandatory
 boundaries, and evidence promotion from local/proxy/weak to direct. This
 command is also read-only: it does not create sessions, mutate git, update the
 ledger, or claim runtime proof.
+
+Use `codex-orchestrator eval run` when you only want to run the fixture suite
+without scanning the current repository text. The default suite is
+`orchestration-policy-auditor`; it compares actual `OPAxxx` rule-hit counts
+against each fixture's `expectedRuleHits`.
 
 The roadmap next-task suggester runner is read-only and does not mutate the
 ledger. It parses remaining candidate tasks from `docs/roadmap.md`, compares

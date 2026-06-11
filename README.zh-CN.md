@@ -245,6 +245,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 ./codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 ./codex-orchestrator policy check --write-report /tmp/policy-check-report.json
+./codex-orchestrator eval run --write-report /tmp/eval-run-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -337,6 +338,11 @@ dry-run 后未明确批准就派发、worktree setup 失败后回退到主工作
 完成后停止整个队列、delegated worker prompt 缺少核心边界、把 local/proxy 证据
 升级成 direct。它不会派发 Codex session、修改 git、更新 ledger，也不会声称
 runtime proof；结果只是本地静态 policy 证据。
+
+`eval run` 只运行 policy fixture suite，不扫描当前仓库文本。修改 policy 规则时，
+可以先用它做确定性的回归检查。第一套 suite 是
+`orchestration-policy-auditor`，读取 `eval/orchestration-policy-auditor/` 下的
+fixture，并把实际 `OPAxxx` 命中次数和每个 fixture 的 `expectedRuleHits` 对齐。
 
 `run-routine roadmap-next-task-suggester` 是第八个可运行 routine MVP。它是只读的，
 不会修改 ledger。它会从 `docs/roadmap.md` 解析剩余候选任务，对照本地可运行

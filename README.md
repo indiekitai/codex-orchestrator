@@ -281,6 +281,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 ./codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 ./codex-orchestrator policy check --write-report /tmp/policy-check-report.json
+./codex-orchestrator eval run --write-report /tmp/eval-run-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -390,6 +391,13 @@ worktree setup failure, stopping the larger queue after one child task,
 delegated worker prompts missing core boundaries, and local/proxy evidence
 promotion. It does not dispatch Codex sessions, mutate git, update the ledger,
 or claim runtime proof; the result is local/static policy evidence.
+
+`eval run` runs the policy fixture suite by itself. Use it when changing
+policy rules and you want deterministic regression coverage without scanning
+the current repository text. The first suite is
+`orchestration-policy-auditor`; it reads fixtures from
+`eval/orchestration-policy-auditor/` and compares actual `OPAxxx` hit counts
+against each fixture's `expectedRuleHits`.
 
 `run-routine roadmap-next-task-suggester` is the eighth runnable routine MVP.
 It is read-only and does not mutate the ledger. It parses remaining candidate
