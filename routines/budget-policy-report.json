@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "id": "budget-policy-report",
+  "title": "Budget Policy Report",
+  "purpose": "Define a review-only report for budget metadata coverage, local/static budget pressure, unknown timing states, and human/App-layer recommendations without mutating orchestration state.",
+  "trigger": "Run or prepare when the orchestrator needs a bounded budget-policy review before expanding dispatch, concurrency, or review queues.",
+  "inputs": [
+    "docs/roadmap.md",
+    "docs/routines/README.md",
+    "routines/*.json",
+    "optional .codex-orchestrator/ledger.json",
+    "optional .codex-orchestrator/heartbeat-report.json"
+  ],
+  "allowedActions": [
+    "inspect repo-local roadmap and routine docs read-only",
+    "inspect routine budget metadata coverage read-only",
+    "inspect optional ledger task budget metadata and timestamps read-only",
+    "inspect optional heartbeat budgetSummary and budgetPressure sections read-only",
+    "separate metadata coverage, local/static warnings, unknown timing states, and human review recommendations",
+    "write a RoutineRunReport JSON when requested by a future implementation"
+  ],
+  "forbiddenActions": [
+    "stage, commit, merge, push, tag, or release",
+    "create, delete, or clean worktrees",
+    "dispatch sessions or start nested subagents",
+    "prioritize, schedule, pause, reschedule, stop, or kill workers",
+    "mutate the orchestration ledger or heartbeat report",
+    "make dispatch eligibility decisions",
+    "claim direct runtime, review, or session-timing proof from local/static budget evidence"
+  ],
+  "gates": [
+    "roadmap and routine docs inspected for budget-policy boundary wording",
+    "routine spec budget metadata coverage summarized",
+    "optional ledger task budget metadata and timestamps classified as present, missing, stale, or unavailable",
+    "optional heartbeat budgetSummary and budgetPressure warnings copied only as local/static evidence",
+    "unknown runtime or review timing states recorded under blocked evidence rather than invented",
+    "report states that all budget recommendations require Codex App orchestrator or human review"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Reserved for future Codex App or runtime surfaces that explicitly record live session timing; this review-only contract does not emit direct proof.",
+      "proxy": "Reserved for accepted external review artifacts or generated heartbeat files when their provenance is recorded; the static fixture normally does not emit proxy proof.",
+      "local": "Local static inspection of roadmap text, routine specs, routine docs, optional ledger-shaped JSON, and optional heartbeat budget report sections.",
+      "blocked": "Live worker runtime, human review elapsed time, or Codex App session timing is unavailable, ambiguous, or not recorded in the inspected inputs."
+    }
+  },
+  "escalation": [
+    "Stop if roadmap, routine specs, or optional JSON inputs cannot be inspected safely.",
+    "Escalate to the Codex App orchestrator or human reviewer before pausing dispatch, changing concurrency, or declaring budget enforcement.",
+    "Keep missing budget metadata as a review recommendation unless a future human-approved policy defines it as failure.",
+    "Label stale or absent timing data as blocked or unknown; do not infer live runtime from static text."
+  ],
+  "maxRuntimeMinutes": 10,
+  "reviewBudgetMinutes": 15
+}
