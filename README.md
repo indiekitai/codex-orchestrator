@@ -44,6 +44,18 @@ Users do not install this through Homebrew, npm, or another package-manager
 route. The product route is: give the GitHub repository to Codex App, then let
 Codex install/read/use the skill and helper only if needed.
 
+If you are evaluating the workflow for the first time, use this order:
+
+1. Paste the prompt into Codex App from the repository you want to orchestrate.
+2. Let Codex read this GitHub repository and install or update the skill if needed.
+3. Ask for a read-only dry run, and do not create workers or sessions yet.
+4. Wait for explicit user approval after the dry-run plan before any merge,
+   push, cleanup, or worker creation.
+5. Treat the Go helper as optional support for ledger state, heartbeat reports,
+   and routines, not something you must learn before the trial.
+6. If you want a real-project example first, read
+   [docs/case-studies/tastyfuture-orchestration.md](docs/case-studies/tastyfuture-orchestration.md).
+
 Naming note: **codex-orchestrator** is the product name, repository name,
 Codex App skill name, and helper CLI name.
 
@@ -158,6 +170,14 @@ You can also download a prebuilt `codex-orchestrator_<os>_<arch>` binary from
 the Releases page and put it on your `PATH`, but that is an advanced/helper
 path, not a package-manager distribution channel. Most users should start by
 asking Codex App to read this repository.
+
+The intended setup order stays the same even when the helper is used:
+
+1. Give Codex App the GitHub repository.
+2. Let Codex read `README.md`, `SKILL.md`, and the setup docs.
+3. Let Codex decide whether skill install or helper build is useful.
+4. Require a read-only dry run and wait for explicit user approval before any
+   worker creation or mutating orchestration step.
 
 For release assets and shell completions, see
 [docs/distribution-package.md](docs/distribution-package.md).
@@ -522,6 +542,8 @@ codex-orchestrator/
 ├── docs/
 │   ├── beta-release-notes-draft.md
 │   ├── beta-usability-package.md
+│   ├── case-studies/
+│   │   └── tastyfuture-orchestration.md
 │   ├── distribution-package.md
 │   ├── roadmap.md
 │   ├── research/

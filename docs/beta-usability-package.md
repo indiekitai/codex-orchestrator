@@ -23,9 +23,22 @@ It is also not a CLI-first or package-manager install flow. Users should not
 need Homebrew, npm, the helper CLI, or a downloaded binary before asking Codex
 App to inspect the repository and produce a dry run.
 
+If a new user wants proof before trying it, point them to the sanitized project
+example in
+`docs/case-studies/tastyfuture-orchestration.md`. That case study is local
+workflow evidence only; it is not a production, payment, hardware, daemon, or
+direct runtime claim.
+
 ## Quickstart For A New User
 
 The main entrypoint is a prompt, not a command sequence for the human.
+
+The intended user mental model is:
+
+1. Give Codex App the GitHub repository.
+2. Let Codex read the repo and install the skill if needed.
+3. Ask for a read-only dry run before any worker creation or cleanup.
+4. Let Codex decide whether the helper is worth using for durable local state.
 
 Open Codex App in the repository you want to orchestrate and paste:
 
@@ -66,6 +79,10 @@ it:
 
 The human should not need to understand the helper CLI first. The helper is a
 tool Codex App may use to keep durable state and generate reports.
+
+If the user asks what this looks like in a real project, Codex App should point
+to `docs/case-studies/tastyfuture-orchestration.md` before widening into helper
+or release-asset details.
 
 ### Disposable Demo Codex Can Run
 

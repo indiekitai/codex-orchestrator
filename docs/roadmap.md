@@ -450,6 +450,8 @@ roadmap。优先级如下：
      evidence label 和 blocked boundary。
    - README 继续保持 Codex App-first 入口清晰：用户可以把 GitHub 链接交给 Codex App
      dry-run，而不是先学习 CLI。
+   - 当前进展：已补一版脱敏案例和 bootstrap 文案收口，继续观察真实用户是否还会把
+     helper 误解为主入口或把本地证据误读成 runtime/prod/payment/hardware proof。
 
 暂不进入的方向：
 
