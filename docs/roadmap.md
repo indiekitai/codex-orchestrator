@@ -19,6 +19,11 @@ Loop Engineering 控制面。
   增加更多 worker，而是把 worker 结果标准化成可审查的工程交付物，例如
   merge-readiness pack、consultation request pack、transcript failure eval 和
   static status page。
+- 模型能力平台期 / 多模型够用化的产品判断见
+  `docs/research/model-plateau-loop-engineering.md`。如果 Codex、Claude、
+  DeepSeek 或本地模型都能处理足够小的工程块，`codex-orchestrator` 的长期价值
+  应该是模型无关的 review pack、acceptance report、evidence labels 和可迁移
+  loop，而不是绑定某个模型的提示技巧。
 
 ## 当前定位
 
@@ -438,6 +443,19 @@ roadmap。上一批 V4 收口项已经完成，下一批应转向 **standard eng
 handoff artifacts**，也就是把 worker 输出变成可审查、可拒绝、可升级为人工咨询的标准包。
 
 下一批候选：
+
+0. Model-Agnostic Review Pack：下一阶段建议优先补。
+   - 目标：从 ledger 和 git truth 生成可给 Codex / Claude / DeepSeek / local model
+     或人类 reviewer 使用的标准审查包。
+   - 建议命令：
+     `codex-orchestrator pack review --task-id TASK --repo . --output review-pack/TASK`
+   - 输出：task contract、changed files、diff patch、allowed/forbidden paths、
+     requested vs observed gates、docs drift、evidence labels、residual risks、
+     reviewer prompt 和 blocked claims。
+   - 必须解决：外部模型 review 现在主要靠复制聊天或手工整理上下文，无法稳定复用、
+     无法入 ledger，也无法形成 orchestrator acceptance report。
+   - 边界：local/static review material；不是 runtime proof，不自动 merge，不因为
+     多模型同意就自动接受。
 
 1. Ledger-Enforced Dispatch Closure：已补 local/static helper slice。
    - 目标：派发后立即记录 taskId、pendingWorktreeId、resolved thread、
