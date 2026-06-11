@@ -2151,7 +2151,7 @@ func runOrchestrationPolicyAuditorRoutine(repo string) RoutineRunReport {
 		}
 		findings = append(findings, auditOrchestrationPolicyText(path, string(data))...)
 	}
-	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static orchestration policy rules OPA001-OPA005")
+	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static orchestration policy rules OPA001-OPA007")
 	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Scanned %d repo-local orchestration policy input file(s).", len(paths)))
 	report.Evidence["local"] = append(report.Evidence["local"], summarizePolicyAuditFindings(findings))
 
@@ -3513,6 +3513,8 @@ const (
 	policyRuleContinuationGuard = "OPA003"
 	policyRuleWorkerBoundary    = "OPA004"
 	policyRuleEvidenceBoundary  = "OPA005"
+	policyRuleHeartbeatBinding  = "OPA006"
+	policyRulePendingLedger     = "OPA007"
 )
 
 func newEvidenceAuditFinding(ruleID string, format string, args ...any) evidenceAuditFinding {
@@ -4210,6 +4212,22 @@ func auditOrchestrationPolicyText(path string, text string) []policyAuditFinding
 				line,
 				compactForFinding(body),
 			))
+		case violatesHeartbeatBindingGuard(body):
+			findings = append(findings, newPolicyAuditFinding(
+				policyRuleHeartbeatBinding,
+				"%s:%d: heartbeat automation wording appears to bind to the literal placeholder \"current\" instead of a real thread id or verified app binding: %s",
+				path,
+				line,
+				compactForFinding(body),
+			))
+		case violatesPendingLedgerGuard(body):
+			findings = append(findings, newPolicyAuditFinding(
+				policyRulePendingLedger,
+				"%s:%d: pending worktree setup wording appears to keep pendingWorktreeId only in transient prompt/chat state instead of durable ledger truth: %s",
+				path,
+				line,
+				compactForFinding(body),
+			))
 		}
 	}
 	return findings
@@ -4354,6 +4372,56 @@ func violatesEvidenceBoundary(text string) bool {
 		strings.Contains(lower, "当成直接") ||
 		strings.Contains(lower, "升级为 direct") ||
 		strings.Contains(lower, "升级为直接")
+}
+
+func violatesHeartbeatBindingGuard(text string) bool {
+	if containsAnyFold(text, []string{"OPA006"}) || containsAnyFold(text, evidenceNegationTerms()) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"heartbeat", "automation", "target_thread_id", "targetThreadId", "定时", "心跳"}) {
+		return false
+	}
+	lower := strings.ToLower(text)
+	if strings.Contains(lower, "not correctly bound") || strings.Contains(lower, "must be a real thread id") {
+		return false
+	}
+	return strings.Contains(lower, `target_thread_id = "current"`) ||
+		strings.Contains(lower, `target_thread_id="current"`) ||
+		strings.Contains(lower, `targetthreadid: "current"`) ||
+		strings.Contains(lower, `targetthreadid = "current"`) ||
+		strings.Contains(lower, `targetthreadid current`) ||
+		strings.Contains(lower, `target thread id current`) ||
+		strings.Contains(lower, `target_thread_id current`)
+}
+
+func violatesPendingLedgerGuard(text string) bool {
+	if containsAnyFold(text, []string{"OPA007"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"pendingWorktreeId", "pending worktree", "pending setup", "pending-worktree", "pending id"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"ledger", "heartbeat prompt", "chat", "memory", "automation prompt", "聊天", "记忆"}) {
+		return false
+	}
+	lower := strings.ToLower(text)
+	if strings.Contains(lower, "durable ledger truth immediately") ||
+		strings.Contains(lower, "record that pending setup in durable ledger truth") ||
+		strings.Contains(lower, "do not keep pending setup state only") {
+		return false
+	}
+	return strings.Contains(lower, "only in heartbeat") ||
+		strings.Contains(lower, "only in the heartbeat") ||
+		strings.Contains(lower, "only in chat") ||
+		strings.Contains(lower, "only in memory") ||
+		strings.Contains(lower, "skip ledger") ||
+		strings.Contains(lower, "without ledger") ||
+		strings.Contains(lower, "do not record") && strings.Contains(lower, "ledger") ||
+		strings.Contains(lower, "don't record") && strings.Contains(lower, "ledger") ||
+		strings.Contains(lower, "not record") && strings.Contains(lower, "ledger") ||
+		strings.Contains(lower, "只写") && (strings.Contains(lower, "heartbeat") || strings.Contains(lower, "prompt") || strings.Contains(lower, "聊天")) ||
+		strings.Contains(lower, "不写") && strings.Contains(lower, "ledger") ||
+		strings.Contains(lower, "不用") && strings.Contains(lower, "ledger")
 }
 
 func compactForFinding(text string) string {

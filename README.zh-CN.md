@@ -336,9 +336,9 @@ runtime proof；这个 MVP 使用 `local` 或 `blocked` 证据。
 `run-routine orchestration-policy-auditor` 是第一个 V4 policy/eval routine
 MVP。它是只读的，不读取或修改 ledger。它扫描 repo-local 编排文档、prompt、
 routine spec、routine report 和 ledger/event 文件，应用确定性的编排策略规则
-（`OPA001`-`OPA005`）：dry-run 派发屏障、禁止主工作区 fallback 实现、heartbeat
-继续检查、worker 边界、自审和证据升级边界。这些发现只是本地静态疑点，不是最终
-判定。它不会 stage、commit、merge、push、tag、release、清理 worktree、派发
+（`OPA001`-`OPA007`）：dry-run 派发屏障、禁止主工作区 fallback 实现、heartbeat
+继续检查、worker 边界、自审和证据升级边界、heartbeat target 绑定 guard，以及
+pending worktree ledger guard。这些发现只是本地静态疑点，不是最终判定。它不会 stage、commit、merge、push、tag、release、清理 worktree、派发
 session、修改 ledger，也不会声称 runtime proof；这个 MVP 使用 `local` 或
 `blocked` 证据。
 
@@ -347,7 +347,8 @@ orchestration policy auditor，同时运行 `eval/orchestration-policy-auditor/`
 里的本地 eval fixtures。第一批 fixture 来自这个项目真实踩过的编排问题：
 dry-run 后未明确批准就派发、worktree setup 失败后回退到主工作区实现、一个子任务
 完成后停止整个队列、delegated worker prompt 缺少核心边界、把 local/proxy 证据
-升级成 direct。它不会派发 Codex session、修改 git、更新 ledger，也不会声称
+升级成 direct、heartbeat 绑定到字面量 `current` 占位符，以及 pending worktree id
+只留在 prompt/chat 而没有进入 ledger。它不会派发 Codex session、修改 git、更新 ledger，也不会声称
 runtime proof；结果只是本地静态 policy 证据。
 
 `eval run` 只运行 policy fixture suite，不扫描当前仓库文本。修改 policy 规则时，

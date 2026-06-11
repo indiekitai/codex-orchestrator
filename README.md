@@ -390,9 +390,10 @@ or `blocked`.
 MVP. It is read-only and does not load or update the ledger. It scans
 repo-local orchestration docs, prompts, routine specs, routine reports, and
 ledger/event files for deterministic orchestration policy rules (`OPA001`-
-`OPA005`): dry-run dispatch barrier, no-main-checkout fallback guard, heartbeat
-continuation guard, delegated worker boundaries, and evidence promotion
-boundaries. Findings are local/static suspicions, not proof of wrongdoing. It
+`OPA007`): dry-run dispatch barrier, no-main-checkout fallback guard, heartbeat
+continuation guard, delegated worker boundaries, evidence promotion boundaries,
+heartbeat target binding guard, and pending worktree ledger guard. Findings are
+local/static suspicions, not proof of wrongdoing. It
 does not stage, commit, merge, push, tag, release, clean worktrees, dispatch
 sessions, mutate the ledger, or claim runtime proof; MVP evidence is `local`
 or `blocked`.
@@ -403,9 +404,11 @@ eval fixtures from `eval/orchestration-policy-auditor/`. The initial fixtures
 cover the failures this project already encountered in real orchestration:
 dry-run dispatch without explicit approval, main-checkout fallback after
 worktree setup failure, stopping the larger queue after one child task,
-delegated worker prompts missing core boundaries, and local/proxy evidence
-promotion. It does not dispatch Codex sessions, mutate git, update the ledger,
-or claim runtime proof; the result is local/static policy evidence.
+delegated worker prompts missing core boundaries, local/proxy evidence
+promotion, heartbeat automation bound to the literal `current` placeholder, and
+pending worktree ids kept only in prompt/chat state. It does not dispatch Codex
+sessions, mutate git, update the ledger, or claim runtime proof; the result is
+local/static policy evidence.
 
 `eval run` runs the policy fixture suite by itself. Use it when changing
 policy rules and you want deterministic regression coverage without scanning

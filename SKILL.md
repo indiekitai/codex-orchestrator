@@ -106,6 +106,15 @@ whole orchestrator lifecycle. Completing one child task must not be treated as
 permission to stop the larger loop when the user asked the orchestrator to keep
 working through a queue or roadmap.
 
+After creating or updating a heartbeat automation, verify the real persisted
+automation state before claiming the monitor exists. Inspect the automation
+record through the available automation tool and, when filesystem access is
+available, check `$CODEX_HOME/automations/<automation-id>/automation.toml`.
+The `target_thread_id` must be a real thread id, not the literal placeholder
+`"current"`. If the persisted target is missing, stale, or equal to `"current"`,
+delete/recreate or update the automation correctly and report the binding
+blocker; do not pretend the queue is being monitored.
+
 ## Orchestrator State Ledger
 
 After dispatching or discovering a delegated session, keep a compact ledger in the orchestrator thread or current status note. Do not rely on memory or stale automation text.
@@ -124,6 +133,15 @@ codex-orchestrator append-event --task-id TASK --type review --status completed-
 The helper is not a session launcher and must not be treated as one. It is a
 state and heartbeat tool. The Codex App orchestrator still owns worker dispatch,
 review, merge, push, and cleanup decisions.
+
+When `create_thread` returns a `pendingWorktreeId`, record that pending setup in
+durable ledger truth immediately, even before the final worktree path is known.
+If the current helper cannot yet store a first-class pending id, record a
+temporary pending task with `status=pending-setup` and include the opaque
+`pendingWorktreeId` in a budget note, event note, or other durable local field.
+Do not keep pending setup state only in the heartbeat prompt, chat memory, or an
+automation description. Once the real worktree/thread/branch appears, reconcile
+the ledger record instead of dispatching a duplicate same-task worker.
 
 Optional task runtime/review budget metadata is visibility-only. `observe` and
 `heartbeat` can surface recorded budgets, but the helper must not kill
@@ -391,9 +409,9 @@ to create. Do not pass a fresh desired task branch such as
 exists. Let the App create the worktree from the saved project/current base, then
 tell the delegated session to create or switch to `codex/<task-slug>` inside its
 own worktree. If `create_thread` returns only a `pendingWorktreeId`, record it
-as `pending setup` and poll repo/thread truth; do not assume the task is running,
-and do not dispatch a duplicate same-task worker until setup resolves or is
-declared stale/blocked.
+as `pending setup` in the ledger and poll repo/thread truth; do not assume the
+task is running, and do not dispatch a duplicate same-task worker until setup
+resolves or is declared stale/blocked.
 
 Do not try to bind a newly hand-made git worktree path to `create_thread` as if
 it were a saved Codex App project. Codex App project-thread creation requires a
