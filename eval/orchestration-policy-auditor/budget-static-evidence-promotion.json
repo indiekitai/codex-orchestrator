@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "budget-static-evidence-promotion",
+  "description": "Local/static ledger or heartbeat budget evidence must not be promoted into direct runtime proof.",
+  "files": {
+    "docs/reviews/local-budget-evidence-review.md": "Human review transcript: the local/static ledger timestamp and heartbeat budgetPressure warning count as direct runtime proof that the live worker exceeded its session runtime budget."
+  },
+  "expectedRuleHits": {
+    "OPA008": 1
+  }
+}

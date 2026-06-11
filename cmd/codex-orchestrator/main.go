@@ -2492,7 +2492,7 @@ func runOrchestrationPolicyAuditorRoutine(repo string) RoutineRunReport {
 		}
 		findings = append(findings, auditOrchestrationPolicyText(path, string(data))...)
 	}
-	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static orchestration policy rules OPA001-OPA007")
+	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static orchestration policy rules OPA001-OPA008")
 	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Scanned %d repo-local orchestration policy input file(s).", len(paths)))
 	report.Evidence["local"] = append(report.Evidence["local"], summarizePolicyAuditFindings(findings))
 
@@ -4483,6 +4483,7 @@ const (
 	policyRuleEvidenceBoundary  = "OPA005"
 	policyRuleHeartbeatBinding  = "OPA006"
 	policyRulePendingLedger     = "OPA007"
+	policyRuleBudgetBoundary    = "OPA008"
 )
 
 func newEvidenceAuditFinding(ruleID string, format string, args ...any) evidenceAuditFinding {
@@ -4831,7 +4832,10 @@ func isKnownPolicyRule(ruleID string) bool {
 		policyRuleMainFallbackGuard,
 		policyRuleContinuationGuard,
 		policyRuleWorkerBoundary,
-		policyRuleEvidenceBoundary:
+		policyRuleEvidenceBoundary,
+		policyRuleHeartbeatBinding,
+		policyRulePendingLedger,
+		policyRuleBudgetBoundary:
 		return true
 	default:
 		return false
@@ -5180,6 +5184,14 @@ func auditOrchestrationPolicyText(path string, text string) []policyAuditFinding
 				line,
 				compactForFinding(body),
 			))
+		case violatesBudgetBoundary(body):
+			findings = append(findings, newPolicyAuditFinding(
+				policyRuleBudgetBoundary,
+				"%s:%d: budget-policy wording appears to promote local/static budget evidence or imply helper budget enforcement/scheduling behavior: %s",
+				path,
+				line,
+				compactForFinding(body),
+			))
 		case violatesHeartbeatBindingGuard(body):
 			findings = append(findings, newPolicyAuditFinding(
 				policyRuleHeartbeatBinding,
@@ -5341,6 +5353,93 @@ func violatesEvidenceBoundary(text string) bool {
 		strings.Contains(lower, "当成直接") ||
 		strings.Contains(lower, "升级为 direct") ||
 		strings.Contains(lower, "升级为直接")
+}
+
+func violatesBudgetBoundary(text string) bool {
+	if containsAnyFold(text, []string{"OPA008"}) || containsAnyFold(text, evidenceNegationTerms()) {
+		return false
+	}
+	if containsAnyFold(text, []string{"catch claims", "catches claims", "forbidden from", "must keep these categories separate", "merge, push, delete branches", "必须", "禁止"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"budget", "预算"}) {
+		return false
+	}
+	localBudgetEvidence := containsAnyFold(text, []string{
+		"local/static",
+		"local static",
+		"ledger timestamp",
+		"recorded timestamp",
+		"task timestamp",
+		"heartbeat budgetpressure",
+		"heartbeat budget pressure",
+		"heartbeat warning",
+		"budget warning",
+		"budgetpressure",
+		"helper evidence",
+		"local ledger",
+		"ledger",
+		"heartbeat",
+		"本地",
+		"静态",
+	})
+	if localBudgetEvidence && containsAnyFold(text, evidenceAssertionTerms()) && containsAnyFold(text, []string{
+		"direct runtime proof",
+		"direct proof",
+		"runtime proof",
+		"live runtime",
+		"worker runtime proof",
+		"session runtime proof",
+		"proves live worker",
+		"proves the worker",
+		"证明运行时",
+		"直接证明",
+	}) {
+		return true
+	}
+	helperControl := containsAnyFold(text, []string{
+		"helper",
+		"budget-policy-report",
+		"budget policy report",
+		"heartbeat",
+		"budget warning",
+		"budget warnings",
+		"budgetpressure",
+	})
+	if helperControl && containsAnyFold(text, []string{
+		"automatically paused",
+		"automatically pauses",
+		"auto-paused",
+		"auto pauses",
+		"paused workers",
+		"pause workers",
+		"pause worker",
+		"kill workers",
+		"kills workers",
+		"killed workers",
+		"automatic killing",
+		"enforced dispatch eligibility",
+		"enforces dispatch eligibility",
+		"make dispatch eligibility decisions",
+		"scheduler",
+		"schedules workers",
+		"schedule workers",
+		"prioritizer",
+		"prioritizes workers",
+		"priority engine",
+		"worker-control",
+		"worker control",
+		"暂停 worker",
+		"杀掉 worker",
+		"调度",
+		"排序",
+	}) {
+		return true
+	}
+	lower := strings.ToLower(text)
+	return (strings.Contains(lower, "helper") || strings.Contains(lower, "heartbeat")) &&
+		strings.Contains(lower, "enforce") &&
+		(strings.Contains(lower, "dispatch") || strings.Contains(lower, "worker"))
 }
 
 func violatesHeartbeatBindingGuard(text string) bool {
@@ -5598,12 +5697,15 @@ func evidenceNegationTerms() []string {
 		"do not",
 		"does not",
 		"don't",
+		"must not",
 		"not claim",
 		"not direct",
 		"not production",
 		"not runtime",
 		"no direct",
 		"no runtime",
+		"no scheduler",
+		"forbidden",
 		"never",
 		"without",
 		"reserved",

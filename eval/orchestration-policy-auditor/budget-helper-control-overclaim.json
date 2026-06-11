@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "budget-helper-control-overclaim",
+  "description": "Budget helper warnings must not be described as automatic worker pause/kill, dispatch eligibility enforcement, or scheduler/prioritizer behavior.",
+  "files": {
+    "docs/reviews/local-budget-policy-review.md": "Local review note: the budget-policy-report helper saw budget warnings and automatically paused workers, killed workers over budget, enforced dispatch eligibility decisions, and acted as the scheduler/prioritizer for the next batch."
+  },
+  "expectedRuleHits": {
+    "OPA008": 1
+  }
+}

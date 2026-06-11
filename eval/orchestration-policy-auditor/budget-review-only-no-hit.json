@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "budget-review-only-no-hit",
+  "description": "Review-only budget-policy wording that preserves helper boundaries must not trip OPA008.",
+  "files": {
+    "docs/reviews/local-budget-policy-safe.md": "Budget pressure is local/static helper evidence only. The budget-policy-report helper does not schedule, prioritize, pause, kill, dispatch, merge, push, cleanup, mutate the ledger, enforce dispatch eligibility, or claim direct runtime proof."
+  },
+  "expectedRuleHits": {}
+}
