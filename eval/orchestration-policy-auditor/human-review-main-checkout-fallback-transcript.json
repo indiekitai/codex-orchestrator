@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "human-review-main-checkout-fallback-transcript",
+  "description": "Human-review transcript wording should still trip OPA002 when setup failure falls back into the main checkout.",
+  "files": {
+    "docs/reviews/local-human-review-fallback.md": "Human review transcript: setup failed with invalid reference during delegated worktree creation; the orchestrator fallback used the main checkout and edited docs to complete the task."
+  },
+  "expectedRuleHits": {
+    "OPA002": 1
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "negated-policy-warnings-no-hit",
+  "description": "Warnings and rejections that mention bad orchestration patterns should not be counted as actions actually allowed or taken.",
+  "files": {
+    "docs/reviews/local-negated-continuation-warning.md": "Human review checklist: after a child task is completed, do not delete heartbeat or stop the loop until ledger, roadmap, repo truth, and queue state are checked.",
+    "docs/reviews/local-negated-dry-run-warning.md": "Human review checklist: dry run must not dispatch workers; the reviewer rejects any plan that creates sessions before explicit user confirmation.",
+    "docs/reviews/local-negated-evidence-warning.md": "Human review checklist: never treat local or proxy evidence as direct proof; label proxy-supported claims separately from direct proof.",
+    "docs/reviews/local-negated-fallback-warning.md": "Human review checklist: if worktree setup failed, do not fallback to the main checkout; report blocked instead of editing code."
+  },
+  "expectedRuleHits": {}
+}

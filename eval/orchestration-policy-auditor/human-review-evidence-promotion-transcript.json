@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "human-review-evidence-promotion-transcript",
+  "description": "Human-review transcript wording should still trip OPA005 when local/static evidence is promoted to direct proof.",
+  "files": {
+    "docs/reviews/local-human-review-evidence.md": "Human review transcript: the reviewer found that the final handoff says local/static eval output counts as direct proof for the orchestration behavior."
+  },
+  "expectedRuleHits": {
+    "OPA005": 1
+  }
+}

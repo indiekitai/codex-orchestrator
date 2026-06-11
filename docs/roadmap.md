@@ -294,7 +294,7 @@ review timestamp unknown warnings。这些都是 local/static helper evidence，
 - docs drift checker；
 - rebase helper；
 - release verifier；
-- orchestration policy auditor follow-on eval fixtures：已补 transcript-style local review-note fixtures，覆盖 stale heartbeat binding、pending setup ledger、child completion without continuation proof，并补了一个 narrow `OPA004` forbidden-path worker-boundary case；剩余是更深的否定语义/人工审核型 transcript case；
+- orchestration policy auditor follow-on eval fixtures：已补 transcript-style local review-note fixtures，覆盖 stale heartbeat binding、pending setup ledger、child completion without continuation proof，并补了一个 narrow `OPA004` forbidden-path worker-boundary case；后续又补了否定语义 false-positive guard 和 human-review transcript fixtures，覆盖被明确拒绝/警告的坏模式不应算作 action，以及 human-review transcript 中实际发生的 dry-run dispatch、main-checkout fallback、evidence promotion 仍应命中对应 `OPA001`、`OPA002`、`OPA005`；
 
 补充说明：
 
@@ -363,7 +363,7 @@ codex-orchestrator rules propose --from-review docs/reviews/example.md --write-r
 
 `policy check` 会先运行本地 orchestration policy auditor，再运行仓库内置 fixture
 eval；`eval run` 只运行 fixture eval；当前 orchestration-policy-auditor suite 有
-12 个 local/static fixture；`eval add-failure` 能手动沉淀失败案例。
+16 个 local/static fixture；`eval add-failure` 能手动沉淀失败案例。
 `rules propose` 能从本地 review/text 输入生成只供人工 review 的规则建议报告；还没有
 自动修改 live 规则，也不应自动修改。
 

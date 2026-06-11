@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "human-review-dry-run-dispatch-transcript",
+  "description": "Human-review transcript wording should still trip OPA001 when dry-run dispatch happened without a human gate.",
+  "files": {
+    "docs/reviews/local-human-review-dry-run.md": "Human review transcript: the reviewer observed that dry run created worker sessions immediately. The worker note says dry run mode can dispatch workers as soon as the plan is printed; no human gate was captured."
+  },
+  "expectedRuleHits": {
+    "OPA001": 1
+  }
+}
