@@ -8,13 +8,9 @@ splitting roadmap work into isolated worktree sessions, checking them with
 heartbeats, reviewing and merging clean branches, rescuing stuck sessions, and
 dispatching the next batch when it is safe to do so.
 
-## 🚀 Fastest Way To Try It
+## 🚀 Quick Start
 
-You do **not** need to install a CLI or Homebrew tap first.
-
-Open Codex App in the repository you want to orchestrate, paste this prompt,
-and let Codex read this GitHub repo, install the skill if needed, and explain
-the dry-run plan before it mutates anything:
+Open Codex App in the repository you want to orchestrate and paste:
 
 ```text
 I want to try codex-orchestrator in this repository.
@@ -27,7 +23,7 @@ If the Codex App skill from that repository is not installed, install it into
 skill name is the Codex App component of codex-orchestrator.
 
 If the Go helper CLI is useful for durable ledger state, explain what it does
-and then install or build it if safe. Do not require me to learn the CLI first.
+and then install or build it if safe.
 
 Start with a dry run:
 - inspect git status, worktrees, and project docs;
@@ -39,14 +35,12 @@ Do not push, deploy, delete worktrees, or make destructive changes unless I
 explicitly approve.
 ```
 
-The intended user flow is not "learn every command first." The intended flow is
-"give Codex App the codex-orchestrator repository, let it read the docs, install
-the Codex App skill, decide whether the helper is useful, and explain the
-orchestration plan before doing mutating work."
+Codex should read this repository, install the Codex App skill if it is missing,
+decide whether the helper is useful for the current project, and produce a
+dry-run orchestration plan before doing mutating work.
 
-The downloadable `codex-orchestrator` binary is optional. It gives Codex App a
-durable ledger, `observe`, heartbeat reports, and routine checks. It is not the
-primary user entrypoint.
+When durable state is useful, Codex can use the `codex-orchestrator` helper
+binary for a local ledger, `observe`, heartbeat reports, and routine checks.
 
 Naming note: **codex-orchestrator** is the product and repository name.
 **delegated-session-orchestrator** is the internal Codex App skill name used
@@ -159,8 +153,7 @@ the Releases page and put it on your `PATH`, but that is an advanced/helper
 path. Most users should start by asking Codex App to read this repository.
 
 For release assets and shell completions, see
-[docs/distribution-package.md](docs/distribution-package.md). Homebrew is
-treated as an optional later convenience, not the main install path.
+[docs/distribution-package.md](docs/distribution-package.md).
 
 After setup, ask Codex App to use codex-orchestrator. Codex may invoke the
 installed internal skill when appropriate:

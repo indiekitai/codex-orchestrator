@@ -4,11 +4,9 @@
 
 **OpenAI Codex App 的 Loop Engineering skill。** 它把单个写代码助手变成一个受监督的工程循环：从路线图中拆任务，派发到隔离 worktree 会话，用 heartbeat 巡检，审查并合并干净分支，恢复卡住的 session，并在安全时继续派发下一批。
 
-## 🚀 最快试用方式
+## 🚀 快速开始
 
-你不需要先安装 CLI，也不需要先装 Homebrew tap。
-
-在你想编排的项目里打开 Codex App，把下面这段 prompt 粘贴进去，让 Codex 自己读取这个 GitHub 仓库、按需安装 skill，并在做任何会修改项目的动作前先解释 dry run 计划：
+在你想编排的项目里打开 Codex App，粘贴下面这段 prompt：
 
 ```text
 我想在这个仓库里试用 codex-orchestrator。
@@ -21,7 +19,6 @@ Codex App-first 的工程编排工作流来使用。
 codex-orchestrator 在 Codex App 里的组件名。
 
 如果 Go helper CLI 对持久 ledger 状态有帮助，请先解释它的作用，然后在安全的情况下安装或构建。
-不要要求我先学习 CLI。
 
 先做 dry run：
 - 检查 git status、worktree 和项目文档；
@@ -32,9 +29,9 @@ codex-orchestrator 在 Codex App 里的组件名。
 除非我明确批准，不要 push、deploy、删除 worktree，或执行破坏性操作。
 ```
 
-预期用法不是“人先学完所有命令”，而是“把 codex-orchestrator 仓库交给 Codex App，让它读文档、安装 Codex App skill、判断是否需要 helper，并在做任何会修改项目的动作前先解释编排计划”。
+Codex 会读取本仓库，按需安装 Codex App skill，判断当前项目是否需要 helper，并在任何会修改项目的动作前先给出 dry-run 编排计划。
 
-可下载的 `codex-orchestrator` 二进制是可选辅助工具。它给 Codex App 提供持久 ledger、`observe`、heartbeat report 和 routine 检查，不是普通用户的主入口。
+需要持久状态时，Codex 可以使用 `codex-orchestrator` helper binary 来维护本地 ledger、运行 `observe`、生成 heartbeat report，并执行 routine 检查。
 
 命名说明：**codex-orchestrator** 是产品名和仓库名；
 **delegated-session-orchestrator** 是安装后给 Codex App 调用的内部 skill 名。
@@ -131,7 +128,7 @@ codex-orchestrator init
 `PATH` 里，但这是高级/辅助路径。多数用户应该先让 Codex App 读取这个仓库。
 
 Release assets 和 shell completion 见
-[docs/distribution-package.md](docs/distribution-package.md)。Homebrew 只是后续可选便利路径，不是主安装方式。
+[docs/distribution-package.md](docs/distribution-package.md)。
 
 接入后，直接让 Codex App 使用 codex-orchestrator；Codex 会在需要时调用已安装的内部 skill：
 
