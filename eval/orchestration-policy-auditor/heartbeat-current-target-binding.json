@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "heartbeat-current-target-binding",
+  "description": "Heartbeat automation must not bind target_thread_id or targetThreadId to the literal placeholder current.",
+  "files": {
+    "automation.toml": "kind = \"heartbeat\"\nstatus = \"ACTIVE\"\ntarget_thread_id = \"current\""
+  },
+  "expectedRuleHits": {
+    "OPA006": 1
+  }
+}
