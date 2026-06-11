@@ -245,9 +245,9 @@ Usage:
   codex-orchestrator init [--ledger PATH] [--project-root PATH]
   codex-orchestrator record-task --id ID --worktree PATH --branch BRANCH [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N]
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--note TEXT]
-  codex-orchestrator observe [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
-  codex-orchestrator heartbeat [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
-  codex-orchestrator status [--ledger PATH] [--json]
+  codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
+  codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
+  codex-orchestrator status [--repo PATH] [--ledger PATH] [--json]
   codex-orchestrator validate-routines [--dir routines] [--json]
   codex-orchestrator run-routine pr-reviewer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine stale-task-rescuer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
@@ -322,10 +322,10 @@ _codex_orchestrator()
       COMPREPLY=( $(compgen -W "--ledger --type --task-id --status --note --help" -- "$cur") )
       ;;
     observe|status)
-      COMPREPLY=( $(compgen -W "--ledger --json --write-report --write-summary --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--repo --ledger --json --write-report --write-summary --help" -- "$cur") )
       ;;
     heartbeat)
-      COMPREPLY=( $(compgen -W "--ledger --interval --count --write-report --write-summary --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--repo --ledger --interval --count --write-report --write-summary --help" -- "$cur") )
       ;;
     validate-routines)
       COMPREPLY=( $(compgen -W "--dir --json --help" -- "$cur") )
@@ -434,10 +434,10 @@ case $state in
         _values 'options' --ledger --type --task-id --status --note --help
         ;;
       observe|status)
-        _values 'options' --ledger --json --write-report --write-summary --help
+        _values 'options' --repo --ledger --json --write-report --write-summary --help
         ;;
       heartbeat)
-        _values 'options' --ledger --interval --count --write-report --write-summary --help
+        _values 'options' --repo --ledger --interval --count --write-report --write-summary --help
         ;;
       validate-routines)
         _values 'options' --dir --json --help
@@ -714,6 +714,7 @@ func cmdAppendEvent(args []string) error {
 
 func cmdObserve(args []string) error {
 	fs := flag.NewFlagSet("observe", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
 	jsonOut := fs.Bool("json", false, "print JSON")
 	writeReport := fs.String("write-report", "", "write JSON report")
@@ -722,7 +723,8 @@ func cmdObserve(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	summary, err := observeWithOptions(*ledgerPath, *staleAfter)
+	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
+	summary, err := observeWithOptions(resolvedLedger, *staleAfter)
 	if err != nil {
 		return err
 	}
@@ -745,6 +747,7 @@ func cmdObserve(args []string) error {
 
 func cmdHeartbeat(args []string) error {
 	fs := flag.NewFlagSet("heartbeat", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
 	eventsPath := fs.String("events", "", "events path")
 	jsonOut := fs.Bool("json", false, "print JSON")
@@ -762,14 +765,15 @@ func cmdHeartbeat(args []string) error {
 	if *interval < 0 {
 		return errors.New("heartbeat --interval cannot be negative")
 	}
+	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
 	resolvedEvents := *eventsPath
 	if resolvedEvents == "" {
-		resolvedEvents = eventsPathForLedger(*ledgerPath)
+		resolvedEvents = eventsPathForLedger(resolvedLedger)
 	}
 	iteration := 0
 	for {
 		iteration++
-		summary, err := observeWithOptions(*ledgerPath, *staleAfter)
+		summary, err := observeWithOptions(resolvedLedger, *staleAfter)
 		if err != nil {
 			return err
 		}
@@ -810,12 +814,14 @@ func cmdHeartbeat(args []string) error {
 
 func cmdStatus(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
 	jsonOut := fs.Bool("json", false, "print JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	ledger, err := loadLedger(*ledgerPath)
+	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
+	ledger, err := loadLedger(resolvedLedger)
 	if err != nil {
 		return err
 	}
@@ -828,7 +834,7 @@ func cmdStatus(args []string) error {
 		counts[status]++
 	}
 	result := map[string]any{
-		"ledger":            *ledgerPath,
+		"ledger":            resolvedLedger,
 		"projectRoot":       ledger.ProjectRoot,
 		"defaultBranch":     ledger.DefaultBranch,
 		"taskCount":         len(ledger.Tasks),
@@ -839,7 +845,7 @@ func cmdStatus(args []string) error {
 	if *jsonOut {
 		return printJSON(result)
 	}
-	fmt.Printf("Ledger: %s\n", *ledgerPath)
+	fmt.Printf("Ledger: %s\n", resolvedLedger)
 	fmt.Printf("Project: %s default=%s\n", ledger.ProjectRoot, ledger.DefaultBranch)
 	fmt.Printf("Tasks: %d\n", len(ledger.Tasks))
 	fmt.Printf("Routine runs: %d\n", len(ledger.RoutineRuns))
@@ -3344,6 +3350,27 @@ func resolveOptionalLedgerPath(repo string, explicit string) (string, bool) {
 		return defaultPath, true
 	}
 	return "", false
+}
+
+func resolveDefaultLedgerPath(repo string, ledgerPath string, ledgerExplicit bool) string {
+	if ledgerExplicit {
+		return ledgerPath
+	}
+	repo = expandPath(repo)
+	if strings.TrimSpace(repo) == "" {
+		repo = "."
+	}
+	return filepath.Join(repo, defaultLedger)
+}
+
+func flagProvided(fs *flag.FlagSet, name string) bool {
+	provided := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			provided = true
+		}
+	})
+	return provided
 }
 
 func observeTaskStatuses(tasks []Task) map[string]string {
