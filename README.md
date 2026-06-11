@@ -522,11 +522,15 @@ cover the failures this project already encountered in real orchestration:
 dry-run dispatch without explicit approval, main-checkout fallback after
 worktree setup failure, stopping the larger queue after one child task,
 delegated worker prompts missing core boundaries, local/proxy evidence
-promotion, heartbeat automation bound to the literal `current` placeholder,
-pending worktree ids kept only in prompt/chat state, and budget-policy helper
-control or evidence overclaims. It does not dispatch Codex
-sessions, mutate git, update the ledger, or claim runtime proof; the result is
-local/static policy evidence.
+promotion, heartbeat automation bound to the literal `current` placeholder or
+a stale fixed task id, pending worktree ids kept only in prompt/chat state or
+counted as running before setup is confirmed, setup-failure cases where the
+orchestrator writes delegated worker implementation code itself, and
+budget-policy helper control or evidence overclaims. It does not dispatch
+Codex sessions, mutate git, update the ledger, or claim runtime proof; the
+result is local/static policy evidence. Private transcript parsing is not part
+of this MVP; transcript-shaped fixtures are sanitized local/static
+reconstructions.
 
 `eval run` runs the policy fixture suite by itself. Use it when changing
 policy rules and you want deterministic regression coverage without scanning

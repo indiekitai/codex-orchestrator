@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "transcript-orchestrator-writes-worker-code",
+  "description": "The orchestrator should report setup failure or recover dispatch instead of personally writing delegated worker implementation code in the orchestrator checkout.",
+  "files": {
+    "docs/reviews/local-transcript-orchestrator-implementation.md": "Sanitized transcript fixture: setup failed with invalid reference during worker creation, so the orchestrator used the main checkout to write code and complete the delegated implementation itself."
+  },
+  "expectedRuleHits": {
+    "OPA002": 1
+  }
+}

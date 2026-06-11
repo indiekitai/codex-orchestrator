@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "transcript-heartbeat-stale-fixed-task-id",
+  "description": "Heartbeat instructions must not keep watching a stale fixed task id instead of rediscovering current repo, ledger, worktree, and queue truth.",
+  "files": {
+    "docs/reviews/local-transcript-heartbeat-stale-task.md": "Sanitized transcript fixture: the 5-minute heartbeat instruction says every 5 minutes check TF-OLD-QUEUE-017 and keep watching that task. It binds the heartbeat to a stale task id instead of dynamically reading the current repo, ledger, worktree list, and queue frontier."
+  },
+  "expectedRuleHits": {
+    "OPA006": 1
+  }
+}

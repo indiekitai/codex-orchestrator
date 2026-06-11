@@ -451,10 +451,12 @@ orchestration policy auditor，同时运行 `eval/orchestration-policy-auditor/`
 里的本地 eval fixtures。第一批 fixture 来自这个项目真实踩过的编排问题：
 dry-run 后未明确批准就派发、worktree setup 失败后回退到主工作区实现、一个子任务
 完成后停止整个队列、delegated worker prompt 缺少核心边界、把 local/proxy 证据
-升级成 direct、heartbeat 绑定到字面量 `current` 占位符、pending worktree id
-只留在 prompt/chat 而没有进入 ledger，以及 budget-policy helper 控制或证据夸大。
-它不会派发 Codex session、修改 git、更新 ledger，也不会声称
-runtime proof；结果只是本地静态 policy 证据。
+升级成 direct、heartbeat 绑定到字面量 `current` 占位符或 stale fixed task id、
+pending worktree id 只留在 prompt/chat 而没有进入 ledger 或在 setup 确认前被算作
+running worker、setup 失败后由统领自己写 delegated worker 实现代码，以及
+budget-policy helper 控制或证据夸大。它不会派发 Codex session、修改 git、更新
+ledger，也不会声称 runtime proof；结果只是本地静态 policy 证据。MVP 不解析私有
+transcript；transcript-shaped fixtures 是脱敏的本地静态重建。
 
 `eval run` 只运行 policy fixture suite，不扫描当前仓库文本。修改 policy 规则时，
 可以先用它做确定性的回归检查。第一套 suite 是

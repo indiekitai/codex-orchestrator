@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "transcript-pending-worktree-treated-running",
+  "description": "pendingWorktreeId must remain pending setup until the real thread, worktree, branch, and ledger setup are confirmed.",
+  "files": {
+    "docs/reviews/local-transcript-pending-running.md": "Sanitized transcript fixture: create_thread returned pendingWorktreeId pwt_456, and the orchestrator counted pwt_456 as a running worker immediately before setup is confirmed, with no real thread id, no worktree path, and no branch."
+  },
+  "expectedRuleHits": {
+    "OPA007": 1
+  }
+}

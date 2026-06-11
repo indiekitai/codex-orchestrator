@@ -7401,7 +7401,7 @@ func auditOrchestrationPolicyText(path string, text string) []policyAuditFinding
 		case violatesHeartbeatBindingGuard(body):
 			findings = append(findings, newPolicyAuditFinding(
 				policyRuleHeartbeatBinding,
-				"%s:%d: heartbeat automation wording appears to bind to the literal placeholder \"current\" instead of a real thread id or verified app binding: %s",
+				"%s:%d: heartbeat automation wording appears to bind to a stale placeholder or fixed task id instead of verified thread/repo/ledger truth: %s",
 				path,
 				line,
 				compactForFinding(body),
@@ -7409,7 +7409,7 @@ func auditOrchestrationPolicyText(path string, text string) []policyAuditFinding
 		case violatesPendingLedgerGuard(body):
 			findings = append(findings, newPolicyAuditFinding(
 				policyRulePendingLedger,
-				"%s:%d: pending worktree setup wording appears to keep pendingWorktreeId only in transient prompt/chat state instead of durable ledger truth: %s",
+				"%s:%d: pending worktree setup wording appears to keep pendingWorktreeId in transient state or count it as running before setup is confirmed: %s",
 				path,
 				line,
 				compactForFinding(body),
@@ -7665,7 +7665,11 @@ func violatesHeartbeatBindingGuard(text string) bool {
 		strings.Contains(lower, `targetthreadid = "current"`) ||
 		strings.Contains(lower, `targetthreadid current`) ||
 		strings.Contains(lower, `target thread id current`) ||
-		strings.Contains(lower, `target_thread_id current`)
+		strings.Contains(lower, `target_thread_id current`) ||
+		(containsAnyFold(text, []string{"fixed task id", "stale task id", "old task id", "previous task id", "hard-coded task", "hardcoded task", "specific task id"}) &&
+			containsAnyFold(text, []string{"wait for that task", "check that task", "watch that task", "only watch", "keep watching", "stale until"})) ||
+		(containsAnyFold(text, []string{"every 5 minutes check", "every five minutes check", "5-minute heartbeat", "heartbeat instruction"}) &&
+			containsAnyFold(text, []string{"TF-OLD", "TASK-OLD", "stale task", "old queue"}))
 }
 
 func violatesPendingLedgerGuard(text string) bool {
@@ -7675,16 +7679,13 @@ func violatesPendingLedgerGuard(text string) bool {
 	if !containsAnyFold(text, []string{"pendingWorktreeId", "pending worktree", "pending setup", "pending-worktree", "pending id"}) {
 		return false
 	}
-	if !containsAnyFold(text, []string{"ledger", "heartbeat prompt", "chat", "memory", "automation prompt", "聊天", "记忆"}) {
-		return false
-	}
 	lower := strings.ToLower(text)
 	if strings.Contains(lower, "durable ledger truth immediately") ||
 		strings.Contains(lower, "record that pending setup in durable ledger truth") ||
 		strings.Contains(lower, "do not keep pending setup state only") {
 		return false
 	}
-	return strings.Contains(lower, "only in heartbeat") ||
+	transientOnly := containsAnyFold(text, []string{"ledger", "heartbeat prompt", "chat", "memory", "automation prompt", "聊天", "记忆"}) && (strings.Contains(lower, "only in heartbeat") ||
 		strings.Contains(lower, "only in the heartbeat") ||
 		strings.Contains(lower, "only in chat") ||
 		strings.Contains(lower, "only in memory") ||
@@ -7695,7 +7696,10 @@ func violatesPendingLedgerGuard(text string) bool {
 		strings.Contains(lower, "not record") && strings.Contains(lower, "ledger") ||
 		strings.Contains(lower, "只写") && (strings.Contains(lower, "heartbeat") || strings.Contains(lower, "prompt") || strings.Contains(lower, "聊天")) ||
 		strings.Contains(lower, "不写") && strings.Contains(lower, "ledger") ||
-		strings.Contains(lower, "不用") && strings.Contains(lower, "ledger")
+		strings.Contains(lower, "不用") && strings.Contains(lower, "ledger"))
+	runningBeforeSetup := containsAnyFold(text, []string{"running worker", "active worker", "counted as running", "count as running", "treated as running", "treat as running", "worker slot"}) &&
+		containsAnyFold(text, []string{"before setup", "before confirmation", "before setup is confirmed", "without setup confirmation", "no real thread", "no worktree", "no branch", "without real thread"})
+	return transientOnly || runningBeforeSetup
 }
 
 func compactForFinding(text string) string {
