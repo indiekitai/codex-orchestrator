@@ -160,6 +160,7 @@ codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/
 codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 codex-orchestrator eval run --write-report /tmp/eval-run-report.json
+codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
 ```
 
 The PR reviewer runner inspects only local git/static state from the ledger task worktree:
@@ -253,6 +254,12 @@ Use `codex-orchestrator eval run` when you only want to run the fixture suite
 without scanning the current repository text. The default suite is
 `orchestration-policy-auditor`; it compares actual `OPAxxx` rule-hit counts
 against each fixture's `expectedRuleHits`.
+
+Use `codex-orchestrator eval add-failure` to add a manually supplied failure
+case to the fixture suite. The MVP requires explicit `--text` or `--text-file`
+and at least one `--expect RULE=N`. It validates the text against the current
+rules before writing JSON and refuses to overwrite existing fixtures unless
+`--force` is supplied.
 
 The roadmap next-task suggester runner is read-only and does not mutate the
 ledger. It parses remaining candidate tasks from `docs/roadmap.md`, compares

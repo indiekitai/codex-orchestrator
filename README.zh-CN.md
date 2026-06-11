@@ -246,6 +246,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 ./codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 ./codex-orchestrator eval run --write-report /tmp/eval-run-report.json
+./codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -343,6 +344,10 @@ runtime proof；结果只是本地静态 policy 证据。
 可以先用它做确定性的回归检查。第一套 suite 是
 `orchestration-policy-auditor`，读取 `eval/orchestration-policy-auditor/` 下的
 fixture，并把实际 `OPAxxx` 命中次数和每个 fixture 的 `expectedRuleHits` 对齐。
+
+`eval add-failure` 用来把手动提供的失败案例加入 fixture suite。MVP 版本需要显式
+传入文本和期望命中的规则；命令会先用当前 policy 规则验证文本，匹配后才写 JSON。
+已有 fixture 默认不会覆盖，除非传 `--force`。它还不会自动解析 review 文档。
 
 `run-routine roadmap-next-task-suggester` 是第八个可运行 routine MVP。它是只读的，
 不会修改 ledger。它会从 `docs/roadmap.md` 解析剩余候选任务，对照本地可运行

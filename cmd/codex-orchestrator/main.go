@@ -259,6 +259,7 @@ Usage:
   codex-orchestrator run-routine roadmap-next-task-suggester [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator policy check [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval run [--suite orchestration-policy-auditor] [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
+  codex-orchestrator eval add-failure --id ID --text TEXT --expect OPA001=1 [--file README.md] [--suite orchestration-policy-auditor] [--repo PATH]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
   codex-orchestrator record-routine-run --report-json PATH
   codex-orchestrator completion bash|zsh|fish
@@ -342,8 +343,10 @@ _codex_orchestrator()
     eval)
       if [[ ${COMP_WORDS[2]} == "run" ]]; then
         COMPREPLY=( $(compgen -W "--suite --repo --eval-dir --write-report --json --help" -- "$cur") )
+      elif [[ ${COMP_WORDS[2]} == "add-failure" ]]; then
+        COMPREPLY=( $(compgen -W "--suite --repo --eval-dir --id --description --file --text --text-file --expect --force --json --help" -- "$cur") )
       else
-        COMPREPLY=( $(compgen -W "run" -- "$cur") )
+        COMPREPLY=( $(compgen -W "run add-failure" -- "$cur") )
       fi
       ;;
     record-routine-run)
@@ -411,7 +414,9 @@ case $state in
         ;;
       eval)
         if (( CURRENT == 3 )); then
-          _values 'subcommand' run
+          _values 'subcommand' run add-failure
+        elif [[ $words[3] == "add-failure" ]]; then
+          _values 'options' --suite --repo --eval-dir --id --description --file --text --text-file --expect --force --json --help
         else
           _values 'options' --suite --repo --eval-dir --write-report --json --help
         fi
@@ -463,7 +468,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
-complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run add-failure'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 complete -c codex-orchestrator -l ledger -d 'Ledger path'
 complete -c codex-orchestrator -l json -d 'Print JSON'
@@ -923,11 +928,13 @@ func cmdPolicy(args []string) error {
 
 func cmdEval(args []string) error {
 	if len(args) == 0 {
-		return errors.New("eval requires a subcommand: run")
+		return errors.New("eval requires a subcommand: run or add-failure")
 	}
 	switch args[0] {
 	case "run":
 		return cmdEvalRun(args[1:])
+	case "add-failure":
+		return cmdEvalAddFailure(args[1:])
 	default:
 		return fmt.Errorf("unsupported eval subcommand %q", args[0])
 	}
@@ -956,6 +963,35 @@ func cmdEvalRun(args []string) error {
 		return printJSON(report)
 	}
 	fmt.Printf("Wrote eval run report: %s\n", *writeReport)
+	return nil
+}
+
+func cmdEvalAddFailure(args []string) error {
+	fs := flag.NewFlagSet("eval add-failure", flag.ExitOnError)
+	suite := fs.String("suite", "orchestration-policy-auditor", "eval suite id")
+	repo := fs.String("repo", ".", "repository path used to resolve relative eval dirs")
+	evalDir := fs.String("eval-dir", "", "eval fixture directory; defaults to eval/SUITE")
+	id := fs.String("id", "", "fixture id; used as the JSON filename")
+	description := fs.String("description", "", "fixture description")
+	fileName := fs.String("file", "README.md", "synthetic file path stored inside the fixture")
+	text := fs.String("text", "", "failure text to store in the fixture")
+	textFile := fs.String("text-file", "", "read failure text from a file instead of --text")
+	force := fs.Bool("force", false, "overwrite an existing fixture")
+	jsonOut := fs.Bool("json", false, "print JSON result")
+	var expects stringList
+	fs.Var(&expects, "expect", "expected rule hit in RULE=N form; may be repeated")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	result, err := addFailureEvalFixture(*repo, *suite, *evalDir, *id, *description, *fileName, *text, *textFile, []string(expects), *force)
+	if err != nil {
+		return err
+	}
+	if *jsonOut {
+		return printJSON(result)
+	}
+	fmt.Printf("Wrote eval fixture: %s\n", result.Path)
+	fmt.Printf("Expected rule hits: %s\n", formatRuleCounts(result.ExpectedRuleHits))
 	return nil
 }
 
@@ -3424,6 +3460,16 @@ type policyEvalResult struct {
 	BlockedReason string
 }
 
+type evalAddFailureResult struct {
+	Suite            string         `json:"suite"`
+	ID               string         `json:"id"`
+	Path             string         `json:"path"`
+	File             string         `json:"file"`
+	ExpectedRuleHits map[string]int `json:"expectedRuleHits"`
+	ActualRuleHits   map[string]int `json:"actualRuleHits"`
+	Overwritten      bool           `json:"overwritten"`
+}
+
 const (
 	evidenceRuleSpecDirectWeakLocal  = "ELA001"
 	evidenceRuleSpecLocalOverclaim   = "ELA002"
@@ -3599,6 +3645,88 @@ func runOrchestrationPolicyEvalFixtures(repo string, evalDir string) policyEvalR
 	return result
 }
 
+func addFailureEvalFixture(repo string, suite string, evalDir string, id string, description string, fileName string, text string, textFile string, expects []string, force bool) (evalAddFailureResult, error) {
+	result := evalAddFailureResult{}
+	repo = expandPath(repo)
+	if repo == "" {
+		repo = "."
+	}
+	suite = strings.TrimSpace(suite)
+	if suite == "" {
+		suite = "orchestration-policy-auditor"
+	}
+	if suite != "orchestration-policy-auditor" {
+		return result, fmt.Errorf("unsupported eval suite %q", suite)
+	}
+	if evalDir == "" {
+		evalDir = filepath.Join("eval", suite)
+	}
+	id = strings.TrimSpace(id)
+	if err := validateFixtureID(id); err != nil {
+		return result, err
+	}
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" {
+		return result, errors.New("eval add-failure requires --file")
+	}
+	if filepath.IsAbs(fileName) || strings.Contains(fileName, "..") {
+		return result, errors.New("eval add-failure --file must be a relative fixture file path without '..'")
+	}
+	body, err := failureText(text, textFile)
+	if err != nil {
+		return result, err
+	}
+	expected, err := parseRuleExpectations(expects)
+	if err != nil {
+		return result, err
+	}
+	if len(expected) == 0 {
+		return result, errors.New("eval add-failure requires at least one --expect RULE=N")
+	}
+	fixture := policyEvalFixture{
+		SchemaVersion:    1,
+		ID:               id,
+		Description:      strings.TrimSpace(description),
+		Files:            map[string]string{fileName: body},
+		ExpectedRuleHits: expected,
+	}
+	findings := auditOrchestrationPolicyText(fileName, body)
+	actual := countPolicyAuditFindings(findings)
+	if !sameRuleCounts(actual, expected) {
+		return result, fmt.Errorf("fixture %s expected %s, but text produced %s", id, formatRuleCounts(expected), formatRuleCounts(actual))
+	}
+	fixtureDir := resolveRepoRelativePath(repo, evalDir)
+	if err := os.MkdirAll(fixtureDir, 0o755); err != nil {
+		return result, err
+	}
+	path := filepath.Join(fixtureDir, id+".json")
+	_, statErr := os.Stat(path)
+	exists := statErr == nil
+	if exists && !force {
+		return result, fmt.Errorf("eval fixture already exists: %s; pass --force to overwrite", path)
+	}
+	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return result, statErr
+	}
+	data, err := json.MarshalIndent(fixture, "", "  ")
+	if err != nil {
+		return result, err
+	}
+	data = append(data, '\n')
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return result, err
+	}
+	return evalAddFailureResult{
+		Suite:            suite,
+		ID:               id,
+		Path:             path,
+		File:             fileName,
+		ExpectedRuleHits: expected,
+		ActualRuleHits:   actual,
+		Overwritten:      exists,
+	}, nil
+}
+
 func loadPolicyEvalFixture(path string) (policyEvalFixture, error) {
 	var fixture policyEvalFixture
 	data, err := os.ReadFile(path)
@@ -3621,6 +3749,96 @@ func loadPolicyEvalFixture(path string) (policyEvalFixture, error) {
 		fixture.ExpectedRuleHits = map[string]int{}
 	}
 	return fixture, nil
+}
+
+func validateFixtureID(id string) error {
+	if id == "" {
+		return errors.New("eval add-failure requires --id")
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= '0' && r <= '9':
+		case r == '-' || r == '_':
+		default:
+			return fmt.Errorf("fixture id %q must contain only lowercase letters, digits, '-' or '_'", id)
+		}
+	}
+	if strings.Contains(id, "..") || strings.ContainsAny(id, `/\`) {
+		return fmt.Errorf("fixture id %q must not contain path separators", id)
+	}
+	return nil
+}
+
+func failureText(text string, textFile string) (string, error) {
+	text = strings.TrimSpace(text)
+	textFile = strings.TrimSpace(textFile)
+	if text != "" && textFile != "" {
+		return "", errors.New("use either --text or --text-file, not both")
+	}
+	if textFile != "" {
+		data, err := os.ReadFile(expandPath(textFile))
+		if err != nil {
+			return "", err
+		}
+		text = strings.TrimSpace(string(data))
+	}
+	if text == "" {
+		return "", errors.New("eval add-failure requires --text or --text-file")
+	}
+	return text, nil
+}
+
+func parseRuleExpectations(values []string) (map[string]int, error) {
+	expectations := map[string]int{}
+	for _, value := range values {
+		parts := strings.Split(strings.TrimSpace(value), "=")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid --expect %q; expected RULE=N", value)
+		}
+		ruleID := strings.TrimSpace(parts[0])
+		countText := strings.TrimSpace(parts[1])
+		if !isKnownPolicyRule(ruleID) {
+			return nil, fmt.Errorf("unsupported policy rule %q", ruleID)
+		}
+		count, err := parseNonNegativeInt(countText)
+		if err != nil {
+			return nil, fmt.Errorf("invalid count in --expect %q: %w", value, err)
+		}
+		if count == 0 {
+			delete(expectations, ruleID)
+			continue
+		}
+		expectations[ruleID] = count
+	}
+	return expectations, nil
+}
+
+func parseNonNegativeInt(value string) (int, error) {
+	if value == "" {
+		return 0, errors.New("empty integer")
+	}
+	total := 0
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return 0, fmt.Errorf("not a non-negative integer: %s", value)
+		}
+		total = total*10 + int(r-'0')
+	}
+	return total, nil
+}
+
+func isKnownPolicyRule(ruleID string) bool {
+	switch ruleID {
+	case policyRuleDryRunBarrier,
+		policyRuleMainFallbackGuard,
+		policyRuleContinuationGuard,
+		policyRuleWorkerBoundary,
+		policyRuleEvidenceBoundary:
+		return true
+	default:
+		return false
+	}
 }
 
 func sameRuleCounts(left map[string]int, right map[string]int) bool {

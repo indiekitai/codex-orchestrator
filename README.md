@@ -282,6 +282,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 ./codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 ./codex-orchestrator eval run --write-report /tmp/eval-run-report.json
+./codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -398,6 +399,12 @@ the current repository text. The first suite is
 `orchestration-policy-auditor`; it reads fixtures from
 `eval/orchestration-policy-auditor/` and compares actual `OPAxxx` hit counts
 against each fixture's `expectedRuleHits`.
+
+`eval add-failure` adds a manually supplied failure case to the fixture suite.
+For the MVP, pass the text and expected rule hits explicitly. The command
+verifies the text against the current policy rules before writing JSON, refuses
+to overwrite an existing fixture unless `--force` is supplied, and does not
+parse review documents automatically yet.
 
 `run-routine roadmap-next-task-suggester` is the eighth runnable routine MVP.
 It is read-only and does not mutate the ledger. It parses remaining candidate

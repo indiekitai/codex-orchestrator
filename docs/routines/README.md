@@ -23,6 +23,7 @@ codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/
 codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 codex-orchestrator eval run --write-report /tmp/eval-run-report.json
+codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
 codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ```
 
@@ -127,6 +128,12 @@ sessions, mutate the ledger, or claim runtime proof; this command emits
 Use it while changing policy rules to catch regressions in known good and bad
 cases. The default suite is `orchestration-policy-auditor`, backed by
 `eval/orchestration-policy-auditor/`.
+
+`eval add-failure` writes a new fixture into the suite after validating that
+the provided text actually produces the declared `--expect RULE=N` hit counts.
+It is intentionally manual in this MVP: it accepts `--text` or `--text-file`,
+does not parse review documents automatically, and refuses to overwrite
+existing fixtures unless `--force` is supplied.
 
 `run-routine roadmap-next-task-suggester` is a read-only local planning
 assistant. It reads `docs/roadmap.md`, compares the remaining v3 and explicit

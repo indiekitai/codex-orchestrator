@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1702,6 +1703,136 @@ func TestEvalRunBlocksUnsupportedSuite(t *testing.T) {
 	report := runEvalSuite(project, "unknown-suite", "")
 	if report.Status != "blocked" || report.BlockedReason != "unsupported eval suite" {
 		t.Fatalf("expected unsupported suite block, got %#v", report)
+	}
+}
+
+func TestEvalAddFailureWritesVerifiedFixture(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	result, err := addFailureEvalFixture(
+		project,
+		"orchestration-policy-auditor",
+		"",
+		"new-dry-run-failure",
+		"dry run failure",
+		"README.md",
+		"Dry run mode can dispatch workers immediately.",
+		"",
+		[]string{"OPA001=1"},
+		false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ID != "new-dry-run-failure" || result.ExpectedRuleHits["OPA001"] != 1 || result.ActualRuleHits["OPA001"] != 1 {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	data, err := os.ReadFile(result.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture policyEvalFixture
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.ID != "new-dry-run-failure" || fixture.Files["README.md"] == "" || fixture.ExpectedRuleHits["OPA001"] != 1 {
+		t.Fatalf("unexpected fixture: %#v", fixture)
+	}
+}
+
+func TestCmdEvalAddFailureWritesJSONResult(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	if err := cmdEval([]string{
+		"add-failure",
+		"--repo", project,
+		"--id", "new-worker-boundary-failure",
+		"--text", "Worker prompt: use a worktree branch for this task.",
+		"--expect", "OPA004=1",
+		"--json",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(project, "eval", "orchestration-policy-auditor", "new-worker-boundary-failure.json")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected fixture file: %v", err)
+	}
+}
+
+func TestEvalAddFailureRejectsExpectationMismatch(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	_, err := addFailureEvalFixture(
+		project,
+		"orchestration-policy-auditor",
+		"",
+		"bad-expectation",
+		"",
+		"README.md",
+		"Dry run mode can dispatch workers immediately.",
+		"",
+		[]string{"OPA002=1"},
+		false,
+	)
+	if err == nil || !strings.Contains(err.Error(), "expected OPA002=1, but text produced OPA001=1") {
+		t.Fatalf("expected mismatch error, got %v", err)
+	}
+	path := filepath.Join(project, "eval", "orchestration-policy-auditor", "bad-expectation.json")
+	if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("mismatched fixture should not be written, stat=%v", statErr)
+	}
+}
+
+func TestEvalAddFailureRequiresForceForOverwrite(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	_, err := addFailureEvalFixture(
+		project,
+		"orchestration-policy-auditor",
+		"",
+		"duplicate-fixture",
+		"",
+		"README.md",
+		"Local proxy smoke counts as direct proof.",
+		"",
+		[]string{"OPA005=1"},
+		false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = addFailureEvalFixture(
+		project,
+		"orchestration-policy-auditor",
+		"",
+		"duplicate-fixture",
+		"",
+		"README.md",
+		"Local proxy smoke counts as direct proof.",
+		"",
+		[]string{"OPA005=1"},
+		false,
+	)
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("expected overwrite error, got %v", err)
+	}
+	result, err := addFailureEvalFixture(
+		project,
+		"orchestration-policy-auditor",
+		"",
+		"duplicate-fixture",
+		"",
+		"README.md",
+		"Local proxy smoke counts as direct proof.",
+		"",
+		[]string{"OPA005=1"},
+		true,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Overwritten {
+		t.Fatalf("expected overwritten result: %#v", result)
 	}
 }
 
