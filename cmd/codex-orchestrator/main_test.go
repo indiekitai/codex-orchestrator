@@ -506,6 +506,9 @@ func TestTaskBudgetMetadataSurfacesInObserveAndHeartbeat(t *testing.T) {
 	if observed.BudgetSummary.TotalMaxRuntimeMinutes != 90 || observed.BudgetSummary.TotalReviewBudgetMinutes != 25 {
 		t.Fatalf("unexpected budget totals: %#v", observed.BudgetSummary)
 	}
+	if observed.BudgetPressure.TasksMissingBudget != 1 {
+		t.Fatalf("expected one missing-budget pressure warning, got %#v", observed.BudgetPressure)
+	}
 	var budgetObservation *Observation
 	for index := range observed.Observations {
 		if observed.Observations[index].ID == "BUDGETED" {
@@ -543,6 +546,98 @@ func TestTaskBudgetMetadataSurfacesInObserveAndHeartbeat(t *testing.T) {
 	}
 	if !strings.Contains(string(summaryData), "budget: maxRuntime=90m review=25m note=local-only") {
 		t.Fatalf("expected heartbeat summary to include task budget:\n%s", string(summaryData))
+	}
+	if !strings.Contains(string(summaryData), "Budget Pressure") {
+		t.Fatalf("expected heartbeat summary to include budget pressure:\n%s", string(summaryData))
+	}
+}
+
+func TestBudgetPressureWarningsUseLocalLedgerTimestamps(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	runtimeWorker := filepath.Join(root, "worker-runtime")
+	reviewWorker := filepath.Join(root, "worker-review")
+	legacyWorker := filepath.Join(root, "worker-legacy")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/runtime", runtimeWorker, "HEAD")
+	git(t, project, "worktree", "add", "-q", "-b", "codex/review", reviewWorker, "HEAD")
+	git(t, project, "worktree", "add", "-q", "-b", "codex/legacy-budget-pressure", legacyWorker, "HEAD")
+
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "RUNTIME",
+		"--worktree", runtimeWorker,
+		"--branch", "codex/runtime",
+		"--max-runtime-minutes", "30",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "REVIEW",
+		"--worktree", reviewWorker,
+		"--branch", "codex/review",
+		"--review-budget-minutes", "10",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "LEGACY", "--worktree", legacyWorker, "--branch", "codex/legacy-budget-pressure"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(reviewWorker, "done.txt"), []byte("done\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, reviewWorker, "add", ".")
+	git(t, reviewWorker, "commit", "-q", "-m", "ready for review")
+	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "review", "--task-id", "REVIEW", "--status", "completed-unreviewed", "--note", "ready"}); err != nil {
+		t.Fatal(err)
+	}
+
+	ledgerData, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimeAt := time.Now().Add(-31 * time.Minute).Format(time.RFC3339)
+	reviewAt := time.Now().Add(-9 * time.Minute).Format(time.RFC3339)
+	for index := range ledgerData.Tasks {
+		switch ledgerData.Tasks[index].ID {
+		case "RUNTIME":
+			ledgerData.Tasks[index].History[0]["at"] = runtimeAt
+			ledgerData.Tasks[index].LastObservation["at"] = runtimeAt
+		case "REVIEW":
+			ledgerData.Tasks[index].History[len(ledgerData.Tasks[index].History)-1]["at"] = reviewAt
+			ledgerData.Tasks[index].LastObservation["at"] = reviewAt
+		}
+	}
+	if err := saveLedger(ledger, &ledgerData); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.BudgetPressure.EvidenceLabel != "local/static" {
+		t.Fatalf("expected local/static budget pressure, got %#v", summary.BudgetPressure)
+	}
+	if summary.BudgetPressure.TasksExceeded != 1 || summary.BudgetPressure.TasksNearLimit != 1 || summary.BudgetPressure.TasksMissingBudget != 1 {
+		t.Fatalf("unexpected budget pressure summary: %#v", summary.BudgetPressure)
+	}
+	byID := map[string]Observation{}
+	for _, observation := range summary.Observations {
+		byID[observation.ID] = observation
+	}
+	if byID["RUNTIME"].BudgetPressure == nil || byID["RUNTIME"].BudgetPressure.Status != "exceeded" {
+		t.Fatalf("expected runtime budget exceeded, got %#v", byID["RUNTIME"].BudgetPressure)
+	}
+	if byID["REVIEW"].BudgetPressure == nil || byID["REVIEW"].BudgetPressure.Status != "near-limit" {
+		t.Fatalf("expected review budget near-limit, got %#v", byID["REVIEW"].BudgetPressure)
+	}
+	if byID["LEGACY"].BudgetPressure == nil || byID["LEGACY"].BudgetPressure.Status != "missing" {
+		t.Fatalf("expected legacy task missing budget pressure, got %#v", byID["LEGACY"].BudgetPressure)
 	}
 }
 

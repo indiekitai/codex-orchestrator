@@ -263,9 +263,12 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ```
 
 JSON heartbeat report 会包含 `overallStatus`、按状态聚合的 `counts`、
-`reviewPressure`，以及存在任务预算元数据时的只读 `budgetSummary`。通过
-`record-task` 记录的 runtime/review budget 会在 `observe` 和 heartbeat summary
-中展示；helper 不会 kill 进程、调度 session 或强制执行预算。
+`reviewPressure`、只读 `budgetSummary`，以及追加型 `budgetPressure` warnings。
+通过 `record-task` 记录的 runtime/review budget 会在 `observe`、`status` 和
+heartbeat summary 中展示。runtime pressure 只根据本地 ledger timestamp 计算；
+review pressure 只有在 ledger 里有 review-ready timestamp 时才计算。缺失或无法
+确定的预算信息会标成 local/static helper evidence。helper 不会 kill 进程、调度
+session 或强制执行预算。
 
 Codex App worktree 派发是 App-first。要用 project worktree session 前，先确认
 这个仓库已经保存为 Codex App project。如果因为 unknown project、没有 saved
