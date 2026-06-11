@@ -1653,6 +1653,18 @@ func runPRReviewerRoutine(ledgerPath string, taskID string) (RoutineRunReport, e
 	report.Evidence["local"] = append(report.Evidence["local"], "git diff --name-status "+base+"..HEAD:\n"+nameStatusOut)
 	report.ActionsTaken = append(report.ActionsTaken, "Checked committed file list against baseCommit")
 
+	changedPaths := parseNameStatusPaths(nameStatusOut)
+	checklistFailures, checklistWarnings := evaluateReviewChecklist(task, changedPaths)
+	report.ActionsTaken = append(report.ActionsTaken, "Generated local/static automated review checklist")
+	checklistFailed := len(checklistFailures) > 0
+	if len(checklistFailures) > 0 {
+		report.Evidence["local"] = append(report.Evidence["local"], checklistFailures...)
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], checklistWarnings...)
+	if reviewChecklistNeedsHuman(checklistWarnings) {
+		report.NeedsHuman = true
+	}
+
 	diffCheckOut, err := gitOutput(worktree, "diff", "--check", base+"..HEAD")
 	if err != nil {
 		report.Status = "failed"
@@ -1666,10 +1678,213 @@ func runPRReviewerRoutine(ledgerPath string, taskID string) (RoutineRunReport, e
 	report.Evidence["local"] = append(report.Evidence["local"], "git diff --check "+base+"..HEAD: "+diffCheckOut)
 	report.ActionsTaken = append(report.ActionsTaken, "Ran read-only committed diff checks")
 
+	if checklistFailed {
+		report.Status = "failed"
+		report.NextSuggestedAction = "Return to the same task worker for a bounded fixup of the automated review checklist failures, then rerun pr-reviewer."
+		return report, nil
+	}
+
 	report.Status = "passed"
 	report.BlockedReason = ""
-	report.NextSuggestedAction = "Review the local/static report and, if sufficient for this task, record it with record-routine-run --report-json before any separate merge decision."
+	report.NextSuggestedAction = "Review the local/static checklist and rerun narrow task gates before any separate merge decision; record it with record-routine-run --report-json only if the evidence is sufficient."
 	return report, nil
+}
+
+func parseNameStatusPaths(nameStatus string) []string {
+	paths := []string{}
+	for _, line := range strings.Split(nameStatus, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "(") {
+			continue
+		}
+		fields := strings.Split(line, "\t")
+		if len(fields) < 2 {
+			continue
+		}
+		for _, path := range fields[1:] {
+			path = normalizeRepoPath(path)
+			if path != "" {
+				paths = append(paths, path)
+			}
+		}
+	}
+	return uniqueSortedStrings(paths)
+}
+
+func evaluateReviewChecklist(task Task, changedPaths []string) ([]string, []string) {
+	failures := []string{}
+	warnings := []string{}
+	allowed := cleanPathPatterns(task.WriteSet["allowed"])
+	forbidden := cleanPathPatterns(task.WriteSet["forbidden"])
+	if len(allowed) == 0 && len(forbidden) == 0 {
+		warnings = append(warnings, "Automated review checklist: ledger writeSet has no allowed/forbidden paths; path-boundary check is advisory-only.")
+	} else {
+		warnings = append(warnings, fmt.Sprintf("Automated review checklist: ledger writeSet allowed=%s forbidden=%s.", formatStringList(allowed), formatStringList(forbidden)))
+		if len(allowed) > 0 {
+			outsideAllowed := pathsOutsidePatterns(changedPaths, allowed)
+			if len(outsideAllowed) > 0 {
+				failures = append(failures, "Automated review checklist failed: changed path(s) outside ledger allowed writeSet: "+formatStringList(outsideAllowed)+".")
+			} else {
+				warnings = append(warnings, "Automated review checklist: all changed paths fit the ledger allowed writeSet.")
+			}
+		}
+		if len(forbidden) > 0 {
+			forbiddenHits := pathsMatchingPatterns(changedPaths, forbidden)
+			if len(forbiddenHits) > 0 {
+				failures = append(failures, "Automated review checklist failed: changed path(s) match ledger forbidden writeSet: "+formatStringList(forbiddenHits)+".")
+			} else {
+				warnings = append(warnings, "Automated review checklist: no changed paths matched the ledger forbidden writeSet.")
+			}
+		}
+	}
+
+	warnings = append(warnings, reviewSignalEvidence(changedPaths)...)
+	if len(task.Gates) > 0 {
+		warnings = append(warnings, "Automated review checklist: suggested narrow gate(s) from ledger task: "+formatStringList(task.Gates)+".")
+	} else {
+		warnings = append(warnings, "Automated review checklist: no ledger task gates are recorded; reviewer should choose the narrowest credible local gate before merge.")
+	}
+	return failures, warnings
+}
+
+func reviewSignalEvidence(changedPaths []string) []string {
+	signals := []string{}
+	if anyPathHasPrefix(changedPaths, "docs/reviews/") {
+		signals = append(signals, "Automated review checklist: review artifact signal found under docs/reviews/.")
+	} else {
+		signals = append(signals, "Automated review checklist warning: no changed review artifact under docs/reviews/ was locally detectable.")
+	}
+	if anyPathLooksLikeArtifact(changedPaths) {
+		signals = append(signals, "Automated review checklist: artifact/report evidence path signal found in changed files.")
+	} else {
+		signals = append(signals, "Automated review checklist warning: no changed artifact/report evidence path was locally detectable.")
+	}
+	if anyPathContainsFold(changedPaths, []string{"self-review", "self_review", "selfreview", "handoff", "review"}) {
+		signals = append(signals, "Automated review checklist: self-review or handoff filename signal found in changed files.")
+	} else {
+		signals = append(signals, "Automated review checklist warning: worker self-review is not locally detectable from changed filenames; verify the final handoff before merge.")
+	}
+	if anyPathContainsFold(changedPaths, []string{"evidence", "proof", "report", "review"}) {
+		signals = append(signals, "Automated review checklist: evidence-label review signal found in changed filenames.")
+	} else {
+		signals = append(signals, "Automated review checklist warning: evidence-label review signal is not locally detectable from changed filenames; verify direct/proxy/local/blocked claims manually.")
+	}
+	return signals
+}
+
+func reviewChecklistNeedsHuman(warnings []string) bool {
+	for _, warning := range warnings {
+		if strings.Contains(strings.ToLower(warning), "warning:") {
+			return true
+		}
+	}
+	return false
+}
+
+func cleanPathPatterns(patterns []string) []string {
+	cleaned := []string{}
+	for _, pattern := range patterns {
+		pattern = normalizeRepoPath(pattern)
+		if pattern != "" {
+			cleaned = append(cleaned, pattern)
+		}
+	}
+	return uniqueSortedStrings(cleaned)
+}
+
+func pathsOutsidePatterns(paths []string, patterns []string) []string {
+	outside := []string{}
+	for _, path := range paths {
+		if !pathMatchesAnyPattern(path, patterns) {
+			outside = append(outside, path)
+		}
+	}
+	return uniqueSortedStrings(outside)
+}
+
+func pathsMatchingPatterns(paths []string, patterns []string) []string {
+	matches := []string{}
+	for _, path := range paths {
+		if pathMatchesAnyPattern(path, patterns) {
+			matches = append(matches, path)
+		}
+	}
+	return uniqueSortedStrings(matches)
+}
+
+func pathMatchesAnyPattern(path string, patterns []string) bool {
+	for _, pattern := range patterns {
+		if repoPathMatchesPattern(path, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func repoPathMatchesPattern(path string, pattern string) bool {
+	path = normalizeRepoPath(path)
+	pattern = normalizeRepoPath(pattern)
+	if path == "" || pattern == "" {
+		return false
+	}
+	if pattern == "." || pattern == "**" || pattern == "*" {
+		return true
+	}
+	if strings.HasSuffix(pattern, "/**") {
+		prefix := strings.TrimSuffix(pattern, "/**")
+		return path == prefix || strings.HasPrefix(path, prefix+"/")
+	}
+	if strings.HasSuffix(pattern, "/") {
+		prefix := strings.TrimSuffix(pattern, "/")
+		return path == prefix || strings.HasPrefix(path, prefix+"/")
+	}
+	if strings.ContainsAny(pattern, "*?[") {
+		if matched, err := filepath.Match(pattern, path); err == nil && matched {
+			return true
+		}
+	}
+	return path == pattern || strings.HasPrefix(path, pattern+"/")
+}
+
+func normalizeRepoPath(path string) string {
+	path = strings.TrimSpace(path)
+	path = strings.TrimPrefix(path, "./")
+	path = filepath.ToSlash(path)
+	return strings.Trim(path, "/")
+}
+
+func anyPathHasPrefix(paths []string, prefix string) bool {
+	prefix = normalizeRepoPath(prefix)
+	for _, path := range paths {
+		path = normalizeRepoPath(path)
+		if path == prefix || strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func anyPathLooksLikeArtifact(paths []string) bool {
+	for _, path := range paths {
+		normalized := strings.ToLower(normalizeRepoPath(path))
+		if strings.Contains(normalized, "artifact") ||
+			strings.Contains(normalized, "report") ||
+			strings.Contains(normalized, "evidence") ||
+			strings.HasPrefix(normalized, "examples/routine-reports/") ||
+			strings.HasPrefix(normalized, ".codex-orchestrator/") {
+			return true
+		}
+	}
+	return false
+}
+
+func anyPathContainsFold(paths []string, terms []string) bool {
+	for _, path := range paths {
+		if containsAnyFold(path, terms) {
+			return true
+		}
+	}
+	return false
 }
 
 func cmdRunStaleTaskRescuerRoutine(args []string) error {

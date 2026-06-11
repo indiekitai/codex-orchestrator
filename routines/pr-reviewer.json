@@ -9,11 +9,15 @@
     "ledger task record",
     "worker final handoff",
     "git diff main..HEAD",
+    "ledger writeSet allowed/forbidden paths when recorded",
     "changed docs and review artifacts",
     "declared verification gates"
   ],
   "allowedActions": [
     "inspect changed files and diff",
+    "generate a local/static automated review checklist",
+    "compare changed paths with ledger allowed/forbidden writeSet when available",
+    "surface locally detectable review doc, artifact, self-review, evidence-label, and gate signals",
     "inspect recorded verification gates and rerun only trusted local gates when explicitly approved",
     "classify forbidden path or contract violations",
     "recommend merge, reject, or same-task fixup",
@@ -29,7 +33,9 @@
   "gates": [
     "git diff --check",
     "git diff --name-status main..HEAD",
-    "forbidden path scan from task contract"
+    "forbidden path scan from task contract",
+    "allowed path scan from task contract when allowed paths are recorded",
+    "local/static review checklist for review docs, artifacts, self-review, evidence labels, and suggested narrow gates"
   ],
   "evidenceLabels": [
     "direct",
