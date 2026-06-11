@@ -160,7 +160,7 @@ codex-orchestrator append-event \
 Use this shape when starting a fresh orchestrator:
 
 ```text
-Use $delegated-session-orchestrator for this repository.
+Use $codex-orchestrator for this repository.
 
 Before dispatching, run `codex-orchestrator status` and
 `codex-orchestrator observe --json` if the helper is installed. Use the ledger

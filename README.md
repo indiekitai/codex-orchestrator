@@ -2,11 +2,11 @@
 
 # codex-orchestrator
 
-**Loop engineering for OpenAI Codex App.** A multi-session orchestrator skill
-that turns a single coding assistant into a supervised engineering loop:
-splitting roadmap work into isolated worktree sessions, checking them with
-heartbeats, reviewing and merging clean branches, rescuing stuck sessions, and
-dispatching the next batch when it is safe to do so.
+**A supervised outer loop for OpenAI Codex App.** `codex-orchestrator`
+brings Loop Engineering-style workflow to Codex App: splitting roadmap work
+into isolated worktree sessions, checking them with heartbeats, reviewing and
+merging clean branches, rescuing stuck sessions, and dispatching the next batch
+when it is safe to do so.
 
 ## 🚀 Quick Start
 
@@ -19,8 +19,7 @@ Read https://github.com/indiekitai/codex-orchestrator and use it as a
 Codex App-first orchestration workflow.
 
 If the Codex App skill from that repository is not installed, install it into
-~/.codex/skills/delegated-session-orchestrator and explain that this internal
-skill name is the Codex App component of codex-orchestrator.
+~/.codex/skills/codex-orchestrator.
 
 If the Go helper CLI is useful for durable ledger state, explain what it does
 and then install or build it if safe.
@@ -42,9 +41,8 @@ dry-run orchestration plan before doing mutating work.
 When durable state is useful, Codex can use the `codex-orchestrator` helper
 binary for a local ledger, `observe`, heartbeat reports, and routine checks.
 
-Naming note: **codex-orchestrator** is the product and repository name.
-**delegated-session-orchestrator** is the internal Codex App skill name used
-after installation.
+Naming note: **codex-orchestrator** is the product name, repository name,
+Codex App skill name, and helper CLI name.
 
 ## 🔥 The Problem
 
@@ -141,7 +139,7 @@ Codex should inspect this repository and then perform the relevant steps:
 
 ```bash
 # Install the Codex App skill when needed.
-cp -r codex-orchestrator ~/.codex/skills/delegated-session-orchestrator
+cp -r codex-orchestrator ~/.codex/skills/codex-orchestrator
 
 # Optionally install the helper when durable state is useful.
 scripts/install.sh
@@ -156,7 +154,7 @@ For release assets and shell completions, see
 [docs/distribution-package.md](docs/distribution-package.md).
 
 After setup, ask Codex App to use codex-orchestrator. Codex may invoke the
-installed internal skill when appropriate:
+installed skill when appropriate:
 
 ```
 Use codex-orchestrator to split this feature into bounded worktree sessions,
@@ -222,9 +220,13 @@ Overnight, the heartbeat catches Session C stuck at minute 22 with a clean commi
 
 ## 🪜 Loop Engineering Maturity Model
 
-`codex-orchestrator` is a practical **v1 loop**, not the final form of agentic
-software development. It sits between manual prompting and a fully persistent
-agent operating system.
+`codex-orchestrator` is a practical **v1 outer loop**, not the final form of
+agentic software development. It sits between manual prompting and a fully
+persistent agent operating system.
+
+Worker sessions still own the inner edit/test/fix loop. This project manages
+the outer engineering loop around them: task selection, isolation, monitoring,
+review, merge, cleanup, and continuation.
 
 | Level | Shape | What changes |
 |-------|-------|--------------|
@@ -241,10 +243,10 @@ can adopt today without running a custom daemon or changing their whole
 development platform. The next hard problems are durable state, routine
 composition, safety classification, and eval-driven improvement.
 
-The ambition is not to claim that a Codex skill is already a complete loop
-runtime. The ambition is to make the first useful loop concrete: bounded work,
-isolated execution, heartbeat inspection, honest proof labels, and review before
-merge.
+The ambition is not to claim that a Codex skill is already a complete Loop
+Engineering runtime. The ambition is to make the first useful outer loop
+concrete: bounded work, isolated execution, heartbeat inspection, honest proof
+labels, and review before merge.
 
 See [docs/v2-persistent-ledger-and-heartbeat.md](docs/v2-persistent-ledger-and-heartbeat.md)
 for the v2 durable ledger and heartbeat helper design, and

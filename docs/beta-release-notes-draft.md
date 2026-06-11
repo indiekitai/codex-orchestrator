@@ -48,9 +48,7 @@ Codex App in the repository you want to orchestrate and paste:
 I want to try codex-orchestrator in this repository.
 Read https://github.com/indiekitai/codex-orchestrator and use it as a Codex
 App-first orchestration workflow.
-Install the Codex App skill from this repository if needed. It is installed as
-delegated-session-orchestrator because that is the internal skill component of
-codex-orchestrator.
+Install the Codex App skill from this repository if needed.
 If the Go helper CLI is useful, explain what it does and install/build it if
 safe.
 Start with a dry run and do not push, deploy, delete worktrees, or make

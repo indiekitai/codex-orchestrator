@@ -1,9 +1,9 @@
 ---
-name: delegated-session-orchestrator
-description: Coordinate multiple Codex sessions or worktrees for large early-stage modules, feature batches, or project slices. Use when the user wants Codex to dispatch new sessions/subagents, run an autonomous session pipeline, monitor delegated work, merge completed branches, maintain a heartbeat/checkback loop, or turn broad development into bounded task contracts with review, gates, push, and worktree cleanup.
+name: codex-orchestrator
+description: Use when the user wants Codex App to run a supervised outer loop for multi-session development: plan bounded work, dispatch isolated worktree sessions, monitor with heartbeat and ledger truth, review/merge/push/cleanup, rescue stale tasks, and keep direct/proxy/local/blocked evidence honest.
 ---
 
-# Delegated Session Orchestrator
+# codex-orchestrator
 
 ## Assumptions And Configuration
 
@@ -27,6 +27,11 @@ surface for that environment, or report the tooling blocker before dispatching.
 ## Core Idea
 
 Use this skill when the best move is not one big implementation in the current thread, but a controlled pipeline of small independent sessions. The orchestrator owns decomposition, dispatch, monitoring, review, merge, push, and cleanup.
+
+This is a Codex App-first supervised outer loop. It is not a standalone daemon,
+a fully autonomous agent operating system, or a replacement for engineering
+judgment. Worker sessions still run their own edit/test/fix inner loops; this
+skill manages the project-level outer loop around those workers.
 
 This works best in early development or large-module buildout where many slices can move in parallel. It works poorly for hardware-heavy acceptance, production deploys, payment tests, or steps requiring frequent human observation; keep those serialized and explicit.
 

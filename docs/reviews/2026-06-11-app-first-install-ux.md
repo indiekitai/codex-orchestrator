@@ -8,8 +8,8 @@ Scope: beta install positioning for `codex-orchestrator`
 The install story is now explicitly Codex App-first:
 
 1. A new user should start by pasting the README bootstrap prompt into Codex App.
-2. Codex App reads the GitHub repository, installs the internal
-   `delegated-session-orchestrator` skill if needed, and explains the dry run.
+2. Codex App reads the GitHub repository, installs the `codex-orchestrator`
+   skill if needed, and explains the dry run.
 3. The Go helper binary is optional and exists to support durable ledger,
    `observe`, heartbeat reports, and routine checks.
 4. Homebrew is optional/later package-manager convenience, not a beta blocker

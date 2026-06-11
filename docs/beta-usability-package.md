@@ -36,8 +36,7 @@ Read https://github.com/indiekitai/codex-orchestrator and use it as a
 Codex App-first orchestration workflow.
 
 If the Codex App skill from that repository is not installed, install it into
-~/.codex/skills/delegated-session-orchestrator and explain that this internal
-skill name is the Codex App component of codex-orchestrator.
+~/.codex/skills/codex-orchestrator.
 
 If the Go helper CLI is useful for durable ledger state, explain what it does
 and then install or build it if safe. Do not require me to learn the CLI first.

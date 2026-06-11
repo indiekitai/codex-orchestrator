@@ -1,6 +1,6 @@
 # codex-orchestrator 路线图
 
-这份路线图用于说明 `codex-orchestrator` 从当前 skill/runbook 形态，逐步演进到持久化 loop、routine library、安全评估层，甚至更完整 agent orchestration runtime 的路径。
+这份路线图用于说明 `codex-orchestrator` 从当前 Codex App-first 外层循环形态，逐步演进到持久化 loop、routine library、安全评估层，甚至更完整 agent orchestration runtime 的路径。
 
 核心判断：
 
@@ -11,7 +11,10 @@
 
 ## 当前定位
 
-`codex-orchestrator` 现在是一个 Codex App orchestrator skill。
+`codex-orchestrator` 现在是一个 Codex App-first outer-loop orchestrator
+skill/helper。
+
+它不是完整的 Loop Engineering runtime。worker session 内部的改代码、跑测试、修复是内层循环；`codex-orchestrator` 管理的是外层工程循环：选任务、隔离 session、巡检、审查、合并、清理和继续推进。
 
 它适合做：
 
@@ -37,7 +40,7 @@
 推荐长期结构：
 
 ```text
-Codex App orchestrator skill
+Codex App outer-loop orchestrator skill
   - 拆任务
   - 创建/继续 Codex App sessions
   - 派发 worker prompt
