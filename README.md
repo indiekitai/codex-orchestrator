@@ -359,6 +359,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator status
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
+./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
@@ -416,6 +417,16 @@ review doc/artifact/self-review/evidence-label/docs-drift signals, recorded and
 suggested gates, residual risks, and `needsHuman` when evidence is missing. It
 does not merge, push, cleanup, dispatch, edit git state, or claim runtime,
 production, device, or direct worker proof.
+
+`pack consultation` converts a blocked, stale, decision-gated, or human-action
+ledger task into a concise local/static consultation request. The JSON report
+includes task metadata, observed local status, inferred blocker, attempted
+paths from task history and routine runs, recorded gates, evidence labels,
+required human input or physical action, decision options with tradeoffs, the
+next safe action, and whether to keep or clean the task branch/worktree. It does
+not dispatch, merge, push, cleanup, mutate the ledger, edit git state, call the
+network, or claim runtime, product, device, or direct proof; the actual decision
+or human action remains `blocked` outside the pack.
 
 Codex App worktree dispatch is App-first. Save the repository as a Codex App
 project before relying on project worktree sessions. If dispatch fails because

@@ -466,6 +466,72 @@ type MergeReadinessSignals struct {
 	Missing       []string `json:"missing,omitempty"`
 }
 
+type ConsultationRequestPack struct {
+	SchemaVersion             int                           `json:"schemaVersion"`
+	Command                   string                        `json:"command"`
+	GeneratedAt               string                        `json:"generatedAt"`
+	Status                    string                        `json:"status"`
+	EvidenceLabel             string                        `json:"evidenceLabel"`
+	Boundary                  string                        `json:"boundary"`
+	LedgerPath                string                        `json:"ledgerPath"`
+	RepoPath                  string                        `json:"repoPath"`
+	Task                      ConsultationTaskSummary       `json:"task"`
+	ObservedStatus            string                        `json:"observedStatus,omitempty"`
+	Blocker                   string                        `json:"blocker,omitempty"`
+	BlockedReason             string                        `json:"blockedReason,omitempty"`
+	AttemptedPaths            []ConsultationAttempt         `json:"attemptedPaths,omitempty"`
+	RecordedGates             []string                      `json:"recordedGates,omitempty"`
+	EvidenceLabels            []string                      `json:"evidenceLabels"`
+	RequiredHumanInput        []ConsultationHumanInput      `json:"requiredHumanInput"`
+	DecisionOptions           []ConsultationDecisionOption  `json:"decisionOptions"`
+	NextSafeAction            string                        `json:"nextSafeAction"`
+	BranchWorktreeDisposition ConsultationBranchDisposition `json:"branchWorktreeDisposition"`
+	NeedsHuman                bool                          `json:"needsHuman"`
+	ResidualRisks             []string                      `json:"residualRisks,omitempty"`
+	Evidence                  map[string][]string           `json:"evidence"`
+	ActionsTaken              []string                      `json:"actionsTaken"`
+	NextSuggestedAction       string                        `json:"nextSuggestedAction"`
+}
+
+type ConsultationTaskSummary struct {
+	ID                string `json:"id"`
+	Title             string `json:"title,omitempty"`
+	Status            string `json:"status"`
+	ThreadID          string `json:"threadId,omitempty"`
+	PendingWorktreeID string `json:"pendingWorktreeId,omitempty"`
+	Worktree          string `json:"worktree,omitempty"`
+	Branch            string `json:"branch,omitempty"`
+	BaseCommit        string `json:"baseCommit,omitempty"`
+}
+
+type ConsultationAttempt struct {
+	At           string `json:"at,omitempty"`
+	Type         string `json:"type,omitempty"`
+	Status       string `json:"status,omitempty"`
+	Note         string `json:"note,omitempty"`
+	Evidence     string `json:"evidence,omitempty"`
+	EvidenceType string `json:"evidenceType,omitempty"`
+}
+
+type ConsultationHumanInput struct {
+	Kind     string `json:"kind"`
+	Request  string `json:"request"`
+	Reason   string `json:"reason,omitempty"`
+	Required bool   `json:"required"`
+}
+
+type ConsultationDecisionOption struct {
+	Option   string `json:"option"`
+	Tradeoff string `json:"tradeoff"`
+}
+
+type ConsultationBranchDisposition struct {
+	Recommendation string `json:"recommendation"`
+	Reason         string `json:"reason"`
+	Branch         string `json:"branch,omitempty"`
+	Worktree       string `json:"worktree,omitempty"`
+}
+
 type githubReleaseView struct {
 	TagName         string               `json:"tagName"`
 	IsPrerelease    bool                 `json:"isPrerelease"`
@@ -545,6 +611,7 @@ Usage:
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
   codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--stale-after 15m]
   codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
+  codex-orchestrator pack consultation --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator validate-routines [--dir routines] [--json]
   codex-orchestrator run-routine pr-reviewer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine stale-task-rescuer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
@@ -651,8 +718,10 @@ _codex_orchestrator()
     pack)
       if [[ ${COMP_WORDS[2]} == "merge-readiness" ]]; then
         COMPREPLY=( $(compgen -W "--repo --ledger --task-id --write-report --json --help" -- "$cur") )
+      elif [[ ${COMP_WORDS[2]} == "consultation" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --ledger --task-id --write-report --json --help" -- "$cur") )
       else
-        COMPREPLY=( $(compgen -W "merge-readiness" -- "$cur") )
+        COMPREPLY=( $(compgen -W "merge-readiness consultation" -- "$cur") )
       fi
       ;;
     heartbeat)
@@ -802,7 +871,7 @@ case $state in
         ;;
       pack)
         if (( CURRENT == 3 )); then
-          _values 'subcommand' merge-readiness
+          _values 'subcommand' merge-readiness consultation
         else
           _values 'options' --repo --ledger --task-id --write-report --json --help
         fi
@@ -854,7 +923,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from dispatch' -a 'record reconcile'
-complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness consultation'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run add-failure'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from rules' -a 'propose'
@@ -1541,13 +1610,15 @@ func cmdStatus(args []string) error {
 
 func cmdPack(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: codex-orchestrator pack merge-readiness")
+		return errors.New("usage: codex-orchestrator pack merge-readiness|consultation")
 	}
 	switch args[0] {
 	case "merge-readiness":
 		return cmdPackMergeReadiness(args[1:])
+	case "consultation":
+		return cmdPackConsultation(args[1:])
 	case "help", "-h", "--help":
-		fmt.Println("usage: codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]")
+		fmt.Println("usage: codex-orchestrator pack merge-readiness|consultation --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]")
 		return nil
 	default:
 		return fmt.Errorf("unknown pack subcommand: %s", args[0])
@@ -1585,6 +1656,40 @@ func cmdPackMergeReadiness(args []string) error {
 		return printJSON(report)
 	}
 	fmt.Printf("Wrote merge-readiness pack: %s\n", *writeReport)
+	return nil
+}
+
+func cmdPackConsultation(args []string) error {
+	fs := flag.NewFlagSet("pack consultation", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	taskID := fs.String("task-id", "", "task id to inspect")
+	writeReport := fs.String("write-report", "", "write consultation request report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *taskID == "" {
+		return errors.New("pack consultation requires --task-id")
+	}
+	resolvedRepo := expandPath(*repo)
+	if resolvedRepo == "" {
+		resolvedRepo = "."
+	}
+	resolvedLedger := resolveDefaultLedgerPath(resolvedRepo, *ledgerPath, flagProvided(fs, "ledger"))
+	report, err := buildConsultationRequestPack(resolvedRepo, resolvedLedger, *taskID)
+	if err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote consultation request pack: %s\n", *writeReport)
 	return nil
 }
 
@@ -2794,6 +2899,470 @@ func finalizeMergeReadinessPack(report MergeReadinessPack) MergeReadinessPack {
 		report.NextSuggestedAction = "Resolve the blocked local/static evidence precondition, then regenerate the merge-readiness pack."
 	}
 	return report
+}
+
+func buildConsultationRequestPack(repoPath string, ledgerPath string, taskID string) (ConsultationRequestPack, error) {
+	report := newConsultationRequestPack(repoPath, ledgerPath, taskID)
+	ledger, err := loadLedger(ledgerPath)
+	if err != nil {
+		return report, err
+	}
+	report.RepoPath = ledger.ProjectRoot
+	if strings.TrimSpace(report.RepoPath) == "" {
+		report.RepoPath = repoPath
+	}
+	taskIndex := findTaskIndex(ledger.Tasks, taskID)
+	if taskIndex < 0 {
+		report.Status = "blocked"
+		report.Blocker = "Task not found in ledger: " + taskID
+		report.BlockedReason = "task not found in ledger"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], report.Blocker)
+		report.RequiredHumanInput = append(report.RequiredHumanInput, ConsultationHumanInput{
+			Kind:     "ledger",
+			Request:  "Provide a valid ledger task id or record the blocked task before requesting consultation.",
+			Reason:   "The consultation pack is intentionally local/static and cannot reconstruct missing task state.",
+			Required: true,
+		})
+		report.BranchWorktreeDisposition = ConsultationBranchDisposition{
+			Recommendation: "not-applicable",
+			Reason:         "No ledger task record exists, so no branch or worktree disposition can be inferred.",
+		}
+		report.DecisionOptions = defaultConsultationDecisionOptions(report.BranchWorktreeDisposition)
+		return finalizeConsultationRequestPack(report), nil
+	}
+
+	task := ledger.Tasks[taskIndex]
+	report.Task = consultationTaskSummary(task)
+	report.RecordedGates = append([]string(nil), task.Gates...)
+	report.EvidenceLabels = consultationEvidenceLabels(task, ledger.RoutineRuns)
+	report.AttemptedPaths = consultationAttempts(task, ledger.RoutineRuns)
+	report.ActionsTaken = append(report.ActionsTaken, "Loaded ledger task metadata, task history, recorded gates, and recent routine-run evidence")
+	report.Evidence["local"] = append(report.Evidence["local"], "Loaded local ledger task record: "+task.ID)
+	if len(task.Gates) > 0 {
+		report.Evidence["local"] = append(report.Evidence["local"], "Recorded gates: "+strings.Join(task.Gates, " | "))
+	}
+
+	observation := inspectTask(task, 15*time.Minute)
+	report.ObservedStatus = observation.Status
+	report.ActionsTaken = append(report.ActionsTaken, "Classified task state using local ledger and git worktree metadata")
+	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Observed task status from local metadata: %s (%s).", observation.Status, observation.Signal))
+	if observation.Note != "" {
+		report.Evidence["local"] = append(report.Evidence["local"], "Observation note: "+observation.Note)
+	}
+
+	report.Blocker = consultationBlocker(task, observation, ledger.RoutineRuns)
+	if report.Blocker != "" {
+		report.BlockedReason = report.Blocker
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], report.Blocker)
+	}
+	report.RequiredHumanInput = consultationHumanInputs(task, observation, ledger.RoutineRuns, report.Blocker)
+	report.BranchWorktreeDisposition = consultationBranchDisposition(task, observation)
+	report.DecisionOptions = defaultConsultationDecisionOptions(report.BranchWorktreeDisposition)
+	report.NextSafeAction = consultationNextSafeAction(task, observation, report.RequiredHumanInput)
+	report.NextSuggestedAction = report.NextSafeAction
+
+	if observation.Status != "blocked" && observation.Status != "stale-needs-inspection" && !consultationNeedsHuman(task, ledger.RoutineRuns) {
+		report.Status = "passed"
+		report.ResidualRisks = append(report.ResidualRisks, "Task is not locally classified as blocked or stale; this pack is still only a consultation draft, not proof of task correctness.")
+	} else {
+		report.Status = "blocked"
+	}
+	report.NeedsHuman = len(report.RequiredHumanInput) > 0 || report.Status == "blocked"
+	report.ResidualRisks = append(report.ResidualRisks,
+		"Actual product decision or human/physical action remains outside this local/static pack.",
+		"No direct runtime, production, device, payment, hardware, network, or Codex App automation proof was collected.",
+	)
+	return finalizeConsultationRequestPack(report), nil
+}
+
+func newConsultationRequestPack(repoPath string, ledgerPath string, taskID string) ConsultationRequestPack {
+	return ConsultationRequestPack{
+		SchemaVersion: 1,
+		Command:       "pack consultation",
+		GeneratedAt:   nowISO(),
+		Status:        "blocked",
+		EvidenceLabel: "local/static",
+		Boundary:      "This pack is local/static consultation planning evidence only. It reads local ledger/worktree metadata and does not dispatch, merge, push, cleanup, edit ledger, edit git state, call the network, or claim direct runtime/product/device proof.",
+		LedgerPath:    ledgerPath,
+		RepoPath:      repoPath,
+		Task: ConsultationTaskSummary{
+			ID: taskID,
+		},
+		EvidenceLabels: []string{"local/static", "blocked"},
+		RequiredHumanInput: []ConsultationHumanInput{{
+			Kind:     "decision",
+			Request:  "Review the local/static consultation pack and provide the missing decision or human action.",
+			Required: true,
+		}},
+		DecisionOptions: []ConsultationDecisionOption{},
+		NextSafeAction:  "Send this consultation request to the user or reviewer; do not dispatch, merge, push, or cleanup until the missing decision is answered.",
+		BranchWorktreeDisposition: ConsultationBranchDisposition{
+			Recommendation: "keep",
+			Reason:         "Default to preserving task state until a human reviews the blocker.",
+		},
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Loaded local consultation request pack inputs",
+		},
+		NextSuggestedAction: "Send this consultation request to the user or reviewer; do not dispatch, merge, push, or cleanup until the missing decision is answered.",
+	}
+}
+
+func finalizeConsultationRequestPack(report ConsultationRequestPack) ConsultationRequestPack {
+	report.AttemptedPaths = uniqueConsultationAttempts(report.AttemptedPaths)
+	report.RecordedGates = uniqueSortedStrings(report.RecordedGates)
+	report.EvidenceLabels = uniqueSortedStrings(report.EvidenceLabels)
+	if len(report.EvidenceLabels) == 0 {
+		report.EvidenceLabels = []string{"local/static", "blocked"}
+	}
+	report.RequiredHumanInput = uniqueConsultationHumanInputs(report.RequiredHumanInput)
+	report.DecisionOptions = uniqueConsultationDecisionOptions(report.DecisionOptions)
+	report.ResidualRisks = uniqueSortedStrings(report.ResidualRisks)
+	report.ActionsTaken = uniqueSortedStrings(report.ActionsTaken)
+	report.Evidence = normalizedEvidence(report.Evidence)
+	if report.BlockedReason == "" && report.Blocker != "" {
+		report.BlockedReason = report.Blocker
+	}
+	if report.NextSafeAction == "" {
+		report.NextSafeAction = "Send this consultation request to the user or reviewer; do not dispatch, merge, push, or cleanup until the missing decision is answered."
+	}
+	if report.NextSuggestedAction == "" {
+		report.NextSuggestedAction = report.NextSafeAction
+	}
+	report.NeedsHuman = report.NeedsHuman || len(report.RequiredHumanInput) > 0 || report.Status == "blocked"
+	return report
+}
+
+func consultationTaskSummary(task Task) ConsultationTaskSummary {
+	return ConsultationTaskSummary{
+		ID:                task.ID,
+		Title:             task.Title,
+		Status:            task.Status,
+		ThreadID:          task.ThreadID,
+		PendingWorktreeID: task.PendingWorktreeID,
+		Worktree:          task.Worktree,
+		Branch:            task.Branch,
+		BaseCommit:        task.BaseCommit,
+	}
+}
+
+func consultationAttempts(task Task, runs []RoutineRun) []ConsultationAttempt {
+	attempts := []ConsultationAttempt{}
+	for _, event := range task.History {
+		attempt := ConsultationAttempt{
+			At:       strings.TrimSpace(event["at"]),
+			Type:     strings.TrimSpace(event["type"]),
+			Status:   firstNonEmpty(strings.TrimSpace(event["status"]), strings.TrimSpace(event["result"])),
+			Note:     strings.TrimSpace(event["note"]),
+			Evidence: strings.TrimSpace(event["evidence"]),
+		}
+		if attempt.Type != "" || attempt.Status != "" || attempt.Note != "" || attempt.Evidence != "" {
+			attempts = append(attempts, attempt)
+		}
+	}
+	if len(task.LastObservation) > 0 {
+		attempt := ConsultationAttempt{
+			At:     strings.TrimSpace(task.LastObservation["at"]),
+			Type:   "last-observation",
+			Status: firstNonEmpty(strings.TrimSpace(task.LastObservation["status"]), strings.TrimSpace(task.LastObservation["result"])),
+			Note:   strings.TrimSpace(task.LastObservation["note"]),
+		}
+		if attempt.Status != "" || attempt.Note != "" {
+			attempts = append(attempts, attempt)
+		}
+	}
+	for _, run := range runs {
+		if run.TaskID != task.ID {
+			continue
+		}
+		attempts = append(attempts, ConsultationAttempt{
+			At:           run.At,
+			Type:         "routine:" + run.RoutineID,
+			Status:       run.Status,
+			Note:         firstNonEmpty(run.BlockedReason, run.NextSuggestedAction),
+			Evidence:     strings.Join(run.ActionsTaken, " | "),
+			EvidenceType: strings.Join(nonEmptyEvidenceLabels(run.Evidence), ","),
+		})
+	}
+	return attempts
+}
+
+func consultationEvidenceLabels(task Task, runs []RoutineRun) []string {
+	labels := []string{"local/static", "blocked"}
+	for _, label := range evidenceLabelsFromTask(task) {
+		labels = append(labels, label)
+	}
+	for _, run := range runs {
+		if run.TaskID != task.ID {
+			continue
+		}
+		labels = append(labels, nonEmptyEvidenceLabels(run.Evidence)...)
+		if run.Status == "blocked" || run.BlockedReason != "" {
+			labels = append(labels, "blocked")
+		}
+	}
+	return uniqueSortedStrings(labels)
+}
+
+func evidenceLabelsFromTask(task Task) []string {
+	labels := []string{}
+	if len(task.Evidence) == 0 {
+		return labels
+	}
+	for key, value := range task.Evidence {
+		switch typed := value.(type) {
+		case string:
+			if key == "expected" && strings.TrimSpace(typed) != "" {
+				labels = append(labels, strings.TrimSpace(typed))
+			}
+		}
+	}
+	return labels
+}
+
+func nonEmptyEvidenceLabels(evidence map[string][]string) []string {
+	labels := []string{}
+	for _, label := range []string{"direct", "proxy", "local", "blocked"} {
+		if len(evidence[label]) > 0 {
+			labels = append(labels, label)
+		}
+	}
+	return labels
+}
+
+func consultationBlocker(task Task, observation Observation, runs []RoutineRun) string {
+	for index := len(runs) - 1; index >= 0; index-- {
+		run := runs[index]
+		if run.TaskID == task.ID && strings.TrimSpace(run.BlockedReason) != "" {
+			return strings.TrimSpace(run.BlockedReason)
+		}
+	}
+	for index := len(task.History) - 1; index >= 0; index-- {
+		event := task.History[index]
+		status := firstNonEmpty(event["status"], event["result"])
+		note := strings.TrimSpace(event["note"])
+		if status == "blocked" && note != "" {
+			return note
+		}
+		if containsAnyFold(note, []string{"blocked", "blocker", "needs human", "human action", "device", "physical", "product decision", "owner decision"}) {
+			return note
+		}
+	}
+	if strings.TrimSpace(task.LastObservation["note"]) != "" && (task.Status == "blocked" || observation.Status == "blocked") {
+		return strings.TrimSpace(task.LastObservation["note"])
+	}
+	if observation.Status == "blocked" || observation.Status == "stale-needs-inspection" {
+		return observation.Note
+	}
+	if task.Status == "blocked" {
+		return "Task status is blocked, but no detailed blocked reason is recorded in the ledger."
+	}
+	return ""
+}
+
+func consultationHumanInputs(task Task, observation Observation, runs []RoutineRun, blocker string) []ConsultationHumanInput {
+	inputs := []ConsultationHumanInput{}
+	combined := strings.Join([]string{
+		task.ID,
+		task.Title,
+		task.Status,
+		blocker,
+		observation.Note,
+		consultationHistoryText(task, runs),
+	}, "\n")
+	switch {
+	case containsAnyFold(combined, []string{"device", "hardware", "physical", "pax", "printer", "card reader", "phone", "simulator", "emulator", "manual action", "human action", "人", "设备", "硬件", "刷卡", "打印机"}):
+		inputs = append(inputs, ConsultationHumanInput{
+			Kind:     "human-physical-action",
+			Request:  "Perform or confirm the required human/device action, then report the observable result back to the orchestrator.",
+			Reason:   firstNonEmpty(blocker, "Ledger/history mentions a human, physical, or device-dependent action."),
+			Required: true,
+		})
+	case containsAnyFold(combined, []string{"product decision", "owner decision", "decision", "approve", "approval", "choose", "tradeoff", "scope", "用户决定", "产品决策", "确认"}):
+		inputs = append(inputs, ConsultationHumanInput{
+			Kind:     "product-decision",
+			Request:  "Choose the product or scope direction before the worker continues.",
+			Reason:   firstNonEmpty(blocker, "Ledger/history indicates that the next implementation path depends on a decision."),
+			Required: true,
+		})
+	}
+	if observation.Signal == "pending-setup-stale" || observation.Signal == "missing-worktree-stale" {
+		inputs = append(inputs, ConsultationHumanInput{
+			Kind:     "setup-decision",
+			Request:  "Decide whether to re-dispatch this task, abandon it, or wait for setup evidence.",
+			Reason:   observation.Note,
+			Required: true,
+		})
+	}
+	if blocker != "" && len(inputs) == 0 {
+		inputs = append(inputs, ConsultationHumanInput{
+			Kind:     "blocker-clarification",
+			Request:  "Answer the blocker or provide the missing input before further implementation.",
+			Reason:   blocker,
+			Required: true,
+		})
+	}
+	for _, run := range runs {
+		if run.TaskID == task.ID && run.NeedsHuman {
+			inputs = append(inputs, ConsultationHumanInput{
+				Kind:     "routine-review",
+				Request:  "Review the routine result and provide the missing input it requested.",
+				Reason:   firstNonEmpty(run.BlockedReason, run.NextSuggestedAction),
+				Required: true,
+			})
+		}
+	}
+	if len(inputs) == 0 {
+		inputs = append(inputs, ConsultationHumanInput{
+			Kind:     "review",
+			Request:  "Review this local/static pack before deciding whether the task should continue, wait, or be cleaned up.",
+			Reason:   "No specific human action was inferable from local metadata.",
+			Required: true,
+		})
+	}
+	return inputs
+}
+
+func consultationHistoryText(task Task, runs []RoutineRun) string {
+	parts := []string{}
+	for _, event := range task.History {
+		parts = append(parts, event["type"], event["status"], event["result"], event["note"])
+	}
+	for _, run := range runs {
+		if run.TaskID == task.ID {
+			parts = append(parts, run.RoutineID, run.Status, run.BlockedReason, run.NextSuggestedAction, strings.Join(run.ActionsTaken, " "))
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func consultationNeedsHuman(task Task, runs []RoutineRun) bool {
+	if task.Status == "blocked" {
+		return true
+	}
+	for _, run := range runs {
+		if run.TaskID == task.ID && (run.NeedsHuman || run.Status == "blocked") {
+			return true
+		}
+	}
+	return false
+}
+
+func consultationBranchDisposition(task Task, observation Observation) ConsultationBranchDisposition {
+	disposition := ConsultationBranchDisposition{
+		Recommendation: "keep",
+		Reason:         "Keep the task branch/worktree until the consultation decision is resolved.",
+		Branch:         task.Branch,
+		Worktree:       task.Worktree,
+	}
+	if task.Worktree == "" && task.Branch == "" {
+		disposition.Recommendation = "not-applicable"
+		disposition.Reason = "No branch or worktree is recorded in the ledger."
+		return disposition
+	}
+	if observation.Status == "cleanup-needed" {
+		disposition.Recommendation = "clean-after-review"
+		disposition.Reason = "The task is terminal but the worktree still exists; cleanup should happen only after explicit review."
+		return disposition
+	}
+	if observation.Status == "completed-unreviewed" {
+		disposition.Recommendation = "keep-until-review"
+		disposition.Reason = "The task appears reviewable; preserve branch/worktree until review and merge/cleanup decisions are separate."
+		return disposition
+	}
+	if observation.Status == "blocked" || observation.Status == "stale-needs-inspection" {
+		disposition.Recommendation = "keep"
+		disposition.Reason = "The task is blocked or stale; preserving the branch/worktree avoids losing local evidence before the human decision."
+		return disposition
+	}
+	return disposition
+}
+
+func defaultConsultationDecisionOptions(disposition ConsultationBranchDisposition) []ConsultationDecisionOption {
+	options := []ConsultationDecisionOption{
+		{
+			Option:   "Answer the blocker and continue in the same task branch/worktree.",
+			Tradeoff: "Preserves context and local evidence, but waits for the missing decision or human action before more implementation.",
+		},
+		{
+			Option:   "Pause the task and keep the branch/worktree unchanged.",
+			Tradeoff: "Avoids unsafe progress while the decision is pending, but consumes review/orchestration attention.",
+		},
+		{
+			Option:   "Abandon or clean the branch/worktree only after explicit review.",
+			Tradeoff: "Frees local state, but may discard evidence or worker context if done before the blocker is resolved.",
+		},
+	}
+	if disposition.Recommendation == "clean-after-review" {
+		options = append([]ConsultationDecisionOption{{
+			Option:   "Clean the terminal task branch/worktree after confirming no follow-up is needed.",
+			Tradeoff: "Reduces local clutter, but should remain separate from any merge/push decision.",
+		}}, options...)
+	}
+	return options
+}
+
+func consultationNextSafeAction(task Task, observation Observation, inputs []ConsultationHumanInput) string {
+	if len(inputs) > 0 {
+		return fmt.Sprintf("Send the consultation request for %s and wait for %s before continuing; do not dispatch, merge, push, or cleanup in this command.", task.ID, inputs[0].Kind)
+	}
+	if observation.Status == "cleanup-needed" {
+		return "Confirm cleanup is safe in a separate review step; this command did not clean the branch or worktree."
+	}
+	return "Review this local/static consultation pack, then choose whether to continue, pause, or clean the task in a separate step."
+}
+
+func uniqueConsultationAttempts(attempts []ConsultationAttempt) []ConsultationAttempt {
+	seen := map[string]bool{}
+	out := []ConsultationAttempt{}
+	for _, attempt := range attempts {
+		key := strings.Join([]string{attempt.At, attempt.Type, attempt.Status, attempt.Note, attempt.Evidence, attempt.EvidenceType}, "\x00")
+		if key == "\x00\x00\x00\x00\x00" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, attempt)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].At == out[j].At {
+			return out[i].Type < out[j].Type
+		}
+		return out[i].At < out[j].At
+	})
+	return out
+}
+
+func uniqueConsultationHumanInputs(inputs []ConsultationHumanInput) []ConsultationHumanInput {
+	seen := map[string]bool{}
+	out := []ConsultationHumanInput{}
+	for _, input := range inputs {
+		key := strings.Join([]string{input.Kind, input.Request, input.Reason, strconv.FormatBool(input.Required)}, "\x00")
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, input)
+	}
+	return out
+}
+
+func uniqueConsultationDecisionOptions(options []ConsultationDecisionOption) []ConsultationDecisionOption {
+	seen := map[string]bool{}
+	out := []ConsultationDecisionOption{}
+	for _, option := range options {
+		key := option.Option + "\x00" + option.Tradeoff
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, option)
+	}
+	return out
 }
 
 func mergeReadinessTaskSummary(task Task) MergeReadinessTaskSummary {

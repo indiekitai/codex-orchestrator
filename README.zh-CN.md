@@ -312,6 +312,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator status
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
+./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
@@ -365,6 +366,15 @@ self-review/evidence-label/docs-drift 信号、已记录 gates、建议复跑 ga
 residual risks，以及证据缺失时的 `needsHuman`。它不会 merge、push、cleanup、
 dispatch、修改 git state，也不会声称 runtime、production、device 或 direct worker
 proof。
+
+`pack consultation` 会把 blocked、stale、需要产品决策或需要人做物理动作的
+ledger task 转成简洁的 local/static 求助包。JSON report 会包含 task metadata、
+本地观察状态、推断 blocker、来自 task history 和 routine runs 的 attempted
+paths、已记录 gates、evidence labels、需要人的输入或物理动作、带取舍的决策选项、
+next safe action，以及 task branch/worktree 应该保留还是清理。它不会 dispatch、
+merge、push、cleanup、修改 ledger、修改 git state、联网，也不会声称 runtime、
+product、device 或 direct proof；真正的决策或人的动作仍然是 pack 外部的
+`blocked` 项。
 
 Codex App worktree 派发是 App-first。要用 project worktree session 前，先确认
 这个仓库已经保存为 Codex App project。如果因为 unknown project、没有 saved

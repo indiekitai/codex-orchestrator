@@ -1745,6 +1745,160 @@ func TestPackMergeReadinessFailsForbiddenPathCheck(t *testing.T) {
 	}
 }
 
+func TestPackConsultationSummarizesBlockedLedgerTask(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	reportPath := filepath.Join(root, "reports", "consultation.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/blocked", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "CONSULT-BLOCKED",
+		"--title", "Blocked owner decision",
+		"--thread-id", "thread_blocked",
+		"--worktree", worker,
+		"--branch", "codex/blocked",
+		"--base-commit", base,
+		"--allowed", "cmd/codex-orchestrator/**",
+		"--forbidden", ".github/**",
+		"--gate", "go test ./...",
+		"--evidence", "local",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdAppendEvent([]string{
+		"--ledger", ledger,
+		"--type", "blocked",
+		"--task-id", "CONSULT-BLOCKED",
+		"--status", "blocked",
+		"--note", "Blocked on product decision: choose strict cleanup wording before implementation continues.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordRoutineRun([]string{
+		"--ledger", ledger,
+		"--routine", "docs-drift-checker",
+		"--task-id", "CONSULT-BLOCKED",
+		"--status", "blocked",
+		"--evidence-local", "reviewed README and roadmap wording",
+		"--evidence-blocked", "owner decision still required",
+		"--action", "checked local docs",
+		"--next", "ask owner to pick wording",
+		"--needs-human",
+		"--blocked-reason", "Product decision required before cleanup wording can be finalized.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cmdPackConsultation([]string{"--ledger", ledger, "--task-id", "CONSULT-BLOCKED", "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report ConsultationRequestPack
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatalf("expected consultation JSON, got %q: %v", string(data), err)
+	}
+	if report.Command != "pack consultation" || report.Status != "blocked" || !report.NeedsHuman {
+		t.Fatalf("expected blocked consultation pack needing human, got %#v", report)
+	}
+	if report.Task.ID != "CONSULT-BLOCKED" || report.Task.Title != "Blocked owner decision" || report.Task.ThreadID != "thread_blocked" {
+		t.Fatalf("expected task metadata, got %#v", report.Task)
+	}
+	if !strings.Contains(report.BlockedReason, "Product decision required") {
+		t.Fatalf("expected routine blocked reason, got %q", report.BlockedReason)
+	}
+	if len(report.AttemptedPaths) < 3 {
+		t.Fatalf("expected history and routine attempts, got %#v", report.AttemptedPaths)
+	}
+	if got := strings.Join(report.RecordedGates, "\n"); !strings.Contains(got, "go test ./...") {
+		t.Fatalf("expected recorded gate, got %#v", report.RecordedGates)
+	}
+	if got := strings.Join(report.EvidenceLabels, "\n"); !strings.Contains(got, "local") || !strings.Contains(got, "blocked") {
+		t.Fatalf("expected local/blocked evidence labels, got %#v", report.EvidenceLabels)
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 {
+		t.Fatalf("expected no direct/proxy evidence, got %#v", report.Evidence)
+	}
+	if got := report.RequiredHumanInput[0].Kind; got != "product-decision" && got != "routine-review" {
+		t.Fatalf("expected product or routine human request, got %#v", report.RequiredHumanInput)
+	}
+	if len(report.DecisionOptions) < 3 {
+		t.Fatalf("expected decision options, got %#v", report.DecisionOptions)
+	}
+	if report.BranchWorktreeDisposition.Recommendation != "keep" {
+		t.Fatalf("expected keep disposition for blocked task, got %#v", report.BranchWorktreeDisposition)
+	}
+	if !strings.Contains(report.NextSafeAction, "CONSULT-BLOCKED") || !strings.Contains(report.Boundary, "does not dispatch, merge, push, cleanup, edit ledger, edit git state") {
+		t.Fatalf("expected conservative next action and boundary, next=%q boundary=%q", report.NextSafeAction, report.Boundary)
+	}
+}
+
+func TestPackConsultationDetectsHumanDeviceAction(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/device", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "CONSULT-DEVICE",
+		"--title", "PAX device action required",
+		"--worktree", worker,
+		"--branch", "codex/device",
+		"--base-commit", base,
+		"--gate", "go test ./...",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdAppendEvent([]string{
+		"--ledger", ledger,
+		"--type", "blocked",
+		"--task-id", "CONSULT-DEVICE",
+		"--status", "blocked",
+		"--note", "Needs human action on physical PAX device before the worker can continue.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	output := captureStdout(t, func() error {
+		return cmdPackConsultation([]string{"--ledger", ledger, "--task-id", "CONSULT-DEVICE", "--json"})
+	})
+	var report ConsultationRequestPack
+	if err := json.Unmarshal([]byte(output), &report); err != nil {
+		t.Fatalf("expected consultation JSON, got %q: %v", output, err)
+	}
+	foundDeviceInput := false
+	for _, input := range report.RequiredHumanInput {
+		if input.Kind == "human-physical-action" && strings.Contains(input.Request, "human/device action") {
+			foundDeviceInput = true
+		}
+	}
+	if !foundDeviceInput {
+		t.Fatalf("expected human/device request, got %#v", report.RequiredHumanInput)
+	}
+	if !strings.Contains(report.Blocker, "PAX device") {
+		t.Fatalf("expected PAX blocker, got %q", report.Blocker)
+	}
+	if report.BranchWorktreeDisposition.Recommendation != "keep" || report.BranchWorktreeDisposition.Branch != "codex/device" {
+		t.Fatalf("expected keep branch/worktree disposition, got %#v", report.BranchWorktreeDisposition)
+	}
+	if report.Status != "blocked" || report.Task.Status != "blocked" {
+		t.Fatalf("expected ledger blocker to make the consultation pack blocked, got status=%q task=%#v observed=%q", report.Status, report.Task, report.ObservedStatus)
+	}
+}
+
 func TestRunStaleTaskRescuerRoutineWritesPassedReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
