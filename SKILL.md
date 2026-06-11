@@ -243,12 +243,15 @@ ledger. It parses the local `run-routine` command surface from
 `cmd/codex-orchestrator/main.go`, compares runnable routine IDs against
 `routines/*.json`, and checks `README.md`, `README.zh-CN.md`, `SKILL.md`,
 `docs/routines/README.md`, `docs/v2-usage.md`, and `docs/roadmap.md` when
-present for obvious missing references or stale status text. It classifies
-missing specs or docs mentions as `failed`, missing repository/source/spec
-access as `blocked`, and a clean static comparison as `passed`. Its MVP report
-uses only `local` and `blocked` evidence; it does not stage, commit, merge,
-push, tag, release, clean worktrees, dispatch sessions, mutate the ledger, or
-claim runtime proof.
+present for obvious missing references or stale status text. It also scans
+`docs/reviews/*.md` for accepted or merged central-impact task notes that
+mention command/routine/source changes but do not record a central docs update
+or explicit docs-drift decision. It classifies missing specs, docs mentions, or
+post-merge docs-drift guard warnings as `failed`, missing
+repository/source/spec/review-doc access as `blocked`, and a clean static
+comparison as `passed`. Its MVP report uses only `local` and `blocked`
+evidence; it does not stage, commit, merge, push, tag, release, clean
+worktrees, dispatch sessions, mutate the ledger, or claim runtime proof.
 
 The evidence label auditor runner is read-only and does not load or update the
 ledger. It scans explicit repo-local docs, review/handoff notes, routine specs,

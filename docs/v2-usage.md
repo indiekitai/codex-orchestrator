@@ -257,6 +257,14 @@ task. The checklist can fail clear path-boundary violations and warn on missing
 local signals, but it does not merge, push, clean, dispatch, or replace human
 review.
 
+`docs-drift-checker` stays local/static. It compares runnable routines,
+`routines/*.json`, key docs, and roadmap status text, then scans
+`docs/reviews/*.md` for accepted or merged central-impact task notes that
+mention command/routine/source changes without a central docs update or
+explicit docs-drift decision. It reports those as `local` post-merge
+docs-drift guard warnings only; it does not mutate git, ledger, worktrees,
+sessions, releases, or external systems.
+
 `evidence-label-auditor` stays local/static. It scans repo docs, review and
 handoff notes, routine specs, routine reports, and ledger-shaped JSON for
 deterministic `ELA001`-`ELA010` findings, including weak local/static/proxy

@@ -342,8 +342,11 @@ proof；这个 MVP 使用 `local`、`proxy` 或 `blocked` 证据。
 文档漂移，不读取或修改 ledger。它从 `cmd/codex-orchestrator/main.go` 解析
 `run-routine` 命令面，把可运行 routine ID 与 `routines/*.json` 对齐，并扫描
 `README.md`、`README.zh-CN.md`、`SKILL.md`、`docs/routines/README.md`、
-`docs/v2-usage.md`，以及存在时的 `docs/roadmap.md`，查找明显缺失的 routine 引用或过期状态文字。缺少文档引用或
-缺少 spec 时返回 `failed`；仓库、源码或 spec 目录无法检查时返回 `blocked`。它不会
+`docs/v2-usage.md`，以及存在时的 `docs/roadmap.md`，查找明显缺失的 routine
+引用或过期状态文字。它还会扫描 `docs/reviews/*.md`，如果已接受或已合并的任务记录
+提到 command / routine / source 这类会影响中央文档的改动，却没有记录中央文档更新
+或明确的 docs-drift 决策，就返回本地静态告警。缺少文档引用、缺少 spec，或命中
+post-merge docs-drift guard 时返回 `failed`；仓库、源码、spec 目录或 review 文档无法检查时返回 `blocked`。它不会
 stage、commit、merge、push、tag、release、清理 worktree、派发 session、修改
 ledger，也不会声称 runtime proof；这个 MVP 使用 `local` 或 `blocked` 证据。
 

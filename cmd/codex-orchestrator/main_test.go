@@ -1756,6 +1756,67 @@ func TestRunDocsDriftCheckerRoutineFailsOnMissingDocReference(t *testing.T) {
 	}
 }
 
+func TestRunDocsDriftCheckerRoutineFailsOnPostMergeDocsDriftGuardWarning(t *testing.T) {
+	root := t.TempDir()
+	project := createDocsDriftFixture(t, root, []string{"pr-reviewer", "docs-drift-checker"})
+	review := filepath.Join(project, "docs", "reviews", "accepted-routine-runner.md")
+	if err := os.MkdirAll(filepath.Dir(review), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(review, []byte(`# Review
+
+Status: accepted merge.
+Changed files:
+- cmd/codex-orchestrator/main.go
+- routines/new-routine.json
+
+Self-review: local evidence only.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runDocsDriftCheckerRoutine(project)
+	if report.Status != "failed" {
+		t.Fatalf("expected failed report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	if !strings.Contains(local, "docs/reviews/accepted-routine-runner.md may describe an accepted/merged central-impact task") {
+		t.Fatalf("expected post-merge docs drift warning, got:\n%s", local)
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
+		t.Fatalf("expected local-only failed evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunDocsDriftCheckerRoutineAllowsPostMergeDocsDriftDecision(t *testing.T) {
+	root := t.TempDir()
+	project := createDocsDriftFixture(t, root, []string{"pr-reviewer", "docs-drift-checker"})
+	review := filepath.Join(project, "docs", "reviews", "accepted-routine-runner.md")
+	if err := os.MkdirAll(filepath.Dir(review), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(review, []byte(`# Review
+
+Status: accepted merge.
+Changed files:
+- cmd/codex-orchestrator/main.go
+- routines/new-routine.json
+
+Docs drift: README.md and docs/routines/README.md were updated, and the proof remains local/static.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runDocsDriftCheckerRoutine(project)
+	if report.Status != "passed" {
+		t.Fatalf("expected passed report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	if !strings.Contains(local, "docs/reviews post-merge docs drift guard found no accepted/merged central-impact task notes missing a docs update decision") {
+		t.Fatalf("expected post-merge guard pass evidence, got:\n%s", local)
+	}
+}
+
 func TestRunDocsDriftCheckerRoutineBlockedWhenSourceMissing(t *testing.T) {
 	root := t.TempDir()
 	report := runDocsDriftCheckerRoutine(root)
