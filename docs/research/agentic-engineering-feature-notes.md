@@ -35,7 +35,43 @@ The next useful features should make orchestration outputs more standard and
 auditable. The goal is not to add more agents. The goal is to make each agent's
 handoff easier to trust, reject, or escalate.
 
-### 1. Merge-Readiness Pack
+### 1. Ledger-Enforced Dispatch Closure
+
+Purpose: make task dispatch and setup reconciliation durable immediately,
+instead of leaving pending worktree ids and worker setup facts in chat text.
+
+Possible command shape:
+
+```bash
+codex-orchestrator dispatch record --task-id TASK --pending-worktree-id ID
+codex-orchestrator dispatch reconcile --task-id TASK
+```
+
+Expected task state:
+
+- task id and title;
+- pending worktree id returned by Codex App, when available;
+- resolved thread id, worktree path, branch, and base commit;
+- allowed paths and forbidden paths;
+- expected gates;
+- current lifecycle state: pending setup, active, dirty-uncommitted,
+  completed-unreviewed, blocked, merged, or cleaned;
+- latest setup event and latest reviewer event.
+
+Evidence boundary:
+
+- This is `local/static` orchestration state.
+- A pending worktree id is not direct proof that a worker is running.
+- A reconciled worktree path is not proof that the task is correct.
+
+Why it matters:
+
+- Real TastyFuture runs still relied on heartbeat text and chat summaries for
+  pending ids and setup facts.
+- Heartbeats should recover from ledger truth before reading stale prompt text.
+- This is the base layer for reliable long-running App-first orchestration.
+
+### 2. Merge-Readiness Pack
 
 Purpose: turn "the worker says it is done" into a standardized review packet.
 
@@ -71,8 +107,10 @@ Why it matters:
 - It matches the SASE "Merge-Readiness Pack" shape.
 - It gives future UI/status layers a concrete object to render.
 - It reduces dependence on long chat handoffs.
+- It captures the orchestrator's acceptance reasoning, not only the worker's
+  self-review.
 
-### 2. Consultation Request Pack
+### 3. Consultation Request Pack
 
 Purpose: turn a blocker or human decision into a concise, actionable request.
 
@@ -107,7 +145,50 @@ Why it matters:
   a product decision.
 - It gives the human a better interface than a scattered chat explanation.
 
-### 3. Transcript / Heartbeat Failure Eval
+### 4. Project-Aware Roadmap Scorer
+
+Purpose: prevent the loop from drifting into low-value readiness pages just
+because they are safe and easy to dispatch.
+
+Possible command:
+
+```bash
+codex-orchestrator roadmap score --repo .
+```
+
+Expected inputs:
+
+- configurable project source-of-truth docs, such as `PROGRESS.md`,
+  roadmap files, review docs, or project-specific planning docs;
+- existing ledger state;
+- recent cleaned/merged/blocked tasks;
+- forbidden external/hardware/provider/pre/prod boundaries.
+
+Expected output:
+
+- candidate task id/title;
+- source document and evidence snippet;
+- classification: `vertical-completion`, `runtime-proof`,
+  `blocked-removal`, `owner-gated`, or `shallow-risk`;
+- write-set risk;
+- external dependency risk;
+- suggested action: dispatch, ask owner, block, or skip.
+
+Evidence boundary:
+
+- This is local/static planning evidence.
+- It should not claim product completion or runtime proof.
+- A high score is only a dispatch recommendation, not approval to merge.
+
+Why it matters:
+
+- In TastyFuture, many local readiness pages were valid but could hide the
+  higher-value blocked work that actually moves the product forward.
+- The tool should help the orchestrator avoid "safe but shallow" task churn.
+- This makes roadmap-next-task selection project-aware instead of hard-coded to
+  `docs/roadmap.md`.
+
+### 5. Transcript / Heartbeat Failure Eval
 
 Purpose: convert orchestration mistakes into deterministic regression
 fixtures.
@@ -140,7 +221,7 @@ Why it matters:
 - It creates a practical evaluation layer for "loop quality", not just code
   correctness.
 
-### 4. Static Dashboard / Status Page
+### 6. Static Dashboard / Status Page
 
 Purpose: make the current queue understandable without reading JSON or a long
 thread.
@@ -183,13 +264,17 @@ Why it matters:
 
 Recommended order:
 
-1. Merge-Readiness Pack.
-2. Consultation Request Pack.
-3. Transcript / Heartbeat Failure Eval.
-4. Static Dashboard / Status Page.
+1. Ledger-Enforced Dispatch Closure.
+2. Merge-Readiness Pack.
+3. Project-Aware Roadmap Scorer.
+4. Consultation Request Pack.
+5. Transcript / Heartbeat Failure Eval.
+6. Static Dashboard / Status Page.
 
-The first two create standardized engineering artifacts. The third makes the
-orchestrator safer over time. The fourth improves usability and visibility.
+The first item makes long-running state recoverable. The next two improve
+review quality and task choice. Consultation packs improve human handoff.
+Transcript evals make the orchestrator safer over time. The status page
+improves usability and visibility.
 
 ## Non-Goals For This Phase
 
@@ -219,4 +304,3 @@ Avoid saying:
 - "production-grade agentic engineering platform";
 - "Codex replacement";
 - "direct proof" unless the proof is actually direct.
-

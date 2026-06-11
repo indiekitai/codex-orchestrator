@@ -77,6 +77,70 @@ outer loop more observable and harder to misuse:
    After accepted merges, report whether central progress/roadmap docs need an
    orchestrator-owned update or whether docs are explicitly not needed.
 
+## Delta Feedback After Longer TastyFuture Run
+
+Later TastyFuture orchestration added a sharper point: several earlier risks
+are now covered by v0.3.0/V4 policy checks, but the live workflow still depends
+too much on chat memory and manual judgment.
+
+What continued to work:
+
+- Repo truth still mattered more than child-thread messages. The orchestrator
+  accepted completed work only after checking `git status --short --branch`,
+  `git worktree list --porcelain`, worker branch commits, diffs, gates, and
+  self-review.
+- The review/merge/docs/push/cleanup sequence prevented two common failures:
+  merged code without central docs and stale worktrees being mistaken for
+  active workers.
+- Evidence labels remained essential. Local readiness packages such as Admin
+  compliance and Customer account/notifications could be treated as local
+  readiness work, not production audit certification, live provider proof,
+  IAM/RBAC proof, SMS/email/push proof, pre/prod proof, or device proof.
+
+New or still-unresolved gaps:
+
+- The ledger is not yet carrying the whole long-running state in practice.
+  Pending ids, branch names, allowed paths, gates, review state, and whether a
+  task has been accepted can still live primarily in heartbeat text or chat
+  summaries.
+- Central docs sync is still an orchestrator judgment call. Workers correctly
+  avoid broad `PROGRESS.md` or roadmap edits, but the orchestrator needs a
+  stronger project-aware docs drift input after merge.
+- Next-task selection still depends on human/chat experience. When a roadmap is
+  filled with local readiness pages and blocked live/provider/device work, the
+  tool should help classify whether a candidate is vertical completion,
+  runtime proof, blocker removal, owner-gated work, or shallow-risk readiness
+  churn.
+- Heartbeat status is still not transparent enough. The user should be able to
+  see last trigger, next trigger, target thread, last action, and whether a
+  quiet state means waiting, blocked, skipped, or no capacity.
+- Orchestrator acceptance evidence is not a first-class artifact. Gates such as
+  test/build/governance checks and `git diff --check` may be run, but the
+  merge decision is not always stored as a machine-readable acceptance report.
+
+Highest-priority improvements from this delta:
+
+1. Ledger-enforced dispatch closure.
+   Record task id, `pendingWorktreeId`, resolved thread, worktree, branch,
+   base commit, allowed paths, gates, and status immediately after dispatch and
+   reconciliation. Heartbeats should start from ledger truth instead of chat
+   final messages.
+
+2. Orchestrator acceptance report.
+   After reviewing a worker, write a machine-readable report covering diff
+   paths, forbidden path checks, docs drift decision, gates, evidence labels,
+   merge decision, and residual risks.
+
+3. Project-aware roadmap scorer.
+   Support custom source-of-truth docs such as TastyFuture's `PROGRESS.md`,
+   Chinese roadmap, and `docs/reviews/`. Candidate tasks should be classified
+   as `vertical-completion`, `runtime-proof`, `blocked-removal`,
+   `shallow-risk`, or `owner-gated`.
+
+This delta does not overturn the existing V4 work. It narrows the next product
+work from "more routines" to "ledger closure, acceptance artifacts, and
+project-aware next-task scoring."
+
 ## Candidate Fixtures
 
 - `pendingWorktreeId` exists but no worktree exists yet: should remain pending
