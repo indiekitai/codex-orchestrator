@@ -297,6 +297,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 ./codex-orchestrator eval run --write-report /tmp/eval-run-report.json
 ./codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
+./codex-orchestrator rules propose --from-review docs/reviews/example.md --write-report /tmp/rules-proposal-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -422,6 +423,12 @@ For the MVP, pass the text and expected rule hits explicitly. The command
 verifies the text against the current policy rules before writing JSON, refuses
 to overwrite an existing fixture unless `--force` is supplied, and does not
 parse review documents automatically yet.
+
+`rules propose` turns local evidence text or a review file into a review-only
+rule proposal report. It can read `--from-review`, `--text`, or `--text-file`,
+and it writes only the proposal report when `--write-report` is supplied. It
+does not edit `SKILL.md`, README files, AGENTS/CLAUDE instructions, policy
+files, or project rules; every proposal is marked as needing human review.
 
 `run-routine roadmap-next-task-suggester` is the eighth runnable routine MVP.
 It is read-only and does not mutate the ledger. It parses remaining candidate

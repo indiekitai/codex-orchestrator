@@ -225,6 +225,7 @@ cmd/codex-orchestrator run-routine roadmap-next-task-suggester
 cmd/codex-orchestrator policy check
 cmd/codex-orchestrator eval run
 cmd/codex-orchestrator eval add-failure
+cmd/codex-orchestrator rules propose
 cmd/codex-orchestrator record-routine-run --routine ... --status ...
 cmd/codex-orchestrator record-task --max-runtime-minutes ... --review-budget-minutes ...
 cmd/codex-orchestrator observe / heartbeat budgetSummary
@@ -255,6 +256,11 @@ local/proxy/weak 证据升级为 direct。
 `eval add-failure` 已有手动 MVP：通过 `--text`/`--text-file` 和 `--expect RULE=N`
 写入新的 fixture。写入前会先用当前规则验证实际命中是否匹配期望；还没有从 review
 文档自动解析失败案例。
+
+`rules propose` 已有保守的 review-only MVP：通过 `--from-review`、`--text` 或
+`--text-file` 读取本地证据文本，输出建议规则 title/body/source/evidence label/
+needs human review 报告；只有 `--write-report` 会写出报告文件，不会自动修改
+SKILL、README、AGENTS、CLAUDE、policy 文件或项目规则。
 
 剩余：
 
@@ -327,7 +333,7 @@ routines/
 codex-orchestrator policy check --task TASK_ID
 codex-orchestrator eval add-failure --from-review docs/reviews/...
 codex-orchestrator eval run
-codex-orchestrator rules propose
+codex-orchestrator rules propose --from-review docs/reviews/...
 ```
 
 当前已落地的第一步是：
@@ -336,11 +342,13 @@ codex-orchestrator rules propose
 codex-orchestrator policy check --repo .
 codex-orchestrator eval run --repo .
 codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
+codex-orchestrator rules propose --from-review docs/reviews/example.md --write-report /tmp/rules-proposal-report.json
 ```
 
 `policy check` 会先运行本地 orchestration policy auditor，再运行仓库内置 fixture
 eval；`eval run` 只运行 fixture eval；`eval add-failure` 能手动沉淀失败案例。
-还没有自动 review 解析或 `rules propose`。
+`rules propose` 能从本地 review/text 输入生成只供人工 review 的规则建议报告；还没有
+自动修改 live 规则，也不应自动修改。
 
 边界：
 
