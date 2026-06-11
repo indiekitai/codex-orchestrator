@@ -257,6 +257,13 @@ task. The checklist can fail clear path-boundary violations and warn on missing
 local signals, but it does not merge, push, clean, dispatch, or replace human
 review.
 
+`evidence-label-auditor` stays local/static. It scans repo docs, review and
+handoff notes, routine specs, routine reports, and ledger-shaped JSON for
+deterministic `ELA001`-`ELA010` findings, including weak local/static/proxy
+wording promoted to direct/pre/prod/device/runtime/payment proof without
+explicit direct evidence wording. It does not inspect live devices, production,
+pre, payment terminals, or runtime services, and it does not claim direct proof.
+
 The budget-policy report surface is now runnable:
 
 ```bash

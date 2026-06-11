@@ -251,17 +251,19 @@ push, tag, release, clean worktrees, dispatch sessions, mutate the ledger, or
 claim runtime proof.
 
 The evidence label auditor runner is read-only and does not load or update the
-ledger. It scans explicit repo-local docs, routine specs, routine report JSON,
-and ledger-shaped JSON for obvious evidence-label issues: weak evidence labels
-near overstated proof wording, missing
-RoutineRunReport evidence buckets, and direct evidence recorded for routines
-whose specs explicitly reserve direct evidence. It uses deterministic named
-policy/eval rules (`ELA001`-`ELA009`), treats glossary/prohibition/blocked
-definition wording as allowed negatives, and summarizes local rule hits when
-findings appear. Findings are local/static suspicions until a reviewer confirms
-them. Its MVP report uses only `local` and `blocked` evidence; it does not
-stage, commit, merge, push, tag, release, clean worktrees, dispatch sessions,
-mutate the ledger, or claim runtime proof.
+ledger. It scans explicit repo-local docs, review/handoff notes, routine specs,
+routine report JSON, and ledger-shaped JSON for obvious evidence-label issues:
+weak evidence labels near overstated proof wording, weak evidence promoted to
+direct/pre/prod/device/runtime/payment proof without explicit direct evidence
+wording, missing RoutineRunReport evidence buckets, and direct evidence
+recorded for routines whose specs explicitly reserve direct evidence. It uses
+deterministic named policy/eval rules (`ELA001`-`ELA010`), treats
+glossary/prohibition/blocked definition/rule-description wording as allowed
+negatives, and summarizes local rule hits when findings appear. Findings are
+local/static suspicions until a reviewer confirms them. Its MVP report uses only
+`local` and `blocked` evidence; it does not stage, commit, merge, push, tag,
+release, clean worktrees, dispatch sessions, mutate the ledger, or claim
+runtime proof.
 
 The orchestration policy auditor runner is the first V4 policy/eval checker.
 It is read-only and does not load or update the ledger. It scans repo-local

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "evidence-label-auditor",
   "title": "Evidence Label Auditor",
-  "purpose": "Find obvious local/static evidence-label misuse in repo docs, routine specs, routine reports, and ledger-shaped JSON with deterministic named policy/eval rules, without mutating repository state.",
+  "purpose": "Find obvious local/static evidence-label misuse in repo docs, review/handoff notes, routine specs, routine reports, and ledger-shaped JSON with deterministic named policy/eval rules, without mutating repository state.",
   "trigger": "Run after routine reports, docs, roadmap text, or routine specs change, especially before publishing proof claims or accepting delegated handoffs.",
   "inputs": [
     "repository path",
@@ -10,6 +10,7 @@
     "README.zh-CN.md",
     "SKILL.md",
     "docs/routines/*.md",
+    "docs/reviews/*.md",
     "docs/roadmap.md when present",
     "routines/*.json",
     "examples/routine-reports/*.json",
@@ -20,6 +21,7 @@
     "parse routine specs for direct evidence reservations",
     "parse RoutineRunReport JSON evidence buckets",
     "scan text for explicit weak-evidence wording near strong proof wording",
+    "scan review/handoff wording for weak evidence promoted to direct/pre/prod/device/runtime/payment proof without explicit direct evidence wording",
     "treat glossary, prohibition, and blocked-definition wording as allowed negatives",
     "write a RoutineRunReport JSON when requested"
   ],
@@ -35,7 +37,7 @@
     "repository path readable",
     "routines directory readable",
     "routine specs parsed for explicit direct-evidence reservations",
-    "repo-local docs, specs, routine reports, and ledger-shaped JSON scanned with deterministic named rules ELA001-ELA009",
+    "repo-local docs, review/handoff notes, specs, routine reports, and ledger-shaped JSON scanned with deterministic named rules ELA001-ELA010",
     "RoutineRunReport JSON evidence buckets checked for direct, proxy, local, and blocked keys",
     "local report includes rule-hit summary counts when findings are present"
   ],
@@ -62,7 +64,7 @@
     "evidence": {
       "direct": "Reserved for future rendered, runtime, or human-reviewed proof; the MVP does not emit direct proof.",
       "proxy": "Reserved for accepted external audit indexes or review artifacts; the MVP normally does not emit proxy proof.",
-      "local": "Local static scan of repo docs, routine specs, routine reports, and ledger-shaped JSON, including deterministic rule-hit summaries.",
+      "local": "Local static scan of repo docs, review/handoff notes, routine specs, routine reports, and ledger-shaped JSON, including deterministic rule-hit summaries.",
       "blocked": "Repository, routine specs, docs, or JSON audit inputs cannot be inspected safely."
     }
   },
