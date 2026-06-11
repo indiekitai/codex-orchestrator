@@ -1,10 +1,10 @@
-# v0.3.0-beta.4 Release Notes
+# v0.3.0-beta.5 Release Notes
 
-`v0.3.0-beta.4` is a small hardening release after external review. It keeps
-the same App-first workflow, but fixes naming drift, tightens the `ci-fixer`
-safety boundary, makes evidence labels consistently four-bucket
-`direct`/`proxy`/`local`/`blocked`, and includes the post-beta.3 release
-publishing fix.
+`v0.3.0-beta.5` is a visibility and onboarding release. It keeps the same
+App-first workflow, but makes the helper's status surface more useful for
+humans and future UI/daemon layers: `observe`, `status`, and heartbeat reports
+now expose a compact `jobSummary` and a local/static `projectMap` readiness
+signal.
 
 ## Highlights
 
@@ -19,8 +19,13 @@ publishing fix.
   - `release-verifier`
   - `docs-drift-checker`
   - `evidence-label-auditor`
+  - `orchestration-policy-auditor`
   - `roadmap-next-task-suggester`
+  - `budget-policy-report`
 - Budget visibility in ledger, observe, and heartbeat reports.
+- Jobs/status-style `jobSummary` in observe/status/heartbeat JSON and Markdown.
+- Project-map readiness detection through `projectMap`, with
+  `docs/CODEBASE_MAP.md` as the recommended repository map.
 - Conservative evidence labels: `direct`, `proxy`, `local`, `blocked`.
 - Cross-platform GitHub prerelease assets for darwin, linux, and windows.
 - Shell completion generation for bash, zsh, and fish.
@@ -30,23 +35,21 @@ publishing fix.
 does not edit, stage, commit, merge, push, clean, or update ledger state, but it
 should not be run against an untrusted repository or untrusted ledger.
 
-## What Changed Since Beta.3
+## What Changed Since Beta.4
 
-- `agents/openai.yaml` now uses the public `codex-orchestrator` skill name.
-- `ci-fixer` docs and routine spec now state that it runs trusted recorded
-  gates rather than being a fully read-only routine or automatic code fixer.
-- `SKILL.md` and `examples/ledger.example.json` consistently use all four
-  evidence labels: `direct`, `proxy`, `local`, and `blocked`.
-- Ledger JSON writes now use a temporary file plus atomic rename to reduce the
-  risk of a truncated durable ledger.
-- `scripts/install.sh` now uses the same trimmed build flags as release assets.
-- Local gate execution now uses a non-login shell and a Windows `cmd /C`
-  fallback when needed.
-- The release workflow now runs `go vet ./...` in addition to `go test ./...`.
-- README file trees, Chinese terminology, and device-proof language were
-  cleaned up for public use.
-- The release publishing helper includes the missing-release lookup fix that
-  landed on main after `v0.3.0-beta.3`.
+- `ObserveSummary` now includes `jobSummary`: total task count, per-status
+  counts, and compact rows with id, status, signal, branch, pending worktree id,
+  latest timestamp, and next action.
+- `ObserveSummary` now includes `projectMap`: a local/static check for common
+  project-map files such as `docs/CODEBASE_MAP.md`, with a recommended action
+  when no map exists.
+- `status` text output now prints jobs counts and project-map readiness.
+- Heartbeat Markdown summaries now render "Job Summary" and "Project Map"
+  sections.
+- The repository now includes `docs/CODEBASE_MAP.md` as a concrete project-map
+  example for Codex App before broad orchestration.
+- README, Chinese README, `SKILL.md`, v2 usage docs, ledger/heartbeat docs, and
+  roadmap docs now describe the new status signals.
 
 ## Install
 
@@ -99,6 +102,7 @@ This release does not:
 - `codex-orchestrator validate-routines --dir routines`
 - `codex-orchestrator run-routine docs-drift-checker --repo . --json`
 - `codex-orchestrator run-routine evidence-label-auditor --repo . --json`
+- `codex-orchestrator policy check --repo . --json`
 - GitHub Actions build matrix passed for darwin/linux/windows.
 - GitHub prerelease exists with expected darwin/linux/windows assets.
 - Release asset download smoke passed for `darwin_arm64`.
