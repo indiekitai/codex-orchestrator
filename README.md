@@ -2,22 +2,39 @@
 
 # codex-orchestrator
 
-**Codex Orchestrator for Codex App.** `codex-orchestrator` is an
-open-source Codex App-first harness for **Loop Engineering**: it turns Codex
-from a single coding assistant into a supervised engineering loop that splits
-roadmap work into isolated worktree sessions, checks them with heartbeats and
-local policy guards, reviews and merges clean branches, rescues stuck sessions,
-and dispatches the next batch when it is safe to do so.
+**Codex App-first Loop Engineering for real repositories.**
+`codex-orchestrator` is an open-source workflow for turning Codex App from one
+chat-at-a-time coding help into a supervised engineering loop: bounded task
+contracts, isolated Codex worktree sessions, heartbeat/status visibility,
+review-before-merge discipline, stale-task rescue, and honest evidence labels.
 
-If you are searching for a **Codex App orchestrator**, **Codex skill
-orchestrator**, **Loop Engineering harness**, or **multi-agent coding workflow
-with git worktrees**, this repository is the App-first version: Codex App still
-creates and runs the worker sessions, while this skill and helper provide the
-task contracts, persistent ledger, review routines, evidence-label checks, and
-continuation rules around them.
+It is not a daemon, a package-manager-first install, a full agent operating
+system, or an unreviewed autonomous coding bot. Codex App still creates and
+runs the worker sessions. This repository supplies the skill, prompts, local
+ledger helper, routines, and review rules that make those sessions inspectable.
 
-Read the project story:
-[Loop Engineering for Codex and Claude Code](https://indiekit.ai/blog/2026-06-09-codex-orchestrator-loop-engineering-en).
+What it gives you:
+
+- clear task contracts with allowed paths, forbidden paths, gates, and proof
+  expectations;
+- isolated Codex App worktree sessions instead of one sprawling chat;
+- durable local ledger and heartbeat reports for status, review pressure, and
+  stale-session recovery;
+- review/merge/push/cleanup discipline before completed branches are trusted;
+- explicit `direct`, `proxy`, `local`, and `blocked` evidence labels, so local
+  checks are not overstated as production, device, payment, or runtime proof;
+- a continuation guard that checks the broader queue before declaring the loop
+  finished.
+
+Best first path: paste the Quick Start prompt below into Codex App from the
+repository you want to orchestrate. Let Codex read this repo, install or update
+the skill if needed, optionally build the Go helper for ledger support, and
+start with a dry run.
+
+Deep dives:
+[project story](https://indiekit.ai/blog/2026-06-09-codex-orchestrator-loop-engineering-en),
+[TastyFuture case study](docs/case-studies/tastyfuture-orchestration.md), and
+[case article](docs/articles/tastyfuture-loop-engineering-case.md).
 
 ## 🚀 Quick Start
 

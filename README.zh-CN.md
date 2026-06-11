@@ -2,20 +2,34 @@
 
 # codex-orchestrator
 
-**面向 Codex App 的 Codex Orchestrator。**
-`codex-orchestrator` 是一个开源的 Codex App-first **Loop Engineering**
-harness：它把 Codex 从“单个写代码助手”，变成一个受监督的工程循环。从路线图中拆
-任务，派发到隔离 worktree 会话，用 heartbeat 和本地 policy guard 巡检，审查并
-合并干净分支，恢复卡住的 session，并在安全时继续派发下一批。
+**给真实代码仓库用的 Codex App-first Loop Engineering 工作流。**
+`codex-orchestrator` 把 Codex App 从“一次开一个聊天写代码”，推进到一个受监督的
+工程循环：有界任务契约、隔离的 Codex worktree session、heartbeat/status 可见性、
+先审查再合并、卡住任务救援，以及诚实的证据标签。
 
-如果你在找 **Codex App orchestrator**、**Codex skill orchestrator**、
-**Loop Engineering harness**，或者基于 git worktree 的 multi-agent coding
-workflow，这个仓库就是偏 Codex App-first 的实现：Codex App 仍然负责创建和运行
-worker session；这个 skill 和 helper 负责有界任务契约、持久 ledger、review
-routine、证据标签检查和续跑规则。
+它不是 daemon，不是以 Homebrew/npm 这类 package manager 为主的安装方案，不是完整
+Agent Operating System，也不是不经审查就自动写代码的 bot。Codex App 仍然负责创建
+和运行 worker session；这个仓库提供 skill、prompt、本地 ledger helper、routine 和
+review 规则，让这些 session 变得可检查、可恢复、可合并。
 
-项目由来：
-[从提示 Agent 到设计循环：codex-orchestrator 的由来](https://indiekit.ai/blog/2026-06-09-codex-orchestrator-loop-engineering)。
+它解决的核心问题：
+
+- 每个任务都有清楚的允许路径、禁止路径、验收 gate 和证据要求；
+- worker 跑在隔离的 Codex App worktree session 里，而不是挤在一个超长聊天里；
+- 本地 ledger 和 heartbeat report 记录状态、待审压力和 stale session；
+- 完成的分支必须经过 review / merge / push / cleanup 纪律；
+- `direct`、`proxy`、`local`、`blocked` 证据标签分清楚，不把本地检查说成生产、
+  设备、支付或真实运行时证明；
+- continuation guard 会在停止前检查整体队列，而不是做完一个子任务就误报结束。
+
+第一次试用的最佳路径：在你要编排的仓库里打开 Codex App，直接粘贴下面的 Quick
+Start prompt。让 Codex 读取本仓库，按需安装或更新 skill，必要时再构建 Go helper
+支持 ledger，然后先做只读 dry run。
+
+延伸阅读：
+[项目由来](https://indiekit.ai/blog/2026-06-09-codex-orchestrator-loop-engineering)、
+[TastyFuture 案例](docs/case-studies/tastyfuture-orchestration.md)、以及
+[案例文章](docs/articles/tastyfuture-loop-engineering-case.md)。
 
 ## 🚀 快速开始
 
