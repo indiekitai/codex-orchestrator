@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "pending-setup-chat-only-review-note",
+  "description": "Transcript-style review wording for pending setup IDs kept in prompt or chat state must still require durable ledger recording.",
+  "files": {
+    "docs/reviews/local-pending-setup-review.md": "Local review note: after Codex App returned two pendingWorktreeId values, the orchestrator kept the pending setup only in chat and the heartbeat prompt. There was no ledger event for either pending id."
+  },
+  "expectedRuleHits": {
+    "OPA007": 1
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "heartbeat-current-binding-review-note",
+  "description": "Transcript-style review wording for stale heartbeat target binding must still trip the current-thread placeholder guard.",
+  "files": {
+    "docs/reviews/local-heartbeat-review.md": "Local review note: the heartbeat automation was copied from an older run and still has targetThreadId: \"current\" in the persisted settings. Treat the timer as stale until it is recreated for the real thread."
+  },
+  "expectedRuleHits": {
+    "OPA006": 1
+  }
+}
