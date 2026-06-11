@@ -266,9 +266,11 @@ mutate the ledger, or claim runtime proof.
 The orchestration policy auditor runner is the first V4 policy/eval checker.
 It is read-only and does not load or update the ledger. It scans repo-local
 orchestration docs, prompts, routine specs, routine reports, and ledger/event
-files for deterministic policy rules (`OPA001`-`OPA005`): dry-run dispatch
+files for deterministic policy rules (`OPA001`-`OPA008`): dry-run dispatch
 barrier, no-main-checkout fallback guard, heartbeat continuation guard,
-delegated worker boundary, and evidence promotion boundary. Findings are
+delegated worker boundary, evidence promotion boundary, heartbeat target binding
+guard, pending worktree ledger guard, and budget-policy evidence/control
+boundary drift. Findings are
 local/static suspicions until a reviewer confirms them. Its MVP report uses
 only `local` and `blocked` evidence; it does not stage, commit, merge, push,
 tag, release, clean worktrees, dispatch sessions, mutate the ledger, or claim

@@ -242,19 +242,20 @@ examples/routine-reports/
 rule-hit 统计；但它仍然是只读、本地、静态的保守检查器。
 
 `orchestration-policy-auditor` 启动了 V4 policy/eval 层的第一块：命名规则
-`OPA001`-`OPA007` 覆盖 dry-run 派发屏障、主工作区 fallback guard、heartbeat
-continuation guard、worker 边界、证据升级边界、heartbeat target 绑定 guard，
-以及 pending worktree ledger guard。它同样是只读、本地、静态的保守检查器，
+`OPA001`-`OPA008` 覆盖 dry-run 派发屏障、主工作区 fallback guard、heartbeat
+continuation guard、worker 边界、证据升级边界、heartbeat target 绑定 guard、
+pending worktree ledger guard，以及 budget-policy 证据/控制边界漂移。它同样是只读、本地、静态的保守检查器，
 输出的是可复核疑点，不是语义定罪。
 
 `policy check` 把 `orchestration-policy-auditor` 和
 `eval/orchestration-policy-auditor/` 下的 fixture eval 串起来，成为 V4 的第一个
 产品化入口。第一批 fixture 覆盖真实编排失败类别：dry-run 未批准派发、setup
 失败后回退主工作区、单个 child task 完成后停止总队列、worker prompt 缺少边界、
-local/proxy/weak 证据升级为 direct。
+local/proxy/weak 证据升级为 direct、heartbeat target 绑定错误、pending setup
+未写入 ledger，以及 budget-policy helper 控制或证据夸大。
 
 `eval run` 单独运行 fixture suite，不扫描当前仓库文本。它适合在修改
-`OPA001`-`OPA007` 规则时做确定性回归检查。
+`OPA001`-`OPA008` 规则时做确定性回归检查。
 
 `eval add-failure` 已有手动 MVP：通过 `--text`/`--text-file` 和 `--expect RULE=N`
 写入新的 fixture。写入前会先用当前规则验证实际命中是否匹配期望；还没有从 review
@@ -291,11 +292,12 @@ heartbeat `budgetPressure` 仍只作为 local/static visibility；live runtime /
 timing 不存在直接证据时写入 blocked/unknown。runner 不调度、不排序、不 pause/kill
 worker、不做 dispatch enforcement、不 merge/push/delete/cleanup，也不修改 ledger。
 
-剩余：
-
-- budget policy static eval：只检查预算证据误用或边界漂移，例如把
-  local/static timestamp 写成 live session proof，或把 budget warning 写成 helper
-  已经 pause/kill worker。finding 只能作为 review prompt，不能成为自动调度决策。
+已完成 budget policy static eval follow-up：
+`OPA008` 和 3 个 local/static fixture 检查预算证据误用或边界漂移，例如把
+local/static timestamp / ledger / heartbeat budget evidence 写成 direct runtime
+proof，或把 budget warning 写成 helper 已经 pause/kill worker、强制 dispatch
+eligibility、承担 scheduler/prioritizer/worker-control 行为。finding 只能作为
+review prompt，不能成为自动调度决策。
 
 ## v3：Routine library
 
@@ -311,7 +313,7 @@ worker、不做 dispatch enforcement、不 merge/push/delete/cleanup，也不修
 - docs drift checker；
 - rebase helper；
 - release verifier；
-- orchestration policy auditor follow-on eval fixtures：已补 transcript-style local review-note fixtures，覆盖 stale heartbeat binding、pending setup ledger、child completion without continuation proof，并补了一个 narrow `OPA004` forbidden-path worker-boundary case；后续又补了否定语义 false-positive guard 和 human-review transcript fixtures，覆盖被明确拒绝/警告的坏模式不应算作 action，以及 human-review transcript 中实际发生的 dry-run dispatch、main-checkout fallback、evidence promotion 仍应命中对应 `OPA001`、`OPA002`、`OPA005`；
+- orchestration policy auditor follow-on eval fixtures：已补 transcript-style local review-note fixtures，覆盖 stale heartbeat binding、pending setup ledger、child completion without continuation proof，并补了一个 narrow `OPA004` forbidden-path worker-boundary case；后续又补了否定语义 false-positive guard 和 human-review transcript fixtures，覆盖被明确拒绝/警告的坏模式不应算作 action，以及 human-review transcript 中实际发生的 dry-run dispatch、main-checkout fallback、evidence promotion 仍应命中对应 `OPA001`、`OPA002`、`OPA005`；budget static eval follow-up 已补 `OPA008` 和 3 个 fixture，覆盖 budget local/static evidence promotion、helper pause/kill/dispatch-enforcement/scheduler overclaim，以及 review-only budget wording no-hit；
 
 补充说明：
 
@@ -380,7 +382,7 @@ codex-orchestrator rules propose --from-review docs/reviews/example.md --write-r
 
 `policy check` 会先运行本地 orchestration policy auditor，再运行仓库内置 fixture
 eval；`eval run` 只运行 fixture eval；当前 orchestration-policy-auditor suite 有
-16 个 local/static fixture；`eval add-failure` 能手动沉淀失败案例。
+19 个 local/static fixture；`eval add-failure` 能手动沉淀失败案例。
 `rules propose` 能从本地 review/text 输入生成只供人工 review 的规则建议报告；还没有
 自动修改 live 规则，也不应自动修改。
 

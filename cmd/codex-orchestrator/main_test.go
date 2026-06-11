@@ -1901,6 +1901,8 @@ func TestRunOrchestrationPolicyAuditorRoutineFlagsPolicyMisuse(t *testing.T) {
 		"Worker prompt: use a worktree branch for this task.",
 		"",
 		"Local proxy smoke counts as direct proof.",
+		"",
+		"The budget-policy-report helper automatically paused workers after heartbeat budget warnings and enforced dispatch eligibility.",
 	}, "\n")
 	if err := os.WriteFile(filepath.Join(project, "README.md"), []byte(bad), 0o644); err != nil {
 		t.Fatal(err)
@@ -1917,7 +1919,8 @@ func TestRunOrchestrationPolicyAuditorRoutineFlagsPolicyMisuse(t *testing.T) {
 		"[OPA003] README.md:5: heartbeat/child-task completion wording may stop the larger queue without a ledger/roadmap/repo-truth check",
 		"[OPA004] README.md:7: worker/delegation prompt lacks one of the core boundaries",
 		"[OPA005] README.md:9: evidence wording appears to allow local/proxy/weak evidence to be promoted to direct proof",
-		"Rule hits: OPA001=1, OPA002=1, OPA003=1, OPA004=1, OPA005=1.",
+		"[OPA008] README.md:11: budget-policy wording appears to promote local/static budget evidence or imply helper budget enforcement/scheduling behavior",
+		"Rule hits: OPA001=1, OPA002=1, OPA003=1, OPA004=1, OPA005=1, OPA008=1.",
 	} {
 		if !strings.Contains(local, want) {
 			t.Fatalf("expected finding %q in:\n%s", want, local)
@@ -2330,6 +2333,29 @@ func TestEvalAddFailureRequiresForceForOverwrite(t *testing.T) {
 	}
 	if !result.Overwritten {
 		t.Fatalf("expected overwritten result: %#v", result)
+	}
+}
+
+func TestEvalAddFailureAcceptsBudgetBoundaryRule(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	result, err := addFailureEvalFixture(
+		project,
+		"orchestration-policy-auditor",
+		"",
+		"budget-helper-control-overclaim",
+		"",
+		"docs/reviews/local-budget-review.md",
+		"The budget-policy-report helper automatically paused workers and enforced dispatch eligibility after heartbeat budget warnings.",
+		"",
+		[]string{"OPA008=1"},
+		false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ExpectedRuleHits["OPA008"] != 1 || result.ActualRuleHits["OPA008"] != 1 {
+		t.Fatalf("unexpected budget boundary fixture result: %#v", result)
 	}
 }
 
