@@ -64,7 +64,11 @@ if [ ! -d "$DIST_DIR" ] || ! ls "$DIST_DIR"/codex-orchestrator_* >/dev/null 2>&1
   exit 1
 fi
 
-RELEASE_ID=$(gh_api_retry "repos/$REPO/releases/tags/$TAG" --jq '.id' 2>/dev/null || true)
+if RELEASE_ID=$(gh_api_retry "repos/$REPO/releases/tags/$TAG" --jq '.id' 2>/dev/null); then
+  :
+else
+  RELEASE_ID=""
+fi
 if [ -n "$RELEASE_ID" ]; then
   echo "release $TAG already exists; replacing matching assets"
 else
