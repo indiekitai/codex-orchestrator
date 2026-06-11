@@ -268,9 +268,17 @@ SKILL、README、AGENTS、CLAUDE、policy 文件或项目规则。
 review timestamp unknown warnings。这些都是 local/static helper evidence，不会调度、
 排序、kill 进程或强制执行预算。
 
+已完成 review-only budget policy design：
+`docs/reviews/2026-06-11-budget-policy-review-only-design.md` 定义了 helper
+可以报告的预算事实、App orchestrator/人类 reviewer 可以做的决策，以及 helper
+仍然禁止触碰的调度、排序、worker control、dispatch 和预算强制执行边界。
+
 剩余：
 
-- 更深的 per-routine budget 策略、排序或调度联动；当前 helper 只记录、展示并告警预算元数据，不执行预算。
+- budget policy review report/eval：在 review-only design 之后，后续如果继续推进，
+  只能先做只读报告或静态 policy/eval，检查预算 metadata coverage、local/static
+  warning 状态和 unknown timing 状态；仍然不做调度、排序、worker kill、dispatch
+  或预算强制执行。
 
 ## v3：Routine library
 
@@ -290,7 +298,9 @@ review timestamp unknown warnings。这些都是 local/static helper evidence，
 
 补充说明：
 
-- `roadmap-next-task-suggester` 的第一版只读 MVP 已经具备；接下来剩余的是更深的排序、policy/eval 约束，以及和 heartbeat / ledger budget 的联动。
+- `roadmap-next-task-suggester` 的第一版只读 MVP 已经具备；接下来剩余的是更深的
+  policy/eval 约束，以及和 heartbeat / ledger budget 的 review-only 联动。预算
+  联动必须先停留在报告和人工/App 层决策建议，不等于 helper 自动排序或调度。
 
 推荐形式：
 

@@ -176,6 +176,11 @@ Heartbeat Markdown and JSON include the same local/static budget pressure
 warnings as `observe`. These warnings are for coordinator attention; they do not
 start, stop, prioritize, or reschedule work by themselves.
 
+Future budget-policy work should stay review-only until a human-approved policy
+exists. The helper may report metadata gaps, near/exceeded local thresholds, and
+unknown timing evidence, but dispatch, pause, merge, cleanup, or worker-control
+decisions remain with the Codex App orchestrator and human reviewer.
+
 ## Record Review/Merge/Cleanup Outcomes
 
 The orchestrator should append events when it reviews, merges, rejects, blocks,

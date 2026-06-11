@@ -155,6 +155,11 @@ planning visibility only; the local helper does not enforce runtime limits or
 review budgets. Task-level budget metadata recorded in the ledger is surfaced
 through `observe` and heartbeat summaries when present.
 
+Budget-policy follow-up work is review-only by default. A routine may report
+budget metadata coverage, local/static pressure warnings, and unknown timing
+states, but it must not start, stop, prioritize, reschedule, or kill workers, and
+must not make dispatch eligibility decisions without Codex App or human review.
+
 ## Required Output Shape
 
 Every routine must produce a report with these fields:
