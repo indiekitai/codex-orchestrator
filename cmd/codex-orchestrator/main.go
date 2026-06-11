@@ -2306,6 +2306,9 @@ func runDocsDriftCheckerRoutine(repo string) RoutineRunReport {
 
 func routineReferenceDocs() []string {
 	return []string{
+		"README.md",
+		"README.zh-CN.md",
+		"SKILL.md",
 		filepath.Join("docs", "routines", "README.md"),
 		filepath.Join("docs", "v2-usage.md"),
 	}

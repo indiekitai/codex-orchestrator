@@ -26,7 +26,7 @@ elapsed time are reported under `blocked`/unknown.
 
 - `go test ./...`: passed.
 - `go run ./cmd/codex-orchestrator run-routine budget-policy-report --repo . --json`: passed; emitted local/static report with blocked unknown live timing.
-- `go run ./cmd/codex-orchestrator run-routine docs-drift-checker --repo . --json`: passed after updating routine/usage docs.
+- `go run ./cmd/codex-orchestrator run-routine docs-drift-checker --repo . --json`: passed with top-level README/SKILL coverage restored and `docs/v2-usage.md` included as an additional required routine-reference doc.
 - `go run ./cmd/codex-orchestrator run-routine evidence-label-auditor --repo . --json`: passed.
 - `go run ./cmd/codex-orchestrator policy check --repo . --json`: passed.
 - `git diff --check`: passed.
@@ -37,11 +37,11 @@ Confirmed the runner does not schedule, prioritize, pause, kill, dispatch,
 merge, push, delete, clean worktrees, mutate the ledger, mutate heartbeat
 reports, or enforce budgets.
 
-The docs-drift checker required docs surface was narrowed to
-`docs/routines/README.md` and `docs/v2-usage.md` so this bounded task could
-remain within its allowed path list without editing top-level README/SKILL
-files. The routine spec and core docs still keep runnable routine references
-checked.
+The docs-drift checker required docs surface includes `README.md`,
+`README.zh-CN.md`, `SKILL.md`, `docs/routines/README.md`, and
+`docs/v2-usage.md`; `docs/roadmap.md` remains checked when present. This keeps
+the existing top-level docs/SKILL audit coverage while adding the usage doc to
+the required routine-reference surface.
 
 ## Residual Risks
 

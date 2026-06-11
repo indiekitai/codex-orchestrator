@@ -1447,6 +1447,9 @@ func TestRunDocsDriftCheckerRoutineWritesPassedReport(t *testing.T) {
 	for _, want := range []string{
 		"Runnable routines from cmd/codex-orchestrator/main.go: docs-drift-checker, pr-reviewer",
 		"Routine specs in routines/: docs-drift-checker, pr-reviewer",
+		"README.md mentions all runnable routines",
+		"README.zh-CN.md mentions all runnable routines",
+		"SKILL.md mentions all runnable routines",
 		"docs/routines/README.md mentions all runnable routines",
 		"docs/v2-usage.md mentions all runnable routines",
 		"docs/roadmap.md mentions all runnable routines",
@@ -1469,7 +1472,7 @@ func TestRunDocsDriftCheckerRoutineFailsOnMissingDocReference(t *testing.T) {
 		t.Fatalf("expected failed report, got %#v", report)
 	}
 	local := strings.Join(report.Evidence["local"], "\n")
-	if !strings.Contains(local, "docs/routines/README.md is missing runnable routine reference(s): docs-drift-checker") {
+	if !strings.Contains(local, "README.md is missing runnable routine reference(s): docs-drift-checker") {
 		t.Fatalf("expected missing docs-drift-checker evidence, got:\n%s", local)
 	}
 	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
