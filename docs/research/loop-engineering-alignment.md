@@ -301,8 +301,8 @@ The main gaps are not more task states. They are the deeper loop layers:
 
 ## Roadmap Adjustment
 
-The previous v2-v5 roadmap is directionally right, but the emphasis should
-change.
+The previous staged roadmap is directionally right through v4, but the emphasis
+should change.
 
 Recommended structure:
 
@@ -313,11 +313,13 @@ Recommended structure:
 | v2.5: verification routine foundation | Next | Browser/log/db/device proof interfaces, evidence schemas, harness boundary model |
 | v3: routine library | After v2.5 | Workflow contracts for CI fixer, PR reviewer, stale rescuer, docs drift, release verifier |
 | v4: safety/eval layer | Needed before high autonomy | Classifiers, prompt-injection evals, dangerous action policy |
-| v5: agent operating system | Later | Continuous multi-routine coordination and UI/daemon |
-
 The key change is adding **v2.5 verification routine foundation** before a broad
 routine library. Otherwise v3 risks becoming a list of task managers instead of
 real loops.
+
+An agent operating system should not be part of the current roadmap. The
+project should stop at a Codex App-first harness with durable state, routine
+contracts, policy/eval checks, and reviewable rule improvement.
 
 ## Product Positioning
 
@@ -344,7 +346,8 @@ Use "Loop Engineering" carefully:
 
 ## Recommended Next Work
 
-Do not jump directly to v5 or a daemon UI. The highest-leverage next work is:
+Do not jump to a daemon UI or worker-pool platform. The highest-leverage next
+work is:
 
 1. Add `docs/routines/` with routine specs for:
    - stale task rescuer,

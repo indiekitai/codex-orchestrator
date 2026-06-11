@@ -2,11 +2,11 @@
 
 # codex-orchestrator
 
-**A supervised outer loop for OpenAI Codex App.** `codex-orchestrator`
-brings Loop Engineering-style workflow to Codex App: splitting roadmap work
-into isolated worktree sessions, checking them with heartbeats, reviewing and
-merging clean branches, rescuing stuck sessions, and dispatching the next batch
-when it is safe to do so.
+**A Codex App-first harness for Loop Engineering.** `codex-orchestrator`
+turns Codex App into a supervised engineering loop: splitting roadmap work into
+isolated worktree sessions, checking them with heartbeats and local policy
+guards, reviewing and merging clean branches, rescuing stuck sessions, and
+dispatching the next batch when it is safe to do so.
 
 ## 🚀 Quick Start
 
@@ -132,6 +132,11 @@ The goal is not to let agents write unattended forever. The goal is to keep the
 human in the loop at the right leverage point: designing the loop, reviewing the
 evidence, and deciding what should ship.
 
+It is also not trying to be a full agent operating system. That route is out of
+scope for this project. The practical target is narrower: a reliable harness
+around Codex App sessions, with durable state, recovery rules, verification
+routines, policy/eval checks, and honest evidence labels.
+
 ## 🚀 Codex App Setup Flow
 
 If you want Codex App to do the setup for you, use the bootstrap prompt above.
@@ -220,9 +225,9 @@ Overnight, the heartbeat catches Session C stuck at minute 22 with a clean commi
 
 ## 🪜 Loop Engineering Maturity Model
 
-`codex-orchestrator` is a practical **v1 outer loop**, not the final form of
-agentic software development. It sits between manual prompting and a fully
-persistent agent operating system.
+`codex-orchestrator` is a practical **Codex App-first harness**, not the final
+form of agentic software development. It sits between manual prompting and a
+future persistent agent runtime.
 
 Worker sessions still own the inner edit/test/fix loop. This project manages
 the outer engineering loop around them: task selection, isolation, monitoring,
@@ -236,12 +241,15 @@ review, merge, cleanup, and continuation.
 | **v2.5: Verification routine foundation** | Routine contracts become inspectable | Shared output schema, evidence labels, harness map, and validator for reusable routines |
 | **v3: Routine library** | Reusable background routines | PR reviewer, CI fixer, stale-session rescuer, rebase helper, docs drift checker, release verifier |
 | **v4: Eval and safety layer** | Failures become tests and policies | Orchestration policy auditor, prompt-injection cases, dangerous-operation classifiers, permission checks, evidence-quality evals |
-| **v5: Agent operating system** | Many routines coordinate continuously | The human talks to loops/routines, while specialized agents execute, review, secure, and report |
 
 This repository intentionally starts at v1 because that is the layer most teams
 can adopt today without running a custom daemon or changing their whole
-development platform. The next hard problems are durable state, routine
-composition, safety classification, and eval-driven improvement.
+development platform. The next hard problems are recovery classification,
+runtime verification, policy/eval coverage, and reviewable rule improvement.
+
+An agent operating system is deliberately not on this roadmap. The project
+should stay focused on making Codex App orchestration more observable,
+recoverable, and reviewable.
 
 The ambition is not to claim that a Codex skill is already a complete Loop
 Engineering runtime. The ambition is to make the first useful outer loop
@@ -259,7 +267,9 @@ For a first-time external-user path from install to a safe local demo, see
 copy, see [docs/beta-release-notes-draft.md](docs/beta-release-notes-draft.md).
 For a research note on how this maps to Loop Engineering, see
 [docs/research/loop-engineering-alignment.md](docs/research/loop-engineering-alignment.md).
-For the broader v2-v5 plan, see [docs/roadmap.md](docs/roadmap.md).
+For the harness reading notes that de-scope the agent-OS route, see
+[docs/research/harness-reading-notes.md](docs/research/harness-reading-notes.md).
+For the broader roadmap, see [docs/roadmap.md](docs/roadmap.md).
 
 The v2 helper CLI currently supports:
 

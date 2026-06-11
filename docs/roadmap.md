@@ -1,20 +1,28 @@
 # codex-orchestrator 路线图
 
-这份路线图用于说明 `codex-orchestrator` 从当前 Codex App-first 外层循环形态，逐步演进到持久化 loop、routine library、安全评估层，甚至更完整 agent orchestration runtime 的路径。
+这份路线图用于说明 `codex-orchestrator` 从当前 Codex App-first harness
+形态，逐步演进到持久化 loop、routine library、安全评估层和更可靠的
+Loop Engineering 控制面。
 
 核心判断：
 
 - 当前能力是 **Codex App-first**，因为只有 Codex App 具备创建/继续多个 session、管理 worktree session、设置 heartbeat automation 的能力。
 - CLI/helper 不替代 Codex App 调度。它负责持久状态、git/worktree 观察、heartbeat report、policy/eval 检查。
-- 后续演进不应该把 skill 硬撑成所有东西。更合理的是分层：skill 教 Agent 怎么工作，CLI/helper 管状态和检查，daemon/UI 负责长期运行和可视化。
-- 调研结论见 `docs/research/loop-engineering-alignment.md`：当前项目更准确地说是 **outer orchestration loop**，下一阶段要先补 inner verification routines 和 safety/eval，而不是直接堆更大的 agent OS。
+- 后续演进不应该把 skill 硬撑成所有东西。更合理的是分层：skill 教 Agent 怎么工作，CLI/helper 管状态和检查，未来 watcher/UI 如果出现，也应先保持只读和可审计。
+- 调研结论见 `docs/research/loop-engineering-alignment.md` 和
+  `docs/research/harness-reading-notes.md`：当前项目更准确地说是
+  **Codex App-first harness / outer orchestration loop**，下一阶段要先补
+  recovery classification、inner verification routines 和 safety/eval。Agent OS
+  不放进本项目路线图。
 
 ## 当前定位
 
-`codex-orchestrator` 现在是一个 Codex App-first outer-loop orchestrator
-skill/helper。
+`codex-orchestrator` 现在是一个 Codex App-first outer-loop harness：
+skill 负责给 Codex App 编排 session 的工作方式，helper 负责持久状态、
+git/worktree 观察、heartbeat report、routine/policy/eval 检查。
 
-它不是完整的 Loop Engineering runtime。worker session 内部的改代码、跑测试、修复是内层循环；`codex-orchestrator` 管理的是外层工程循环：选任务、隔离 session、巡检、审查、合并、清理和继续推进。
+它不是完整的 Loop Engineering runtime，也不是 agent OS。agent OS 路线不在本项目范围内。worker session
+内部的改代码、跑测试、修复是内层循环；`codex-orchestrator` 管理的是外层工程循环：选任务、隔离 session、巡检、审查、合并、清理和继续推进。
 
 它适合做：
 
@@ -337,56 +345,51 @@ eval；`eval run` 只运行 fixture eval；`eval add-failure` 能手动沉淀失
 - 自改规则至少需要 review；
 - 对生产、支付、硬件、真实用户数据相关操作必须偏保守。
 
-## v5：Multi-agent operating system
+## 不做：Agent operating system
 
-目标：
+`codex-orchestrator` 不把 Agent OS 作为路线图阶段。
 
-从 App-first skill + helper，演进成更完整的 agent orchestration runtime。
+原因：
 
-它可能包含：
+- 当前最有价值的用户入口是 Codex App-first 编排，不是另起一套 worker runtime；
+- helper CLI 没有可靠的 Codex App session control surface，不能也不应该假装自己能直接管理 worker pool；
+- 现在的主要风险不是“agent 不够多”，而是 evidence over-claim、stale recovery、unsafe fallback、review bandwidth 和规则漂移；
+- daemon/UI/worker pool 会显著增加使用成本，但不能自动解决上述风险。
 
-- task queue；
-- persistent DB；
-- routine registry；
-- worker pool；
-- project adapters；
-- App/Codex/Claude/GitHub Actions adapters；
-- web UI；
-- notification center；
-- audit log；
-- policy/eval gate；
-- human-in-the-loop approval。
+因此本项目的路线图终点先收在 **V4：policy/eval + reviewable rule
+improvement**。如果未来另开 agent runtime 项目，应作为新产品重新论证，而不是塞进
+`codex-orchestrator`。
 
-但 v5 的前提是有可靠的 worker control surface：
+## 下一阶段优先级
 
-- Codex App/CLI 提供可编程 session API；
-- 或者系统自己实现 worker runtime；
-- 或者接入 Claude Code / GitHub Actions / shell workers 等可控执行面。
+最现实的路线是把 **Codex App-first harness** 做扎实：
 
-在这之前，不应该把 `codex-orchestrator` 描述成完整 multi-agent OS。
-
-## 近期优先级
-
-最现实的短期路线已经从“继续补小 routine”切换为 **Codex App-first beta
-usability package**：
-
-1. 保持 v1 skill 简洁可安装。
-2. 把外部用户从安装到安全本地 demo 的路径集中到
-   `docs/beta-usability-package.md`。
-3. 准备 `v0.3.0-beta.1` release notes 草稿：
-   `docs/beta-release-notes-draft.md`。
-4. 跑一次真实 Codex App demo proof，补齐 helper-only smoke 没覆盖的 App
-   dispatch / review / merge / push / cleanup 证据。已记录在
-   `docs/reviews/2026-06-10-real-codex-app-demo-proof.md`。
-5. 只有当某个 routine 能移除 beta blocker 或证明常见真实工作流时，才继续补
-   routine；不要为了数量继续堆小切片。
-
-之后再选择：
-
-- App-first install UX：继续让 GitHub repo + bootstrap prompt 成为主入口，
-  release binary 只是 helper 安装路径；
-- daemon prototype：只读 watcher，运行 `observe` 并写报告，不创建 session 或改 git；
-- deeper policy/eval：把真实失败案例沉淀为 eval fixture。
+1. 保持 skill / README / bootstrap prompt 简洁，让新用户能把 GitHub 链接交给
+   Codex App 自己 dry-run。
+2. 持续维护 real Codex App demo proof，证明 App dispatch / review / merge /
+   push / cleanup 这条链路真实可用。
+3. 扩展 V4 policy/eval：
+   - 从真实编排失败沉淀 fixture；
+   - 检查 setup-failed 后污染主工作区、单任务结束后停止总队列、证据升级、缺少 worker 边界等问题；
+   - 增加 review-only `rules propose`，但不自动启用新规则。
+4. 补 recovery-state classifier：
+   - pending setup；
+   - setup failed；
+   - active；
+   - stale with clean commit；
+   - stale with useful diff；
+   - completed-unreviewed；
+   - blocked；
+   - cleanup-needed；
+   - abandoned。
+5. 继续保守扩展 routine：
+   - 只有当某个 routine 能覆盖真实高频工作流或重复失败时才添加；
+   - 每个 routine 必须声明 verification surface、evidence labels、allowed actions、escalation rule。
+6. 保持 daemon/watch 方向只读：
+   - 可以运行 `observe` 并写报告；
+   - 不创建 session；
+   - 不 merge/push；
+   - 不删除 worktree。
 
 ## 成功标准
 
