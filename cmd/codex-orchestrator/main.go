@@ -74,6 +74,11 @@ type Observation struct {
 	Status            string          `json:"status"`
 	Action            string          `json:"action"`
 	Note              string          `json:"note"`
+	Signal            string          `json:"signal,omitempty"`
+	LedgerStatus      string          `json:"ledgerStatus,omitempty"`
+	Branch            string          `json:"branch,omitempty"`
+	Worktree          string          `json:"worktree,omitempty"`
+	LastUpdatedAt     string          `json:"lastUpdatedAt,omitempty"`
 	GitStatus         string          `json:"gitStatus,omitempty"`
 	PendingWorktreeID string          `json:"pendingWorktreeId,omitempty"`
 	Budget            *BudgetMetadata `json:"budget,omitempty"`
@@ -129,6 +134,37 @@ type BudgetPressureSummary struct {
 	RoutineSpecsMissingBudget  int      `json:"routineSpecsMissingBudget,omitempty"`
 }
 
+type RuntimeStatusItem struct {
+	ID                string `json:"id"`
+	Title             string `json:"title,omitempty"`
+	LedgerStatus      string `json:"ledgerStatus,omitempty"`
+	ObservedStatus    string `json:"observedStatus,omitempty"`
+	Signal            string `json:"signal,omitempty"`
+	Branch            string `json:"branch,omitempty"`
+	Worktree          string `json:"worktree,omitempty"`
+	PendingWorktreeID string `json:"pendingWorktreeId,omitempty"`
+	LastUpdatedAt     string `json:"lastUpdatedAt,omitempty"`
+	Action            string `json:"action,omitempty"`
+	Note              string `json:"note,omitempty"`
+}
+
+type RuntimeStatusReport struct {
+	EvidenceLabel          string              `json:"evidenceLabel"`
+	Summary                string              `json:"summary"`
+	RecentWindowHours      int                 `json:"recentWindowHours"`
+	MaxConcurrency         int                 `json:"maxConcurrency"`
+	UsedDispatchSlots      int                 `json:"usedDispatchSlots"`
+	AvailableDispatchSlots int                 `json:"availableDispatchSlots"`
+	ActiveWorkers          []RuntimeStatusItem `json:"activeWorkers,omitempty"`
+	PendingSetup           []RuntimeStatusItem `json:"pendingSetup,omitempty"`
+	DirtyUncommitted       []RuntimeStatusItem `json:"dirtyUncommitted,omitempty"`
+	CompletedUnreviewed    []RuntimeStatusItem `json:"completedUnreviewed,omitempty"`
+	StaleNeedsInspection   []RuntimeStatusItem `json:"staleNeedsInspection,omitempty"`
+	Blockers               []RuntimeStatusItem `json:"blockers,omitempty"`
+	CleanupNeeded          []RuntimeStatusItem `json:"cleanupNeeded,omitempty"`
+	RecentMergedOrCleaned  []RuntimeStatusItem `json:"recentMergedOrCleaned,omitempty"`
+}
+
 type routineBudgetCoverage struct {
 	Total               int
 	WithMaxRuntime      int
@@ -153,6 +189,7 @@ type ObserveSummary struct {
 	BudgetSummary      BudgetSummary         `json:"budgetSummary"`
 	BudgetPressure     BudgetPressureSummary `json:"budgetPressure"`
 	Integration        IntegrationState      `json:"integration"`
+	RuntimeStatus      RuntimeStatusReport   `json:"runtimeStatus"`
 	Observations       []Observation         `json:"observations"`
 	RecentRoutineRuns  []RoutineRun          `json:"recentRoutineRuns,omitempty"`
 }
@@ -287,7 +324,7 @@ Usage:
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
-  codex-orchestrator status [--repo PATH] [--ledger PATH] [--json]
+  codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--stale-after 15m]
   codex-orchestrator validate-routines [--dir routines] [--json]
   codex-orchestrator run-routine pr-reviewer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine stale-task-rescuer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
@@ -363,8 +400,11 @@ _codex_orchestrator()
     append-event)
       COMPREPLY=( $(compgen -W "--ledger --type --task-id --status --pending-worktree-id --worktree --branch --note --help" -- "$cur") )
       ;;
-    observe|status)
-      COMPREPLY=( $(compgen -W "--repo --ledger --json --write-report --write-summary --help" -- "$cur") )
+    observe)
+      COMPREPLY=( $(compgen -W "--repo --ledger --json --write-report --write-summary --stale-after --help" -- "$cur") )
+      ;;
+    status)
+      COMPREPLY=( $(compgen -W "--repo --ledger --json --stale-after --help" -- "$cur") )
       ;;
     heartbeat)
       COMPREPLY=( $(compgen -W "--repo --ledger --interval --count --write-report --write-summary --help" -- "$cur") )
@@ -491,8 +531,11 @@ case $state in
       append-event)
         _values 'options' --ledger --type --task-id --status --pending-worktree-id --worktree --branch --note --help
         ;;
-      observe|status)
-        _values 'options' --repo --ledger --json --write-report --write-summary --help
+      observe)
+        _values 'options' --repo --ledger --json --write-report --write-summary --stale-after --help
+        ;;
+      status)
+        _values 'options' --repo --ledger --json --stale-after --help
         ;;
       heartbeat)
         _values 'options' --repo --ledger --interval --count --write-report --write-summary --help
@@ -534,6 +577,7 @@ complete -c codex-orchestrator -l ledger -d 'Ledger path'
 complete -c codex-orchestrator -l json -d 'Print JSON'
 complete -c codex-orchestrator -l write-report -d 'Write JSON report'
 complete -c codex-orchestrator -l write-summary -d 'Write Markdown summary'
+complete -c codex-orchestrator -l stale-after -d 'Stale threshold'
 complete -c codex-orchestrator -l task-id -d 'Task id'
 complete -c codex-orchestrator -l pending-worktree-id -d 'Opaque Codex App pending worktree setup id'
 complete -c codex-orchestrator -l worktree -d 'Task worktree path'
@@ -927,6 +971,7 @@ func cmdStatus(args []string) error {
 	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
 	jsonOut := fs.Bool("json", false, "print JSON")
+	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale threshold")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -935,67 +980,49 @@ func cmdStatus(args []string) error {
 	if err != nil {
 		return err
 	}
-	counts := map[string]int{}
+	ledgerCounts := map[string]int{}
 	for _, task := range ledger.Tasks {
 		status := task.Status
 		if status == "" {
 			status = "unknown"
 		}
-		counts[status]++
+		ledgerCounts[status]++
 	}
-	budgetSummary := summarizeTaskBudgets(ledger.Tasks)
-	addRoutineBudgetSummary(&budgetSummary, filepath.Join(expandPath(ledger.ProjectRoot), "routines"))
+	summary, err := observeWithOptions(resolvedLedger, *staleAfter)
+	if err != nil {
+		return err
+	}
 	result := map[string]any{
 		"ledger":            resolvedLedger,
 		"projectRoot":       ledger.ProjectRoot,
 		"defaultBranch":     ledger.DefaultBranch,
 		"taskCount":         len(ledger.Tasks),
 		"routineRunCount":   len(ledger.RoutineRuns),
-		"counts":            counts,
-		"budgetSummary":     budgetSummary,
+		"overallStatus":     summary.OverallStatus,
+		"counts":            summary.Counts,
+		"ledgerCounts":      ledgerCounts,
+		"reviewPressure":    summary.ReviewPressure,
+		"budgetSummary":     summary.BudgetSummary,
+		"budgetPressure":    summary.BudgetPressure,
+		"integration":       summary.Integration,
+		"runtimeStatus":     summary.RuntimeStatus,
 		"tasks":             ledger.Tasks,
-		"recentRoutineRuns": recentRoutineRuns(ledger.RoutineRuns, 5),
+		"observations":      summary.Observations,
+		"recentRoutineRuns": summary.RecentRoutineRuns,
 	}
 	if *jsonOut {
 		return printJSON(result)
 	}
 	fmt.Printf("Ledger: %s\n", resolvedLedger)
 	fmt.Printf("Project: %s default=%s\n", ledger.ProjectRoot, ledger.DefaultBranch)
-	fmt.Printf("Tasks: %d\n", len(ledger.Tasks))
-	fmt.Printf("Routine runs: %d\n", len(ledger.RoutineRuns))
-	fmt.Printf("Budget: tasksWithBudget=%d tasksMissingBudget=%d routineSpecsWithBudget=%d routineSpecsMissingBudget=%d\n",
-		budgetSummary.TasksWithBudget,
-		budgetSummary.TasksMissingBudget,
-		budgetSummary.RoutineSpecsWithBudget,
-		budgetSummary.RoutineSpecsMissingBudget,
+	fmt.Printf("Tasks: %d overall=%s\n", len(ledger.Tasks), summary.OverallStatus)
+	fmt.Printf("Runtime status (%s): %s\n", summary.RuntimeStatus.EvidenceLabel, summary.RuntimeStatus.Summary)
+	fmt.Printf("Dispatch slots: used=%d/%d available=%d\n",
+		summary.RuntimeStatus.UsedDispatchSlots,
+		summary.RuntimeStatus.MaxConcurrency,
+		summary.RuntimeStatus.AvailableDispatchSlots,
 	)
-	keys := make([]string, 0, len(counts))
-	for key := range counts {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		fmt.Printf("- %s: %d\n", key, counts[key])
-	}
-	for _, task := range ledger.Tasks {
-		if task.PendingWorktreeID == "" {
-			continue
-		}
-		fmt.Printf("Pending worktree: task=%s pendingWorktreeId=%s\n", task.ID, task.PendingWorktreeID)
-	}
-	if recent := recentRoutineRuns(ledger.RoutineRuns, 5); len(recent) > 0 {
-		fmt.Println("Recent routine runs:")
-		for _, run := range recent {
-			fmt.Printf("- %s %s", run.RoutineID, run.Status)
-			if run.TaskID != "" {
-				fmt.Printf(" task=%s", run.TaskID)
-			}
-			if run.NextSuggestedAction != "" {
-				fmt.Printf(" next=%q", run.NextSuggestedAction)
-			}
-			fmt.Println()
-		}
-	}
+	printRuntimeStatusReport(summary.RuntimeStatus)
 	return nil
 }
 
@@ -2925,6 +2952,7 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	budget := summarizeTaskBudgets(ledger.Tasks)
 	addRoutineBudgetSummary(&budget, filepath.Join(expandPath(ledger.ProjectRoot), "routines"))
 	budgetPressure := calculateBudgetPressure(ledger.Tasks, observations, observedAt, budget.RoutineSpecsMissingBudget)
+	runtimeStatus := buildRuntimeStatusReport(ledger.Tasks, observations, pressure, observedAt)
 	overall, actions := summarizeObservations(integration, counts, pressure)
 	return ObserveSummary{
 		Ledger:             ledgerPath,
@@ -2939,6 +2967,7 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		BudgetSummary:      budget,
 		BudgetPressure:     budgetPressure,
 		Integration:        integration,
+		RuntimeStatus:      runtimeStatus,
 		Observations:       observations,
 		RecentRoutineRuns:  recentRoutineRuns(ledger.RoutineRuns, 5),
 	}, nil
@@ -3022,6 +3051,140 @@ func calculateBudgetPressure(tasks []Task, observations []Observation, observedA
 		summary.Warnings = append(summary.Warnings, fmt.Sprintf("%d routine spec(s) are missing local budget metadata.", routineSpecsMissingBudget))
 	}
 	return summary
+}
+
+func buildRuntimeStatusReport(tasks []Task, observations []Observation, pressure ReviewPressure, observedAt time.Time) RuntimeStatusReport {
+	const recentWindowHours = 24
+	recentAfter := observedAt.Add(-recentWindowHours * time.Hour)
+	report := RuntimeStatusReport{
+		EvidenceLabel:          "local/static",
+		RecentWindowHours:      recentWindowHours,
+		MaxConcurrency:         pressure.MaxConcurrency,
+		UsedDispatchSlots:      pressure.MaxConcurrency - pressure.AvailableSlots,
+		AvailableDispatchSlots: pressure.AvailableSlots,
+	}
+	for index, observation := range observations {
+		task := tasks[index]
+		item := runtimeStatusItem(task, observation)
+		switch observation.Status {
+		case "active":
+			report.ActiveWorkers = append(report.ActiveWorkers, item)
+		case "pending-setup":
+			report.PendingSetup = append(report.PendingSetup, item)
+		case "completed-unreviewed":
+			report.CompletedUnreviewed = append(report.CompletedUnreviewed, item)
+		case "blocked":
+			report.Blockers = append(report.Blockers, item)
+		case "cleanup-needed":
+			report.CleanupNeeded = append(report.CleanupNeeded, item)
+		case "stale-needs-inspection":
+			if observation.Signal == "dirty-uncommitted" {
+				report.DirtyUncommitted = append(report.DirtyUncommitted, item)
+			} else {
+				report.StaleNeedsInspection = append(report.StaleNeedsInspection, item)
+			}
+		}
+		if recent, ok := recentMergedOrCleanedItem(task, observation, recentAfter); ok {
+			report.RecentMergedOrCleaned = append(report.RecentMergedOrCleaned, recent)
+		}
+	}
+	sortRuntimeStatusItems(report.ActiveWorkers)
+	sortRuntimeStatusItems(report.PendingSetup)
+	sortRuntimeStatusItems(report.DirtyUncommitted)
+	sortRuntimeStatusItems(report.CompletedUnreviewed)
+	sortRuntimeStatusItems(report.StaleNeedsInspection)
+	sortRuntimeStatusItems(report.Blockers)
+	sortRuntimeStatusItems(report.CleanupNeeded)
+	sortRuntimeStatusItemsByLatest(report.RecentMergedOrCleaned)
+	report.Summary = runtimeStatusSummary(report)
+	return report
+}
+
+func runtimeStatusItem(task Task, observation Observation) RuntimeStatusItem {
+	item := RuntimeStatusItem{
+		ID:                task.ID,
+		Title:             task.Title,
+		LedgerStatus:      task.Status,
+		ObservedStatus:    observation.Status,
+		Signal:            observation.Signal,
+		Branch:            task.Branch,
+		Worktree:          task.Worktree,
+		PendingWorktreeID: task.PendingWorktreeID,
+		LastUpdatedAt:     observation.LastUpdatedAt,
+		Action:            observation.Action,
+		Note:              observation.Note,
+	}
+	if item.Title == item.ID {
+		item.Title = ""
+	}
+	return item
+}
+
+func recentMergedOrCleanedItem(task Task, observation Observation, recentAfter time.Time) (RuntimeStatusItem, bool) {
+	if observation.Status == "cleanup-needed" {
+		return RuntimeStatusItem{}, false
+	}
+	event, ok := latestTaskEvent(task, func(event map[string]string) bool {
+		status := event["status"]
+		if status == "" {
+			status = event["result"]
+		}
+		switch status {
+		case "merged", "released", "cleaned":
+			return true
+		default:
+			return false
+		}
+	})
+	if !ok {
+		return RuntimeStatusItem{}, false
+	}
+	at, err := time.Parse(time.RFC3339, event["at"])
+	if err != nil || at.Before(recentAfter) {
+		return RuntimeStatusItem{}, false
+	}
+	item := runtimeStatusItem(task, observation)
+	item.ObservedStatus = event["status"]
+	if item.ObservedStatus == "" {
+		item.ObservedStatus = event["result"]
+	}
+	item.LastUpdatedAt = event["at"]
+	if note := strings.TrimSpace(event["note"]); note != "" {
+		item.Note = note
+	}
+	return item, true
+}
+
+func sortRuntimeStatusItems(items []RuntimeStatusItem) {
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].ID < items[j].ID
+	})
+}
+
+func sortRuntimeStatusItemsByLatest(items []RuntimeStatusItem) {
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].LastUpdatedAt == items[j].LastUpdatedAt {
+			return items[i].ID < items[j].ID
+		}
+		return items[i].LastUpdatedAt > items[j].LastUpdatedAt
+	})
+}
+
+func runtimeStatusSummary(report RuntimeStatusReport) string {
+	parts := []string{
+		fmt.Sprintf("active=%d", len(report.ActiveWorkers)),
+		fmt.Sprintf("pending=%d", len(report.PendingSetup)),
+		fmt.Sprintf("dirty=%d", len(report.DirtyUncommitted)),
+		fmt.Sprintf("review=%d", len(report.CompletedUnreviewed)),
+		fmt.Sprintf("blocked=%d", len(report.Blockers)),
+		fmt.Sprintf("cleanup=%d", len(report.CleanupNeeded)),
+		fmt.Sprintf("recentMergedOrCleaned=%d", len(report.RecentMergedOrCleaned)),
+		fmt.Sprintf("availableSlots=%d", report.AvailableDispatchSlots),
+	}
+	if len(report.StaleNeedsInspection) > 0 {
+		parts = append(parts, fmt.Sprintf("stale=%d", len(report.StaleNeedsInspection)))
+	}
+	return strings.Join(parts, " ")
 }
 
 func taskBudgetPressure(task Task, observedStatus string, observedAt time.Time) *BudgetPressure {
@@ -3129,12 +3292,52 @@ func elapsedMinutes(start time.Time, end time.Time) int {
 	return int(end.Sub(start).Minutes())
 }
 
-func taskObservation(task Task, status string, action string, note string, gitStatus string) Observation {
+func latestTaskEvent(task Task, match func(map[string]string) bool) (map[string]string, bool) {
+	var best map[string]string
+	var bestAt time.Time
+	found := false
+	events := append([]map[string]string{}, task.History...)
+	if len(task.LastObservation) > 0 {
+		events = append(events, task.LastObservation)
+	}
+	for _, event := range events {
+		if !match(event) || event["at"] == "" {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339, event["at"])
+		if err != nil {
+			continue
+		}
+		if !found || at.After(bestAt) {
+			bestAt = at
+			best = event
+			found = true
+		}
+	}
+	return best, found
+}
+
+func taskLastUpdatedAt(task Task) string {
+	event, ok := latestTaskEvent(task, func(event map[string]string) bool {
+		return event["at"] != ""
+	})
+	if !ok {
+		return ""
+	}
+	return event["at"]
+}
+
+func taskObservation(task Task, status string, action string, note string, gitStatus string, signal string) Observation {
 	return Observation{
 		ID:                task.ID,
 		Status:            status,
 		Action:            action,
 		Note:              note,
+		Signal:            signal,
+		LedgerStatus:      task.Status,
+		Branch:            task.Branch,
+		Worktree:          task.Worktree,
+		LastUpdatedAt:     taskLastUpdatedAt(task),
 		GitStatus:         gitStatus,
 		PendingWorktreeID: task.PendingWorktreeID,
 		Budget:            task.Budget,
@@ -3146,51 +3349,55 @@ func inspectTask(task Task, staleAfter time.Duration) Observation {
 		if task.Worktree != "" {
 			worktree := expandPath(task.Worktree)
 			if _, err := os.Stat(worktree); err == nil && task.Status != "rejected" {
-				return taskObservation(task, "cleanup-needed", "remove accepted task worktree and delete local task branch if safe", fmt.Sprintf("Task is %s but worktree still exists: %s", task.Status, worktree), "")
+				return taskObservation(task, "cleanup-needed", "remove accepted task worktree and delete local task branch if safe", fmt.Sprintf("Task is %s but worktree still exists: %s", task.Status, worktree), "", "cleanup-pending")
 			}
 		}
-		return taskObservation(task, task.Status, "quiet", fmt.Sprintf("Task is recorded as %s.", task.Status), "")
+		return taskObservation(task, task.Status, "quiet", fmt.Sprintf("Task is recorded as %s.", task.Status), "", "terminal-quiet")
 	}
 	if task.Worktree == "" {
 		if task.PendingWorktreeID != "" {
 			statusValue := "pending-setup"
 			action := "wait for Codex App worktree setup to finish, then append worktree and branch"
 			note := fmt.Sprintf("Pending worktree setup id recorded: %s", task.PendingWorktreeID)
+			signal := "pending-setup"
 			if isTaskStale(task, staleAfter) {
 				statusValue = "stale-needs-inspection"
 				action = "inspect pending setup and decide whether to re-dispatch or abandon"
 				note = fmt.Sprintf("Pending worktree setup id %s is older than %s.", task.PendingWorktreeID, staleAfter)
+				signal = "pending-setup-stale"
 			}
-			return taskObservation(task, statusValue, action, note, "")
+			return taskObservation(task, statusValue, action, note, "", signal)
 		}
-		return taskObservation(task, "blocked", "record missing worktree path", "Task has no worktree path in ledger.", "")
+		return taskObservation(task, "blocked", "record missing worktree path", "Task has no worktree path in ledger.", "", "missing-worktree-path")
 	}
 	worktree := expandPath(task.Worktree)
 	if _, err := os.Stat(worktree); err != nil {
 		statusValue := "pending-setup"
 		action := "verify setup or mark stale if expired"
 		note := fmt.Sprintf("Worktree does not exist: %s", worktree)
+		signal := "missing-worktree"
 		if isTaskStale(task, staleAfter) {
 			statusValue = "stale-needs-inspection"
 			action = "inspect pending setup and decide whether to re-dispatch or abandon"
 			note = fmt.Sprintf("Worktree does not exist and the last observation is older than %s: %s", staleAfter, worktree)
+			signal = "missing-worktree-stale"
 		}
-		return taskObservation(task, statusValue, action, note, "")
+		return taskObservation(task, statusValue, action, note, "", signal)
 	}
 	status, err := gitOutput(worktree, "status", "--short", "--branch")
 	if err != nil {
-		return taskObservation(task, "blocked", "inspect worktree git state", err.Error(), "")
+		return taskObservation(task, "blocked", "inspect worktree git state", err.Error(), "", "git-status-error")
 	}
 	branch := currentBranch(status)
 	if task.Branch != "" && branch != "" && branch != task.Branch {
-		return taskObservation(task, "blocked", "fix branch mismatch before review", fmt.Sprintf("Expected %s, found %s.", task.Branch, branch), status)
+		return taskObservation(task, "blocked", "fix branch mismatch before review", fmt.Sprintf("Expected %s, found %s.", task.Branch, branch), status, "branch-mismatch")
 	}
 	if hasDirtyChanges(status) {
-		return taskObservation(task, "stale-needs-inspection", "inspect uncommitted scoped diff or nudge same worker", "Worktree has uncommitted changes.", status)
+		return taskObservation(task, "stale-needs-inspection", "inspect uncommitted scoped diff or nudge same worker", "Worktree has uncommitted changes.", status, "dirty-uncommitted")
 	}
 	commitsAfterBase, known := hasCommitsAfterBase(worktree, task.BaseCommit)
 	if known && commitsAfterBase {
-		return taskObservation(task, "completed-unreviewed", "orchestrator review required before merge", "Clean worktree has commits after baseCommit.", status)
+		return taskObservation(task, "completed-unreviewed", "orchestrator review required before merge", "Clean worktree has commits after baseCommit.", status, "completed-clean-commit")
 	}
 	if !known {
 		statusValue := task.Status
@@ -3198,14 +3405,14 @@ func inspectTask(task Task, staleAfter time.Duration) Observation {
 			statusValue = "active"
 		}
 		if statusValue == "active" && isTaskStale(task, staleAfter) {
-			return taskObservation(task, "stale-needs-inspection", "inspect manually", fmt.Sprintf("Task has no comparable baseCommit and the last observation is older than %s.", staleAfter), status)
+			return taskObservation(task, "stale-needs-inspection", "inspect manually", fmt.Sprintf("Task has no comparable baseCommit and the last observation is older than %s.", staleAfter), status, "stale-no-base-commit")
 		}
-		return taskObservation(task, statusValue, "inspect manually", "Could not compare baseCommit; ledger may be a template or base is missing.", status)
+		return taskObservation(task, statusValue, "inspect manually", "Could not compare baseCommit; ledger may be a template or base is missing.", status, "no-base-commit")
 	}
 	if task.Status == "active" && isTaskStale(task, staleAfter) {
-		return taskObservation(task, "stale-needs-inspection", "inspect recent thread messages or nudge same worker", fmt.Sprintf("Clean worktree has no commits after baseCommit, and last observation is older than %s.", staleAfter), status)
+		return taskObservation(task, "stale-needs-inspection", "inspect recent thread messages or nudge same worker", fmt.Sprintf("Clean worktree has no commits after baseCommit, and last observation is older than %s.", staleAfter), status, "stale-active")
 	}
-	return taskObservation(task, "active", "quiet", "Clean worktree has no commits after baseCommit.", status)
+	return taskObservation(task, "active", "quiet", "Clean worktree has no commits after baseCommit.", status, "active-clean")
 }
 
 func loadLedger(path string) (Ledger, error) {
@@ -3560,6 +3767,7 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- blocked: `%d`\n", summary.ReviewPressure.Blocked)
 	fmt.Fprintf(&b, "- cleanupNeeded: `%d`\n", summary.ReviewPressure.CleanupNeeded)
 	fmt.Fprintf(&b, "- availableSlots: `%d`\n", summary.ReviewPressure.AvailableSlots)
+	fmt.Fprintf(&b, "- runtimeStatus: `%s`\n", summary.RuntimeStatus.Summary)
 	fmt.Fprintf(&b, "- tasksWithBudget: `%d`\n", summary.BudgetSummary.TasksWithBudget)
 	if summary.BudgetSummary.TotalMaxRuntimeMinutes > 0 {
 		fmt.Fprintf(&b, "- totalMaxRuntimeMinutes: `%d`\n", summary.BudgetSummary.TotalMaxRuntimeMinutes)
@@ -3589,6 +3797,7 @@ func renderSummary(summary ObserveSummary) string {
 			fmt.Fprintf(&b, "- %s\n", action)
 		}
 	}
+	renderRuntimeStatusMarkdown(&b, summary.RuntimeStatus)
 	fmt.Fprintf(&b, "\n## Tasks\n\n")
 	if len(summary.Observations) == 0 {
 		fmt.Fprintf(&b, "- No tasks recorded.\n")
@@ -3600,6 +3809,15 @@ func renderSummary(summary ObserveSummary) string {
 			}
 			if item.PendingWorktreeID != "" {
 				fmt.Fprintf(&b, "  - pendingWorktreeId: `%s`\n", item.PendingWorktreeID)
+			}
+			if item.Branch != "" {
+				fmt.Fprintf(&b, "  - branch: `%s`\n", item.Branch)
+			}
+			if item.Worktree != "" {
+				fmt.Fprintf(&b, "  - worktree: `%s`\n", item.Worktree)
+			}
+			if item.LastUpdatedAt != "" {
+				fmt.Fprintf(&b, "  - lastUpdatedAt: `%s`\n", item.LastUpdatedAt)
 			}
 			if budget := formatBudget(item.Budget); budget != "" {
 				fmt.Fprintf(&b, "  - budget: %s\n", budget)
@@ -3633,6 +3851,86 @@ func renderSummary(summary ObserveSummary) string {
 		}
 	}
 	return b.String()
+}
+
+func renderRuntimeStatusMarkdown(b *strings.Builder, report RuntimeStatusReport) {
+	fmt.Fprintf(b, "\n## Runtime Status\n\n")
+	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", report.EvidenceLabel)
+	fmt.Fprintf(b, "- summary: `%s`\n", report.Summary)
+	fmt.Fprintf(b, "- dispatchSlots: `%d/%d` used, `%d` available\n", report.UsedDispatchSlots, report.MaxConcurrency, report.AvailableDispatchSlots)
+	renderRuntimeStatusCategoryMarkdown(b, "Active Workers", report.ActiveWorkers)
+	renderRuntimeStatusCategoryMarkdown(b, "Pending Setup", report.PendingSetup)
+	renderRuntimeStatusCategoryMarkdown(b, "Dirty Uncommitted", report.DirtyUncommitted)
+	renderRuntimeStatusCategoryMarkdown(b, "Completed Unreviewed", report.CompletedUnreviewed)
+	renderRuntimeStatusCategoryMarkdown(b, "Blockers", report.Blockers)
+	renderRuntimeStatusCategoryMarkdown(b, "Cleanup Needed", report.CleanupNeeded)
+	renderRuntimeStatusCategoryMarkdown(b, fmt.Sprintf("Recent Merged Or Cleaned (last %dh)", report.RecentWindowHours), report.RecentMergedOrCleaned)
+	renderRuntimeStatusCategoryMarkdown(b, "Stale Needs Inspection", report.StaleNeedsInspection)
+}
+
+func renderRuntimeStatusCategoryMarkdown(b *strings.Builder, title string, items []RuntimeStatusItem) {
+	if len(items) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n### %s\n\n", title)
+	for _, item := range items {
+		fmt.Fprintf(b, "- `%s`: `%s` - %s\n", item.ID, item.ObservedStatus, item.Action)
+		if item.Note != "" {
+			fmt.Fprintf(b, "  - note: %s\n", item.Note)
+		}
+		if item.Branch != "" {
+			fmt.Fprintf(b, "  - branch: `%s`\n", item.Branch)
+		}
+		if item.Worktree != "" {
+			fmt.Fprintf(b, "  - worktree: `%s`\n", item.Worktree)
+		}
+		if item.PendingWorktreeID != "" {
+			fmt.Fprintf(b, "  - pendingWorktreeId: `%s`\n", item.PendingWorktreeID)
+		}
+		if item.LastUpdatedAt != "" {
+			fmt.Fprintf(b, "  - lastUpdatedAt: `%s`\n", item.LastUpdatedAt)
+		}
+	}
+}
+
+func printRuntimeStatusReport(report RuntimeStatusReport) {
+	printRuntimeStatusCategory("Active workers", report.ActiveWorkers)
+	printRuntimeStatusCategory("Pending setup", report.PendingSetup)
+	printRuntimeStatusCategory("Dirty uncommitted", report.DirtyUncommitted)
+	printRuntimeStatusCategory("Completed unreviewed", report.CompletedUnreviewed)
+	printRuntimeStatusCategory("Blockers", report.Blockers)
+	printRuntimeStatusCategory("Cleanup needed", report.CleanupNeeded)
+	printRuntimeStatusCategory(fmt.Sprintf("Recent merged or cleaned (last %dh)", report.RecentWindowHours), report.RecentMergedOrCleaned)
+	printRuntimeStatusCategory("Stale needs inspection", report.StaleNeedsInspection)
+}
+
+func printRuntimeStatusCategory(title string, items []RuntimeStatusItem) {
+	if len(items) == 0 {
+		return
+	}
+	fmt.Printf("%s:\n", title)
+	for _, item := range items {
+		fmt.Printf("- %s: %s", item.ID, item.ObservedStatus)
+		if item.Branch != "" {
+			fmt.Printf(" branch=%s", item.Branch)
+		}
+		if item.PendingWorktreeID != "" {
+			fmt.Printf(" pendingWorktreeId=%s", item.PendingWorktreeID)
+		}
+		if item.LastUpdatedAt != "" {
+			fmt.Printf(" updated=%s", item.LastUpdatedAt)
+		}
+		fmt.Println()
+		if item.Note != "" {
+			fmt.Printf("  note: %s\n", item.Note)
+		}
+		if item.Action != "" {
+			fmt.Printf("  action: %s\n", item.Action)
+		}
+		if item.Worktree != "" {
+			fmt.Printf("  worktree: %s\n", item.Worktree)
+		}
+	}
 }
 
 func compactEvent(event map[string]any) map[string]string {
@@ -3687,6 +3985,12 @@ func printObservations(summary ObserveSummary) {
 	fmt.Printf("Ledger: %s\n", summary.Ledger)
 	fmt.Printf("Project: %s default=%s\n", summary.ProjectRoot, summary.DefaultBranch)
 	fmt.Printf("Overall: %s\n", summary.OverallStatus)
+	fmt.Printf("Runtime status (%s): %s\n", summary.RuntimeStatus.EvidenceLabel, summary.RuntimeStatus.Summary)
+	fmt.Printf("Dispatch slots: used=%d/%d available=%d\n",
+		summary.RuntimeStatus.UsedDispatchSlots,
+		summary.RuntimeStatus.MaxConcurrency,
+		summary.RuntimeStatus.AvailableDispatchSlots,
+	)
 	fmt.Printf("Budget: tasksWithBudget=%d totalMaxRuntimeMinutes=%d totalReviewBudgetMinutes=%d\n",
 		summary.BudgetSummary.TasksWithBudget,
 		summary.BudgetSummary.TotalMaxRuntimeMinutes,
@@ -3706,6 +4010,7 @@ func printObservations(summary ObserveSummary) {
 	} else {
 		fmt.Printf("Integration dirty: %t\n", summary.Integration.Dirty)
 	}
+	printRuntimeStatusReport(summary.RuntimeStatus)
 	for _, action := range summary.RecommendedActions {
 		fmt.Printf("Action: %s\n", action)
 	}
@@ -3716,6 +4021,15 @@ func printObservations(summary ObserveSummary) {
 		fmt.Printf("  note: %s\n", item.Note)
 		if item.PendingWorktreeID != "" {
 			fmt.Printf("  pendingWorktreeId: %s\n", item.PendingWorktreeID)
+		}
+		if item.Branch != "" {
+			fmt.Printf("  branch: %s\n", item.Branch)
+		}
+		if item.Worktree != "" {
+			fmt.Printf("  worktree: %s\n", item.Worktree)
+		}
+		if item.LastUpdatedAt != "" {
+			fmt.Printf("  lastUpdatedAt: %s\n", item.LastUpdatedAt)
 		}
 		if budget := formatBudget(item.Budget); budget != "" {
 			fmt.Printf("  budget: %s\n", budget)

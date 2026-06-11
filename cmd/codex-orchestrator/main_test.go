@@ -274,13 +274,17 @@ func TestPendingWorktreeIDTaskLifecycle(t *testing.T) {
 		return cmdStatus([]string{"--ledger", ledger, "--json"})
 	})
 	var statusPayload struct {
-		Tasks []Task `json:"tasks"`
+		Tasks         []Task              `json:"tasks"`
+		RuntimeStatus RuntimeStatusReport `json:"runtimeStatus"`
 	}
 	if err := json.Unmarshal([]byte(statusJSON), &statusPayload); err != nil {
 		t.Fatalf("expected status JSON, got %q: %v", statusJSON, err)
 	}
 	if len(statusPayload.Tasks) != 1 || statusPayload.Tasks[0].PendingWorktreeID != "pwt_123" {
 		t.Fatalf("expected status JSON to expose pendingWorktreeId, got %#v", statusPayload.Tasks)
+	}
+	if len(statusPayload.RuntimeStatus.PendingSetup) != 1 || statusPayload.RuntimeStatus.PendingSetup[0].PendingWorktreeID != "pwt_123" {
+		t.Fatalf("expected runtime status pending setup bucket, got %#v", statusPayload.RuntimeStatus)
 	}
 
 	summary, err := observe(ledger)
@@ -719,6 +723,124 @@ func TestTerminalMergedTaskRequiresCleanupWhenWorktreeRemains(t *testing.T) {
 	}
 	if summary.OverallStatus != "cleanup-needed" {
 		t.Fatalf("expected overall cleanup-needed, got %q", summary.OverallStatus)
+	}
+}
+
+func TestObserveRuntimeStatusReportCategories(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+
+	activeWorker := filepath.Join(root, "active")
+	dirtyWorker := filepath.Join(root, "dirty")
+	reviewWorker := filepath.Join(root, "review")
+	blockedWorker := filepath.Join(root, "blocked")
+	cleanupWorker := filepath.Join(root, "cleanup")
+	for _, worker := range []struct {
+		path   string
+		branch string
+	}{
+		{path: activeWorker, branch: "codex/active"},
+		{path: dirtyWorker, branch: "codex/dirty"},
+		{path: reviewWorker, branch: "codex/review"},
+		{path: blockedWorker, branch: "codex/blocked"},
+		{path: cleanupWorker, branch: "codex/cleanup"},
+	} {
+		git(t, project, "worktree", "add", "-q", "-b", worker.branch, worker.path, "HEAD")
+	}
+
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "ACTIVE", "--worktree", activeWorker, "--branch", "codex/active"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "PENDING", "--pending-worktree-id", "pwt_runtime"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "DIRTY", "--worktree", dirtyWorker, "--branch", "codex/dirty"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "REVIEW", "--worktree", reviewWorker, "--branch", "codex/review"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "BLOCKED", "--worktree", blockedWorker, "--branch", "codex/expected"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "CLEANUP", "--worktree", cleanupWorker, "--branch", "codex/cleanup"}); err != nil {
+		t.Fatal(err)
+	}
+	doneMissing := filepath.Join(root, "done-missing")
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "DONE", "--worktree", doneMissing, "--branch", "codex/done"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dirtyWorker, "dirty.txt"), []byte("dirty\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(reviewWorker, "review.txt"), []byte("review\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, reviewWorker, "add", "review.txt")
+	git(t, reviewWorker, "commit", "-q", "-m", "review ready")
+
+	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "merge", "--task-id", "CLEANUP", "--status", "merged", "--note", "merged but not cleaned"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "cleanup", "--task-id", "DONE", "--status", "cleaned", "--note", "cleaned this cycle"}); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := summary.RuntimeStatus
+	if report.EvidenceLabel != "local/static" {
+		t.Fatalf("expected local/static runtime report, got %#v", report)
+	}
+	if got := report.AvailableDispatchSlots; got != 0 {
+		t.Fatalf("expected no available dispatch slots, got %d", got)
+	}
+	if len(report.ActiveWorkers) != 1 || report.ActiveWorkers[0].ID != "ACTIVE" {
+		t.Fatalf("expected ACTIVE in activeWorkers, got %#v", report.ActiveWorkers)
+	}
+	if len(report.PendingSetup) != 1 || report.PendingSetup[0].ID != "PENDING" {
+		t.Fatalf("expected PENDING in pendingSetup, got %#v", report.PendingSetup)
+	}
+	if len(report.DirtyUncommitted) != 1 || report.DirtyUncommitted[0].ID != "DIRTY" {
+		t.Fatalf("expected DIRTY in dirtyUncommitted, got %#v", report.DirtyUncommitted)
+	}
+	if len(report.CompletedUnreviewed) != 1 || report.CompletedUnreviewed[0].ID != "REVIEW" {
+		t.Fatalf("expected REVIEW in completedUnreviewed, got %#v", report.CompletedUnreviewed)
+	}
+	if len(report.Blockers) != 1 || report.Blockers[0].ID != "BLOCKED" {
+		t.Fatalf("expected BLOCKED in blockers, got %#v", report.Blockers)
+	}
+	if len(report.CleanupNeeded) != 1 || report.CleanupNeeded[0].ID != "CLEANUP" {
+		t.Fatalf("expected CLEANUP in cleanupNeeded, got %#v", report.CleanupNeeded)
+	}
+	if len(report.RecentMergedOrCleaned) != 1 || report.RecentMergedOrCleaned[0].ID != "DONE" || report.RecentMergedOrCleaned[0].ObservedStatus != "cleaned" {
+		t.Fatalf("expected DONE in recentMergedOrCleaned, got %#v", report.RecentMergedOrCleaned)
+	}
+	rendered := renderSummary(summary)
+	for _, want := range []string{"## Runtime Status", "### Active Workers", "### Recent Merged Or Cleaned"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected rendered summary to include %q:\n%s", want, rendered)
+		}
+	}
+
+	statusJSON := captureStdout(t, func() error {
+		return cmdStatus([]string{"--ledger", ledger, "--json"})
+	})
+	var statusPayload struct {
+		RuntimeStatus RuntimeStatusReport `json:"runtimeStatus"`
+	}
+	if err := json.Unmarshal([]byte(statusJSON), &statusPayload); err != nil {
+		t.Fatalf("expected status JSON, got %q: %v", statusJSON, err)
+	}
+	if len(statusPayload.RuntimeStatus.CleanupNeeded) != 1 || len(statusPayload.RuntimeStatus.RecentMergedOrCleaned) != 1 {
+		t.Fatalf("expected status JSON runtime categories, got %#v", statusPayload.RuntimeStatus)
 	}
 }
 

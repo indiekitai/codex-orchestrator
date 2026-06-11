@@ -422,6 +422,8 @@ roadmap。优先级如下：
    - 输出 active workers、pending setup、dirty-uncommitted、completed-unreviewed、
      merged-this-cycle、blockers、cleanup-needed 和 available dispatch slots。
    - 边界：只读状态面板；不创建 session、不 merge/push、不删除 worktree。
+   - 当前落地：helper 已在 `status` / `observe --json` / heartbeat summary 中输出
+     `runtimeStatus` 本地静态报告；仍不代表 Codex App runtime/daemon direct proof。
 
 2. First-class setup/worktree state model。
    - 目标：把 `pendingWorktreeId`、真实 worktree、branch、dirty diff、clean commit、

@@ -107,6 +107,29 @@ codex-orchestrator append-event \
   --note "Codex App worktree setup completed."
 ```
 
+## Runtime Status Snapshot
+
+Use `status` when you want the shortest answer to "what is happening now" from
+local ledger, repo, and worktree truth:
+
+```bash
+codex-orchestrator status
+codex-orchestrator status --json
+```
+
+The runtime status surface stays `local/static`. It does not query Codex App
+runtime APIs or claim direct daemon/session proof. It groups current work into
+useful buckets when possible:
+
+- `activeWorkers`
+- `pendingSetup`
+- `dirtyUncommitted`
+- `completedUnreviewed`
+- `blockers`
+- `cleanupNeeded`
+- `recentMergedOrCleaned`
+- `availableDispatchSlots`
+
 ## Observe State
 
 Use `observe` for one-shot reconciliation:
@@ -123,6 +146,7 @@ The report includes:
 
 - integration checkout dirty/error state,
 - per-task observations,
+- `runtimeStatus` with a compact local/static "what is happening now" summary,
 - `overallStatus`,
 - per-status `counts`,
 - `reviewPressure` with active/review/stale/blocked/cleanup queues,
@@ -303,8 +327,9 @@ codex-orchestrator record-routine-run \
 ```
 
 `status`, `observe --json`, and heartbeat reports include the most recent
-routine runs so a fresh orchestrator can see the last reviewer/fixer/proof
-outcome without scanning `events.jsonl` manually.
+routine runs plus the runtime status buckets above, so a fresh orchestrator can
+see both the latest proof/checker output and the current worker/worktree state
+without scanning `events.jsonl` manually.
 
 ## Recovery From A Fresh Session
 
