@@ -21,6 +21,7 @@ codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift
 codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
 codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
+codex-orchestrator run-routine budget-policy-report --write-report /tmp/budget-policy-report.json
 codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 codex-orchestrator eval run --write-report /tmp/eval-run-report.json
 codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
@@ -160,14 +161,16 @@ budget metadata coverage, local/static pressure warnings, and unknown timing
 states, but it must not start, stop, prioritize, reschedule, or kill workers, and
 must not make dispatch eligibility decisions without Codex App or human review.
 
-`budget-policy-report` is currently a contract and fixture only, not a
-`run-routine` command. It defines the next local/static report surface for
-budget policy work: summarize routine/task budget metadata coverage, copy
-recorded heartbeat budget warnings only as local/static evidence, separate
-unknown runtime or review timing into blocked evidence, and return advisory
-recommendations for the Codex App orchestrator or a human reviewer. A future
-runner may implement this contract only if it stays read-only and does not
-schedule, prioritize, pause, kill, dispatch, merge, push, or clean worktrees.
+`run-routine budget-policy-report` implements the local/static report surface
+for budget policy work. It reads `docs/roadmap.md`, this routine README,
+`routines/*.json`, and optional repo-local `.codex-orchestrator/ledger.json`
+and `.codex-orchestrator/heartbeat-report.json` files when present. It
+summarizes routine/task budget metadata coverage, copies recorded heartbeat
+budget warnings only as `local` evidence, separates unknown runtime or review
+timing into `blocked` evidence, and returns advisory recommendations for the
+Codex App orchestrator or a human reviewer. It stays read-only: it does not
+schedule, prioritize, pause, kill, dispatch, merge, push, delete, clean
+worktrees, mutate the ledger, or enforce budgets.
 
 ## Required Output Shape
 
@@ -225,9 +228,9 @@ Do not turn `local` or `proxy` evidence into `direct` proof in the final report.
 - `roadmap-next-task-suggester`: suggest the next safe bounded roadmap task
   from repo-local roadmap, runnable routine, routine-spec, and optional ledger
   state without mutating repository state.
-- `budget-policy-report`: define a review-only budget report contract for
-  metadata coverage, local/static pressure warnings, unknown timing states, and
-  human/App-layer recommendations. This spec is not runnable yet.
+- `budget-policy-report`: report review-only budget metadata coverage,
+  local/static heartbeat pressure warnings, unknown timing states, and
+  human/App-layer recommendations without mutating orchestration state.
 - `browser-runtime-proof`: verify browser-visible behavior through a browser
   harness.
 - `log-proof`: verify behavior through current runtime logs.

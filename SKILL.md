@@ -175,10 +175,10 @@ local/proxy evidence into direct proof.
 
 The helper includes conservative MVP runners for PR reviewer, stale task
 rescuer, CI fixer, release verifier, docs drift checker, evidence label auditor,
-and roadmap next-task suggester routines. Most runners are read-only. The
-ci-fixer runner is different: it executes trusted gate commands already
-recorded on a ledger task, so use it only when the ledger/gate source is
-trusted.
+roadmap next-task suggester, and budget policy report routines. Most runners
+are read-only. The ci-fixer runner is different: it executes trusted gate
+commands already recorded on a ledger task, so use it only when the ledger/gate
+source is trusted.
 
 ```bash
 codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
@@ -189,6 +189,7 @@ codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift
 codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
 codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
+codex-orchestrator run-routine budget-policy-report --write-report /tmp/budget-policy-report.json
 codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 codex-orchestrator eval run --write-report /tmp/eval-run-report.json
 codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
@@ -241,12 +242,13 @@ The docs drift checker runner is read-only and does not load or update the
 ledger. It parses the local `run-routine` command surface from
 `cmd/codex-orchestrator/main.go`, compares runnable routine IDs against
 `routines/*.json`, and checks `README.md`, `README.zh-CN.md`, `SKILL.md`,
-`docs/routines/README.md`, and `docs/roadmap.md` when present for obvious
-missing references or stale status text. It classifies missing specs or docs
-mentions as `failed`, missing repository/source/spec access as `blocked`, and a
-clean static comparison as `passed`. Its MVP report uses only `local` and
-`blocked` evidence; it does not stage, commit, merge, push, tag, release, clean
-worktrees, dispatch sessions, mutate the ledger, or claim runtime proof.
+`docs/routines/README.md`, `docs/v2-usage.md`, and `docs/roadmap.md` when
+present for obvious missing references or stale status text. It classifies
+missing specs or docs mentions as `failed`, missing repository/source/spec
+access as `blocked`, and a clean static comparison as `passed`. Its MVP report
+uses only `local` and `blocked` evidence; it does not stage, commit, merge,
+push, tag, release, clean worktrees, dispatch sessions, mutate the ledger, or
+claim runtime proof.
 
 The evidence label auditor runner is read-only and does not load or update the
 ledger. It scans explicit repo-local docs, routine specs, routine report JSON,
@@ -309,6 +311,14 @@ items remain, it reports a queue-drained next action instead of pretending to
 dispatch. Its MVP report uses only `local` and `blocked` evidence; it does not
 stage, commit, merge, push, tag, release, clean worktrees, dispatch sessions,
 or claim runtime proof.
+
+The budget policy report runner is read-only and local/static. It inspects
+roadmap/routine docs, routine budget metadata, optional repo-local ledger state,
+and an optional heartbeat report when present. It keeps budget metadata and
+heartbeat `budgetPressure` warnings as `local` evidence, records unavailable
+live runtime/review timing as `blocked`, and does not schedule, prioritize,
+pause, kill, dispatch, merge, push, delete, clean worktrees, mutate the ledger,
+or enforce budgets.
 
 After a routine is actually run, record the outcome so future orchestrator
 sessions can resume from ledger truth:

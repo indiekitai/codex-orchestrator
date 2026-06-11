@@ -2,23 +2,27 @@
   "routineId": "budget-policy-report",
   "status": "passed",
   "evidence": {
-    "direct": [],
-    "proxy": [],
-    "local": [
-      "Routine specs were inspected for maxRuntimeMinutes and reviewBudgetMinutes metadata.",
-      "Roadmap and routine docs were inspected for the review-only budget-policy boundary.",
-      "No scheduler, priority engine, automatic killing, dispatch enforcement, merge, push, or cleanup action was performed."
-    ],
     "blocked": [
-      "Live Codex App session runtime and human review elapsed time were not available in the static inputs."
-    ]
+      "Live Codex App session runtime, worker wall-clock state, and human review elapsed time were not available from direct runtime APIs; unknown live timing remains blocked/unknown."
+    ],
+    "direct": [],
+    "local": [
+      "Repository exists: .",
+      "docs/roadmap.md preserves budget-policy-report review-only boundary wording.",
+      "docs/routines/README.md preserves budget-policy-report review-only boundary wording.",
+      "Routine budget metadata coverage: total=14 withMaxRuntime=14 withReviewBudget=1 withBoth=1 withAnyBudget=14 withoutAnyBudget=0. missing reviewBudgetMinutes: api-proof, browser-runtime-proof, ci-fixer, database-proof, device-proof, docs-drift-checker, evidence-label-auditor, log-proof, orchestration-policy-auditor, pr-reviewer, release-verifier, roadmap-next-task-suggester, stale-task-rescuer.",
+      "Budget metadata gaps are local/static advisory warnings only; this routine did not enforce dispatch eligibility or worker limits.",
+      "Repo-local ledger is absent; task budget metadata inspection skipped.",
+      "Repo-local heartbeat report is absent; heartbeat budgetPressure copy skipped.",
+      "No scheduler, priority engine, automatic killing, dispatch enforcement, merge, push, delete, cleanup, or worker-control action was performed."
+    ],
+    "proxy": []
   },
   "actionsTaken": [
-    "Separated budget metadata coverage from budget pressure warnings.",
-    "Recorded unknown timing states as blocked evidence.",
-    "Kept budget recommendations advisory for Codex App orchestrator or human review."
+    "Inspected roadmap, routine docs, routine specs, optional ledger, and optional heartbeat report read-only",
+    "Separated local/static budget metadata and heartbeat warnings from unknown live timing states",
+    "Performed no scheduler, priority, worker-control, merge, push, delete, cleanup, or ledger mutation action"
   ],
   "needsHuman": true,
-  "blockedReason": "",
-  "nextSuggestedAction": "Use this local/static report shape as the contract for a future read-only budget-policy-report runner; keep any dispatch or pause decision at the Codex App orchestrator or human-review layer."
+  "nextSuggestedAction": "Review this local/static budget-policy report in Codex App or human review before changing concurrency, dispatch, pause, kill, merge, push, cleanup, or budget-enforcement behavior."
 }

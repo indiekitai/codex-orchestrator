@@ -181,12 +181,37 @@ exists. The helper may report metadata gaps, near/exceeded local thresholds, and
 unknown timing evidence, but dispatch, pause, merge, cleanup, or worker-control
 decisions remain with the Codex App orchestrator and human reviewer.
 
-The next budget-policy surface is the docs-only `budget-policy-report` contract
-under `routines/` plus its example report. It is not a runnable command yet. Its
-report shape keeps metadata coverage, local/static pressure warnings, unknown
-timing states, and human-review recommendations separate so future
-implementation work has a concrete contract without introducing budget
-enforcement.
+## Run Read-Only Routines
+
+The helper can emit local/static routine reports without mutating the ledger,
+git state, worker sessions, releases, or worktrees:
+
+```bash
+codex-orchestrator run-routine pr-reviewer --task-id TASK
+codex-orchestrator run-routine stale-task-rescuer --task-id TASK
+codex-orchestrator run-routine ci-fixer --task-id TASK
+codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1
+codex-orchestrator run-routine docs-drift-checker
+codex-orchestrator run-routine evidence-label-auditor
+codex-orchestrator run-routine orchestration-policy-auditor
+codex-orchestrator run-routine roadmap-next-task-suggester
+codex-orchestrator run-routine budget-policy-report
+```
+
+The budget-policy report surface is now runnable:
+
+```bash
+codex-orchestrator run-routine budget-policy-report \
+  --write-report /tmp/budget-policy-report.json
+```
+
+It stays local/static: it reads roadmap and routine docs, routine specs,
+optional repo-local ledger state, and an optional heartbeat report when those
+files are already present. Its report keeps metadata coverage, local/static
+pressure warnings, unknown timing states, and human-review recommendations
+separate without introducing budget enforcement. It does not dispatch,
+schedule, prioritize, pause, kill, merge, push, delete, clean worktrees, mutate
+the ledger, or make budget eligibility decisions.
 
 ## Record Review/Merge/Cleanup Outcomes
 

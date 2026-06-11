@@ -294,6 +294,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
 ./codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 ./codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
+./codex-orchestrator run-routine budget-policy-report --write-report /tmp/budget-policy-report.json
 ./codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 ./codex-orchestrator eval run --write-report /tmp/eval-run-report.json
 ./codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
@@ -369,9 +370,9 @@ proof; MVP evidence is `local`, `proxy`, or `blocked`.
 read-only and does not load or update the ledger. It parses the local
 `run-routine` command surface from `cmd/codex-orchestrator/main.go`, compares
 the runnable routine IDs with `routines/*.json`, and scans `README.md`,
-`README.zh-CN.md`, `SKILL.md`, `docs/routines/README.md`, and
-`docs/roadmap.md` when present for obvious missing routine references or stale
-status text. Missing docs references or missing specs return `failed`; missing
+`README.zh-CN.md`, `SKILL.md`, `docs/routines/README.md`, `docs/v2-usage.md`,
+and `docs/roadmap.md` when present for obvious missing routine references or
+stale status text. Missing docs references or missing specs return `failed`; missing
 repository/source/spec access returns `blocked`. It does not stage, commit,
 merge, push, tag, release, clean worktrees, dispatch sessions, mutate the
 ledger, or claim runtime proof; MVP evidence is `local` or `blocked`.
@@ -443,6 +444,14 @@ work. If only unsafe items remain, it returns a queue-drained next action
 instead of pretending to dispatch. It does not stage, commit, merge, push,
 tag, release, clean worktrees, dispatch sessions, mutate the ledger, or claim
 runtime proof; MVP evidence is `local` or `blocked`.
+
+`run-routine budget-policy-report` is a read-only local/static budget visibility
+runner. It inspects roadmap/routine docs, routine budget metadata, optional
+repo-local ledger state, and an optional heartbeat report when present. It
+keeps budget metadata and heartbeat `budgetPressure` warnings as `local`
+evidence, records unavailable live runtime/review timing as `blocked`, and
+does not schedule, prioritize, pause, kill, dispatch, merge, push, delete,
+clean worktrees, mutate the ledger, or enforce budgets.
 
 When a delegated task is merged, pushed, released, and cleaned, the
 task-specific heartbeat is not automatically the end of the loop. Before
@@ -534,11 +543,13 @@ codex-orchestrator/
 │   ├── pr-reviewer.json
 │   ├── release-verifier.json
 │   ├── roadmap-next-task-suggester.json
+│   ├── budget-policy-report.json
 │   └── stale-task-rescuer.json
 ├── examples/
 │   ├── ledger.example.json
 │   └── routine-reports/
 │       ├── api-proof.blocked.json
+│       ├── budget-policy-report.review-only.json
 │       └── pr-reviewer.passed.json
 ├── scripts/
 │   ├── build-release-assets.sh
