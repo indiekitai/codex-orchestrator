@@ -4764,7 +4764,7 @@ func auditOrchestrationPolicyText(path string, text string) []policyAuditFinding
 		case violatesWorkerBoundary(body):
 			findings = append(findings, newPolicyAuditFinding(
 				policyRuleWorkerBoundary,
-				"%s:%d: worker/delegation prompt lacks one of the core boundaries: isolated worktree, no subagents/Paseo, self-review, or no merge/push/cleanup: %s",
+				"%s:%d: worker/delegation prompt lacks one of the core boundaries: isolated worktree, allowed/forbidden paths, no subagents/Paseo, self-review, or no merge/push/cleanup: %s",
 				path,
 				line,
 				compactForFinding(body),
@@ -4901,6 +4901,7 @@ func violatesWorkerBoundary(text string) bool {
 	}
 	required := [][]string{
 		{"worktree", "isolated", "separate", "独立", "隔离"},
+		{"forbidden path", "forbidden paths", "forbidden files", "forbidden directories", "禁止路径", "禁止文件"},
 		{"subagent", "sub agent", "Paseo", "二级", "子 agent"},
 		{"self-review", "self review", "自审"},
 		{"do not merge", "not merge", "do not push", "not push", "不 merge", "不 push", "不要 merge", "不要 push", "不合并", "不推送"},
