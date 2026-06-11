@@ -347,6 +347,54 @@ type RoutineRunReport struct {
 	NextSuggestedAction string              `json:"nextSuggestedAction"`
 }
 
+type RoadmapScoreConfig struct {
+	Sources []string `json:"sources"`
+}
+
+type RoadmapScoreReport struct {
+	SchemaVersion       int                     `json:"schemaVersion"`
+	Command             string                  `json:"command"`
+	GeneratedAt         string                  `json:"generatedAt"`
+	Status              string                  `json:"status"`
+	EvidenceLabel       string                  `json:"evidenceLabel"`
+	RepoPath            string                  `json:"repoPath"`
+	ConfigPath          string                  `json:"configPath,omitempty"`
+	Sources             []RoadmapScoreSource    `json:"sources"`
+	Candidates          []RoadmapScoreCandidate `json:"candidates"`
+	Summary             RoadmapScoreSummary     `json:"summary"`
+	Evidence            map[string][]string     `json:"evidence"`
+	ActionsTaken        []string                `json:"actionsTaken"`
+	NeedsHuman          bool                    `json:"needsHuman"`
+	BlockedReason       string                  `json:"blockedReason,omitempty"`
+	NextSuggestedAction string                  `json:"nextSuggestedAction"`
+}
+
+type RoadmapScoreSource struct {
+	Path       string `json:"path"`
+	Status     string `json:"status"`
+	Candidates int    `json:"candidates,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+type RoadmapScoreCandidate struct {
+	Title                   string   `json:"title"`
+	Source                  string   `json:"source"`
+	Line                    int      `json:"line"`
+	EvidenceSnippet         string   `json:"evidenceSnippet"`
+	Classification          string   `json:"classification"`
+	Score                   int      `json:"score"`
+	SuggestedAction         string   `json:"suggestedAction"`
+	WriteSetHints           []string `json:"writeSetHints,omitempty"`
+	ExternalDependencyHints []string `json:"externalDependencyHints,omitempty"`
+	RiskHints               []string `json:"riskHints,omitempty"`
+}
+
+type RoadmapScoreSummary struct {
+	TotalCandidates int            `json:"totalCandidates"`
+	ByClass         map[string]int `json:"byClass"`
+	TopAction       string         `json:"topAction,omitempty"`
+}
+
 type MergeReadinessPack struct {
 	SchemaVersion        int                       `json:"schemaVersion"`
 	Command              string                    `json:"command"`
@@ -462,6 +510,8 @@ func run(args []string) error {
 		return cmdValidateRoutines(args[1:])
 	case "run-routine":
 		return cmdRunRoutine(args[1:])
+	case "roadmap":
+		return cmdRoadmap(args[1:])
 	case "policy":
 		return cmdPolicy(args[1:])
 	case "eval":
@@ -503,6 +553,7 @@ Usage:
   codex-orchestrator run-routine orchestration-policy-auditor [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine roadmap-next-task-suggester [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine budget-policy-report [--repo PATH] [--ledger PATH] [--heartbeat-report PATH] [--write-report PATH] [--json]
+  codex-orchestrator roadmap score [--repo PATH] [--config PATH] [--write-report PATH] [--json]
   codex-orchestrator policy check [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval run [--suite orchestration-policy-auditor] [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval add-failure --id ID --text TEXT --expect OPA001=1 [--file README.md] [--suite orchestration-policy-auditor] [--repo PATH]
@@ -540,7 +591,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init dispatch record-task append-event observe heartbeat status pack validate-routines run-routine policy eval rules record-routine-run completion help"
+  commands="init dispatch record-task append-event observe heartbeat status pack validate-routines run-routine roadmap policy eval rules record-routine-run completion help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report"
 
   case "$prev" in
@@ -558,6 +609,10 @@ _codex_orchestrator()
       ;;
     pack)
       COMPREPLY=( $(compgen -W "merge-readiness" -- "$cur") )
+      return 0
+      ;;
+    roadmap)
+      COMPREPLY=( $(compgen -W "score" -- "$cur") )
       return 0
       ;;
     completion)
@@ -607,6 +662,13 @@ _codex_orchestrator()
     run-routine)
       COMPREPLY=( $(compgen -W "--ledger --task-id --repo --tag --expected-asset --heartbeat-report --write-report --json --help" -- "$cur") )
       ;;
+    roadmap)
+      if [[ ${COMP_WORDS[2]} == "score" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --config --write-report --json --help" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "score" -- "$cur") )
+      fi
+      ;;
     policy)
       if [[ ${COMP_WORDS[2]} == "check" ]]; then
         COMPREPLY=( $(compgen -W "--repo --eval-dir --write-report --json --help" -- "$cur") )
@@ -654,6 +716,7 @@ commands=(
   'pack:generate local/static handoff artifacts'
   'validate-routines:validate routine specs'
   'run-routine:run a read-only routine'
+  'roadmap:score local/static roadmap candidates'
   'policy:run policy and eval checks'
   'eval:run local eval fixtures'
   'rules:propose review-only rule updates'
@@ -695,6 +758,13 @@ case $state in
           _values 'subcommand' check
         else
           _values 'options' --repo --eval-dir --write-report --json --help
+        fi
+        ;;
+      roadmap)
+        if (( CURRENT == 3 )); then
+          _values 'subcommand' score
+        else
+          _values 'options' --repo --config --write-report --json --help
         fi
         ;;
       eval)
@@ -1810,6 +1880,18 @@ func cmdRules(args []string) error {
 		return cmdRulesPropose(args[1:])
 	default:
 		return fmt.Errorf("unsupported rules subcommand %q", args[0])
+	}
+}
+
+func cmdRoadmap(args []string) error {
+	if len(args) == 0 {
+		return errors.New("roadmap requires a subcommand: score")
+	}
+	switch args[0] {
+	case "score":
+		return cmdRoadmapScore(args[1:])
+	default:
+		return fmt.Errorf("unsupported roadmap subcommand %q", args[0])
 	}
 }
 
@@ -3938,6 +4020,389 @@ func runOrchestrationPolicyAuditorRoutine(repo string) RoutineRunReport {
 	report.BlockedReason = ""
 	report.NextSuggestedAction = "Record this local/static orchestration policy report if sufficient; no Codex App session or runtime proof was produced."
 	return report
+}
+
+func cmdRoadmapScore(args []string) error {
+	fs := flag.NewFlagSet("roadmap score", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path to inspect")
+	configPath := fs.String("config", "", "optional JSON config with a sources array")
+	writeReport := fs.String("write-report", "", "write roadmap score report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	report := runRoadmapScore(*repo, *configPath)
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut {
+		return printJSON(report)
+	}
+	if *writeReport == "" {
+		fmt.Print(renderRoadmapScoreReport(report))
+		return nil
+	}
+	fmt.Printf("Wrote roadmap score report: %s\n", *writeReport)
+	return nil
+}
+
+func runRoadmapScore(repo string, configPath string) RoadmapScoreReport {
+	repo = expandPath(repo)
+	if repo == "" {
+		repo = "."
+	}
+	report := RoadmapScoreReport{
+		SchemaVersion: 1,
+		Command:       "roadmap score",
+		GeneratedAt:   nowISO(),
+		Status:        "blocked",
+		EvidenceLabel: "local",
+		RepoPath:      repo,
+		ConfigPath:    configPath,
+		Sources:       []RoadmapScoreSource{},
+		Candidates:    []RoadmapScoreCandidate{},
+		Summary: RoadmapScoreSummary{
+			ByClass: map[string]int{},
+		},
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Read local roadmap/progress/review docs only",
+			"Scored candidates with static keyword and write-set heuristics",
+		},
+		NeedsHuman:          true,
+		NextSuggestedAction: "Fix the blocked roadmap score precondition, then rerun roadmap score.",
+	}
+	if info, err := os.Stat(repo); err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Repository path does not exist: "+repo)
+		report.BlockedReason = "repository path is missing"
+		return report
+	} else if !info.IsDir() {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Repository path is not a directory: "+repo)
+		report.BlockedReason = "repository path is not a directory"
+		return report
+	}
+
+	sources, err := roadmapScoreSources(repo, configPath)
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not load roadmap score sources: "+err.Error())
+		report.BlockedReason = "could not load roadmap score sources"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Roadmap score source list: "+strings.Join(sources, ", "))
+
+	seen := map[string]bool{}
+	for _, source := range sources {
+		path := source
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(repo, path)
+		}
+		rel, relErr := filepath.Rel(repo, path)
+		if relErr != nil || strings.HasPrefix(rel, "..") {
+			rel = path
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			report.Sources = append(report.Sources, RoadmapScoreSource{Path: source, Status: "missing", Error: readErr.Error()})
+			continue
+		}
+		candidates := parseRoadmapScoreCandidates(rel, string(data))
+		added := 0
+		for _, candidate := range candidates {
+			key := normalizeRoadmapKey(candidate.Source + " " + candidate.Title)
+			if key == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			report.Candidates = append(report.Candidates, candidate)
+			report.Summary.ByClass[candidate.Classification]++
+			added++
+		}
+		report.Sources = append(report.Sources, RoadmapScoreSource{Path: source, Status: "read", Candidates: added})
+	}
+
+	if len(report.Candidates) == 0 {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "No actionable local/static candidate lines were found in configured roadmap sources.")
+		report.BlockedReason = "no roadmap score candidates found"
+		report.NextSuggestedAction = "Add candidate bullets to configured local roadmap/progress docs or pass --config with source files that contain remaining work."
+		return report
+	}
+
+	sort.SliceStable(report.Candidates, func(i, j int) bool {
+		if report.Candidates[i].Score != report.Candidates[j].Score {
+			return report.Candidates[i].Score > report.Candidates[j].Score
+		}
+		if report.Candidates[i].Source != report.Candidates[j].Source {
+			return report.Candidates[i].Source < report.Candidates[j].Source
+		}
+		return report.Candidates[i].Line < report.Candidates[j].Line
+	})
+	report.Status = "passed"
+	report.Summary.TotalCandidates = len(report.Candidates)
+	report.Summary.TopAction = report.Candidates[0].SuggestedAction
+	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Scored %d local/static roadmap candidate(s); top classification=%s score=%d title=%q.", len(report.Candidates), report.Candidates[0].Classification, report.Candidates[0].Score, report.Candidates[0].Title))
+	report.Evidence["blocked"] = append(report.Evidence["blocked"], "Real project judgement, owner decisions, runtime/product proof, deployment state, provider credentials, and device evidence remain outside this local/static scorer.")
+	report.NextSuggestedAction = fmt.Sprintf("%s: %s", report.Candidates[0].SuggestedAction, report.Candidates[0].Title)
+	return report
+}
+
+func roadmapScoreSources(repo string, configPath string) ([]string, error) {
+	if strings.TrimSpace(configPath) != "" {
+		path := expandPath(configPath)
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(repo, path)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		var config RoadmapScoreConfig
+		if err := json.Unmarshal(data, &config); err != nil {
+			return nil, err
+		}
+		return cleanRoadmapScoreSources(config.Sources), nil
+	}
+	sources := []string{"docs/roadmap.md", "PROGRESS.md", "docs/TastyFuture-整体开发计划与进度.md"}
+	reviewMatches, _ := filepath.Glob(filepath.Join(repo, "docs", "reviews", "*.md"))
+	sort.Strings(reviewMatches)
+	for _, match := range reviewMatches {
+		rel, err := filepath.Rel(repo, match)
+		if err == nil {
+			sources = append(sources, rel)
+		}
+	}
+	return cleanRoadmapScoreSources(sources), nil
+}
+
+func cleanRoadmapScoreSources(values []string) []string {
+	cleaned := []string{}
+	seen := map[string]bool{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		cleaned = append(cleaned, value)
+	}
+	return cleaned
+}
+
+func parseRoadmapScoreCandidates(source string, text string) []RoadmapScoreCandidate {
+	candidates := []RoadmapScoreCandidate{}
+	currentSection := ""
+	sourcePath := filepath.ToSlash(source)
+	sectionGatedSource := strings.HasPrefix(sourcePath, "docs/reviews/") || strings.Contains(strings.ToLower(sourcePath), "roadmap")
+	for index, raw := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(raw)
+		if strings.HasPrefix(trimmed, "#") {
+			currentSection = strings.TrimSpace(strings.TrimLeft(trimmed, "# "))
+			continue
+		}
+		if raw != trimmed && (strings.HasPrefix(trimmed, "- ") || hasNumberedListPrefix(trimmed)) {
+			continue
+		}
+		title, ok := roadmapScoreCandidateTitle(trimmed)
+		if !ok || roadmapCandidateMarkedCompleted(title) || !roadmapScoreLooksActionable(title, currentSection) {
+			continue
+		}
+		if sectionGatedSource && !roadmapScoreSectionLooksPlanning(currentSection) {
+			continue
+		}
+		if roadmapScoreSkipEvidenceOrCommandBullet(title) {
+			continue
+		}
+		candidates = append(candidates, classifyRoadmapScoreCandidate(title, source, index+1, trimmed))
+	}
+	return candidates
+}
+
+func roadmapScoreCandidateTitle(line string) (string, bool) {
+	switch {
+	case strings.HasPrefix(line, "- "):
+		return cleanRoadmapCandidateText(strings.TrimPrefix(line, "- ")), true
+	case hasNumberedListPrefix(line):
+		return cleanRoadmapCandidateText(line[strings.Index(line, ".")+1:]), true
+	default:
+		return "", false
+	}
+}
+
+func roadmapScoreLooksActionable(title string, section string) bool {
+	lower := strings.ToLower(title + " " + section)
+	for _, skip := range []string{"not on this roadmap", "暂不进入", "not suitable", "不适合假装", "不放进本项目"} {
+		if strings.Contains(lower, strings.ToLower(skip)) {
+			return false
+		}
+	}
+	for _, marker := range []string{"next", "remaining", "todo", "follow-up", "blocked", "needs", "proof", "runtime", "owner", "human", "review", "audit", "dispatch", "candidate", "roadmap", "下一步", "剩余", "候选", "阻塞", "验证", "证明", "人工", "待", "需要", "闭环"} {
+		if strings.Contains(lower, strings.ToLower(marker)) {
+			return true
+		}
+	}
+	return false
+}
+
+func roadmapScoreSectionLooksPlanning(section string) bool {
+	lower := strings.ToLower(section)
+	for _, marker := range []string{"next", "residual", "risk", "recommend", "follow", "remaining", "candidate", "blocker", "plan", "todo", "下一", "剩余", "风险", "建议", "候选", "阻塞", "计划"} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func roadmapScoreSkipEvidenceOrCommandBullet(title string) bool {
+	lower := strings.ToLower(strings.TrimSpace(title))
+	for _, prefix := range []string{"`go ", "`git ", "`blocked`", "`local`", "`proxy`", "`direct`", "local:", "proxy:", "direct:", "blocked:", "acceptance:", "input:", "output:"} {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	for _, phrase := range []string{"does not prove", "did not create", "cannot prove", "not claim", "not semantic proof", "no direct", "no daemon", "no runtime", "no production"} {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	if strings.HasPrefix(lower, "`") && strings.Contains(lower, "/") {
+		return true
+	}
+	return false
+}
+
+func classifyRoadmapScoreCandidate(title string, source string, line int, snippet string) RoadmapScoreCandidate {
+	lower := strings.ToLower(title + " " + snippet)
+	classification := "vertical-completion"
+	score := 70
+	action := "dispatch after human review"
+	risks := []string{}
+
+	if containsAny(lower, []string{"runtime", "proof", "device", "browser", "smoke", "prod", "pre", "deployment", "pax", "printer", "webhook", "真实", "运行", "设备", "证明", "预发", "生产"}) {
+		classification = "runtime-proof"
+		score = 82
+		action = "prepare proof plan; do not claim direct proof"
+	}
+	if containsAny(lower, []string{"owner", "human", "manual", "approval", "product decision", "人工", "负责人", "owner-gated", "确认", "审批"}) {
+		classification = "owner-gated"
+		score = 55
+		action = "ask owner before dispatch"
+		risks = append(risks, "needs human/owner decision")
+	}
+	if containsAny(lower, []string{"blocked", "blocker", "unblock", "阻塞", "blocked-removal", "解锁", "清除阻塞"}) {
+		classification = "blocked-removal"
+		score = 90
+		action = "prioritize if blocker is locally removable"
+	}
+	if containsAny(lower, []string{"docs only", "readiness page", "polish", "cosmetic", "copy", "cleanup", "shallow", "低价值", "浅", "文档-only", "只改文档"}) {
+		classification = "shallow-risk"
+		score = 30
+		action = "skip unless it removes a named blocker"
+		risks = append(risks, "may be safe but shallow")
+	}
+	if classification == "vertical-completion" && containsAny(lower, []string{"待做", "todo", "follow-up", "next"}) {
+		score = 88
+	}
+
+	writeHints := roadmapWriteSetHints(lower)
+	externalHints := roadmapExternalDependencyHints(lower)
+	if len(externalHints) > 0 && classification != "shallow-risk" {
+		risks = append(risks, "external dependency requires separate proof or owner input")
+	}
+	return RoadmapScoreCandidate{
+		Title:                   title,
+		Source:                  source,
+		Line:                    line,
+		EvidenceSnippet:         snippet,
+		Classification:          classification,
+		Score:                   score,
+		SuggestedAction:         action,
+		WriteSetHints:           writeHints,
+		ExternalDependencyHints: externalHints,
+		RiskHints:               risks,
+	}
+}
+
+func containsAny(value string, needles []string) bool {
+	for _, needle := range needles {
+		if strings.Contains(value, strings.ToLower(needle)) {
+			return true
+		}
+	}
+	return false
+}
+
+func roadmapWriteSetHints(lower string) []string {
+	hints := []string{}
+	for _, entry := range []struct {
+		markers []string
+		hint    string
+	}{
+		{[]string{"readme", "docs/", "roadmap", "progress", "文档"}, "docs/**"},
+		{[]string{"cmd/", "cli", "command", "helper", "go helper"}, "cmd/codex-orchestrator/**"},
+		{[]string{"routine", "routines/"}, "routines/**"},
+		{[]string{"terminal", "ios", "android", "mobile", "web", "admin"}, "product app surfaces"},
+		{[]string{"backend", "api", "server", "cloud", "edge"}, "backend/service surfaces"},
+	} {
+		if containsAny(lower, entry.markers) {
+			hints = append(hints, entry.hint)
+		}
+	}
+	return hints
+}
+
+func roadmapExternalDependencyHints(lower string) []string {
+	hints := []string{}
+	for _, entry := range []struct {
+		markers []string
+		hint    string
+	}{
+		{[]string{"pax", "printer", "device", "hardware", "terminal"}, "device/hardware"},
+		{[]string{"sms", "stripe", "cardpointe", "webhook", "provider"}, "external provider"},
+		{[]string{"prod", "production", "pre", "deployment", "release"}, "deployment environment"},
+		{[]string{"owner", "human", "manual", "approval", "人工", "确认"}, "human/owner input"},
+	} {
+		if containsAny(lower, entry.markers) {
+			hints = append(hints, entry.hint)
+		}
+	}
+	return hints
+}
+
+func renderRoadmapScoreReport(report RoadmapScoreReport) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# codex-orchestrator roadmap score\n\n")
+	fmt.Fprintf(&b, "- status: `%s`\n", report.Status)
+	fmt.Fprintf(&b, "- evidenceLabel: `%s`\n", report.EvidenceLabel)
+	fmt.Fprintf(&b, "- repo: `%s`\n", report.RepoPath)
+	fmt.Fprintf(&b, "- candidates: `%d`\n", report.Summary.TotalCandidates)
+	if report.BlockedReason != "" {
+		fmt.Fprintf(&b, "- blockedReason: %s\n", report.BlockedReason)
+	}
+	if len(report.Candidates) > 0 {
+		fmt.Fprintf(&b, "\n## Top Candidates\n\n")
+		limit := len(report.Candidates)
+		if limit > 10 {
+			limit = 10
+		}
+		for _, candidate := range report.Candidates[:limit] {
+			fmt.Fprintf(&b, "- `%s` score=%d action=`%s` source=`%s:%d` title=%s\n", candidate.Classification, candidate.Score, candidate.SuggestedAction, candidate.Source, candidate.Line, candidate.Title)
+		}
+	}
+	if len(report.Evidence["blocked"]) > 0 {
+		fmt.Fprintf(&b, "\n## Blocked Boundaries\n\n")
+		for _, item := range report.Evidence["blocked"] {
+			fmt.Fprintf(&b, "- %s\n", item)
+		}
+	}
+	fmt.Fprintf(&b, "\n## Next Action\n\n%s\n", report.NextSuggestedAction)
+	return b.String()
 }
 
 func cmdRunRoadmapNextTaskSuggesterRoutine(args []string) error {

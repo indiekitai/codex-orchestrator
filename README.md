@@ -568,7 +568,29 @@ repo-local ledger state, and an optional heartbeat report when present. It
 keeps budget metadata and heartbeat `budgetPressure` warnings as `local`
 evidence, records unavailable live runtime/review timing as `blocked`, and
 does not schedule, prioritize, pause, kill, dispatch, merge, push, delete,
-clean worktrees, mutate the ledger, or enforce budgets.
+cleanup, mutate the ledger, or enforce budgets.
+
+`roadmap score` is a read-only local/static planning command for project-aware
+next-task selection:
+
+```bash
+codex-orchestrator roadmap score --repo .
+codex-orchestrator roadmap score --repo . --config roadmap-score.json --json
+```
+
+By default it reads `docs/roadmap.md`, `PROGRESS.md`,
+`docs/TastyFuture-整体开发计划与进度.md`, and `docs/reviews/*.md` when those files
+exist. A config file may provide a simple JSON `sources` list:
+
+```json
+{"sources":["PROGRESS.md","docs/roadmap.md","docs/reviews/accepted.md"]}
+```
+
+It scores candidate lines as `vertical-completion`, `runtime-proof`,
+`blocked-removal`, `owner-gated`, or `shallow-risk`, with local write-set and
+external-dependency hints. It does not dispatch sessions, mutate git or the
+ledger, call the network, or claim direct runtime/product proof; human review
+still decides whether a scored candidate is worth dispatching.
 
 When a delegated task is merged, pushed, released, and cleaned, the
 task-specific heartbeat is not automatically the end of the loop. Before

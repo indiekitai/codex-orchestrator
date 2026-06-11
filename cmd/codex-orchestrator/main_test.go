@@ -2404,6 +2404,122 @@ func TestRunRoadmapNextTaskSuggesterRoutineBlockedWhenRoadmapMissing(t *testing.
 	}
 }
 
+func TestRoadmapScoreUsesProjectAwareDefaultSources(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	if err := os.MkdirAll(filepath.Join(project, "docs", "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "docs", "roadmap.md"), []byte(`# Roadmap
+
+## Remaining
+
+- Runtime proof for PAX device smoke before claiming direct proof.
+- Docs only readiness page cleanup for old queue.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "PROGRESS.md"), []byte(`# Progress
+
+- Blocked-removal: unblock webhook projection drift in backend before next dispatch.
+- Owner-gated: ask owner to confirm production deploy window.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "docs", "reviews", "accepted.md"), []byte(`# Review
+
+## Next Actions
+
+- Vertical completion: finish Terminal payment split across backend and web surfaces.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runRoadmapScore(project, "")
+	if report.Status != "passed" {
+		t.Fatalf("expected passed report, got %#v", report)
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 {
+		t.Fatalf("expected local/static only evidence, got %#v", report.Evidence)
+	}
+	if got := report.Summary.ByClass["blocked-removal"]; got != 1 {
+		t.Fatalf("expected one blocked-removal candidate, got %d in %#v", got, report.Summary.ByClass)
+	}
+	if got := report.Summary.ByClass["runtime-proof"]; got != 1 {
+		t.Fatalf("expected one runtime-proof candidate, got %d in %#v", got, report.Summary.ByClass)
+	}
+	if got := report.Summary.ByClass["owner-gated"]; got != 1 {
+		t.Fatalf("expected one owner-gated candidate, got %d in %#v", got, report.Summary.ByClass)
+	}
+	if got := report.Summary.ByClass["shallow-risk"]; got != 1 {
+		t.Fatalf("expected one shallow-risk candidate, got %d in %#v", got, report.Summary.ByClass)
+	}
+	if report.Candidates[0].Classification != "blocked-removal" {
+		t.Fatalf("expected blocked-removal to rank first, got %#v", report.Candidates[0])
+	}
+	if !containsString(report.Candidates[0].WriteSetHints, "backend/service surfaces") {
+		t.Fatalf("expected backend write-set hint, got %#v", report.Candidates[0].WriteSetHints)
+	}
+	blocked := strings.Join(report.Evidence["blocked"], "\n")
+	if !strings.Contains(blocked, "Real project judgement") {
+		t.Fatalf("expected blocked human-judgement boundary, got %q", blocked)
+	}
+}
+
+func TestRoadmapScoreReadsConfigSources(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	if err := os.MkdirAll(project, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "PLAN.md"), []byte(`# Plan
+
+- Runtime proof: browser smoke for admin web before direct evidence.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	config := `{"sources":["PLAN.md"]}`
+	if err := os.WriteFile(filepath.Join(project, "roadmap-score.json"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runRoadmapScore(project, "roadmap-score.json")
+	if report.Status != "passed" {
+		t.Fatalf("expected passed report, got %#v", report)
+	}
+	if len(report.Sources) != 1 || report.Sources[0].Path != "PLAN.md" || report.Sources[0].Candidates != 1 {
+		t.Fatalf("expected config source only, got %#v", report.Sources)
+	}
+	if report.Candidates[0].Classification != "runtime-proof" {
+		t.Fatalf("expected runtime-proof candidate, got %#v", report.Candidates[0])
+	}
+	if !containsString(report.Candidates[0].WriteSetHints, "product app surfaces") {
+		t.Fatalf("expected product app write-set hint, got %#v", report.Candidates[0].WriteSetHints)
+	}
+}
+
+func TestRoadmapScoreBlockedWhenNoCandidates(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	if err := os.MkdirAll(filepath.Join(project, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "docs", "roadmap.md"), []byte(`# Roadmap
+
+Everything is completed.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runRoadmapScore(project, "")
+	if report.Status != "blocked" || report.BlockedReason == "" {
+		t.Fatalf("expected blocked report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "No actionable local/static candidate lines") {
+		t.Fatalf("expected no-candidates evidence, got %q", got)
+	}
+}
+
 func TestRunBudgetPolicyReportRoutineWritesPassedReport(t *testing.T) {
 	root := t.TempDir()
 	project, ledger, heartbeat := createBudgetPolicyFixture(t, root)
