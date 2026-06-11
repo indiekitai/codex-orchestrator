@@ -286,7 +286,7 @@ review timestamp unknown warnings。这些都是 local/static helper evidence，
 - docs drift checker；
 - rebase helper；
 - release verifier；
-- orchestration policy auditor follow-on eval fixtures and transcript-backed cases beyond the current named-rule local layer；
+- orchestration policy auditor follow-on eval fixtures：已补一小片 transcript-style local review-note fixtures；剩余是更深的语义/人工审核型 transcript case；
 
 补充说明：
 

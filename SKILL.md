@@ -89,20 +89,30 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
    - no evidence exaggeration
 8. If accepted, merge to the default integration branch, push if requested or
    normal for this project, clean the worktree, and delete the local branch.
-9. Before deleting or disabling the task-specific heartbeat, decide whether the
+9. Prefer a generic continuous queue heartbeat for roadmap/queue work. It should
+   dynamically read ledger, repo, worktree, and thread truth every run instead
+   of embedding the current task IDs as a long-lived watchdog. The generic
+   monitor should:
+   - reconcile pending setup to real worktree/branch when setup completes,
+   - wait quietly for active scoped worker progress,
+   - review/merge/push/clean completed task branches,
+   - after cleanup, run observe/roadmap checks and dispatch the next safe
+     bounded task when capacity is available.
+10. Before deleting or disabling any task-specific heartbeat, decide whether the
    orchestration loop itself should continue:
    - run `codex-orchestrator observe --json` or equivalent repo/thread checks,
    - inspect the roadmap/routine queue for the next safe task,
    - if capacity is available and safe work remains, dispatch the next bounded
-     task or replace the task-specific heartbeat with a fresh next-task monitor,
+     task or keep/update the generic continuous queue monitor,
    - if no safe work remains, record that queue-drained state and only then
      delete the heartbeat,
    - if the next task choice is blocked by missing context, notify with the
      blocker instead of silently stopping.
-10. If rejected, report blocking findings and leave the branch/worktree for targeted fix or cleanup.
+11. If rejected, report blocking findings and leave the branch/worktree for targeted fix or cleanup.
 
 Task-specific heartbeats are watchdogs for the current child task, not the
-whole orchestrator lifecycle. Completing one child task must not be treated as
+whole orchestrator lifecycle. For continuing roadmap work, use a generic queue
+monitor heartbeat by default. Completing one child task must not be treated as
 permission to stop the larger loop when the user asked the orchestrator to keep
 working through a queue or roadmap.
 
@@ -572,7 +582,10 @@ unrelated improvements.
 
 ## Dynamic Heartbeat Prompt Pattern
 
-Do not hard-code old task IDs into a long-lived automation. Use dynamic discovery:
+Do not hard-code old task IDs into a long-lived automation. A continuous queue
+monitor should be reusable across batches: completed tasks are discovered from
+ledger/repo truth, reviewed and cleaned, then the monitor dispatches the next
+safe tasks from the roadmap when capacity opens. Use dynamic discovery:
 
 ```text
 Check the orchestrator thread, recent delegated sessions, pending worktree setup, git worktree list, and integration-branch repo status. Identify tasks created by this thread that are active, pending, completed but unmerged, blocked, or stale.
