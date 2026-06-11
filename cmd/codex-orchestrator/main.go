@@ -75,6 +75,7 @@ type Observation struct {
 	Action            string          `json:"action"`
 	Note              string          `json:"note"`
 	Signal            string          `json:"signal,omitempty"`
+	State             LocalTaskState  `json:"state"`
 	LedgerStatus      string          `json:"ledgerStatus,omitempty"`
 	Branch            string          `json:"branch,omitempty"`
 	Worktree          string          `json:"worktree,omitempty"`
@@ -83,6 +84,17 @@ type Observation struct {
 	PendingWorktreeID string          `json:"pendingWorktreeId,omitempty"`
 	Budget            *BudgetMetadata `json:"budget,omitempty"`
 	BudgetPressure    *BudgetPressure `json:"budgetPressure,omitempty"`
+}
+
+type LocalTaskState struct {
+	EvidenceLabel string `json:"evidenceLabel"`
+	Lifecycle     string `json:"lifecycle"`
+	Setup         string `json:"setup"`
+	Worktree      string `json:"worktree"`
+	Branch        string `json:"branch"`
+	Diff          string `json:"diff"`
+	Review        string `json:"review"`
+	Cleanup       string `json:"cleanup"`
 }
 
 type IntegrationState struct {
@@ -135,17 +147,18 @@ type BudgetPressureSummary struct {
 }
 
 type RuntimeStatusItem struct {
-	ID                string `json:"id"`
-	Title             string `json:"title,omitempty"`
-	LedgerStatus      string `json:"ledgerStatus,omitempty"`
-	ObservedStatus    string `json:"observedStatus,omitempty"`
-	Signal            string `json:"signal,omitempty"`
-	Branch            string `json:"branch,omitempty"`
-	Worktree          string `json:"worktree,omitempty"`
-	PendingWorktreeID string `json:"pendingWorktreeId,omitempty"`
-	LastUpdatedAt     string `json:"lastUpdatedAt,omitempty"`
-	Action            string `json:"action,omitempty"`
-	Note              string `json:"note,omitempty"`
+	ID                string         `json:"id"`
+	Title             string         `json:"title,omitempty"`
+	LedgerStatus      string         `json:"ledgerStatus,omitempty"`
+	ObservedStatus    string         `json:"observedStatus,omitempty"`
+	Signal            string         `json:"signal,omitempty"`
+	Branch            string         `json:"branch,omitempty"`
+	Worktree          string         `json:"worktree,omitempty"`
+	PendingWorktreeID string         `json:"pendingWorktreeId,omitempty"`
+	LastUpdatedAt     string         `json:"lastUpdatedAt,omitempty"`
+	Action            string         `json:"action,omitempty"`
+	Note              string         `json:"note,omitempty"`
+	State             LocalTaskState `json:"state"`
 }
 
 type RuntimeStatusReport struct {
@@ -3113,6 +3126,7 @@ func runtimeStatusItem(task Task, observation Observation) RuntimeStatusItem {
 		LastUpdatedAt:     observation.LastUpdatedAt,
 		Action:            observation.Action,
 		Note:              observation.Note,
+		State:             observation.State,
 	}
 	if item.Title == item.ID {
 		item.Title = ""
@@ -3334,6 +3348,7 @@ func taskObservation(task Task, status string, action string, note string, gitSt
 		Action:            action,
 		Note:              note,
 		Signal:            signal,
+		State:             localTaskState(task, status, signal, gitStatus),
 		LedgerStatus:      task.Status,
 		Branch:            task.Branch,
 		Worktree:          task.Worktree,
@@ -3342,6 +3357,119 @@ func taskObservation(task Task, status string, action string, note string, gitSt
 		PendingWorktreeID: task.PendingWorktreeID,
 		Budget:            task.Budget,
 	}
+}
+
+func localTaskState(task Task, status string, signal string, gitStatus string) LocalTaskState {
+	state := LocalTaskState{
+		EvidenceLabel: "local/static",
+		Lifecycle:     status,
+		Setup:         "unknown",
+		Worktree:      "unknown",
+		Branch:        "unknown",
+		Diff:          "not-inspected",
+		Review:        "not-ready",
+		Cleanup:       "not-needed",
+	}
+	if isTerminalStatus(status) {
+		state.Setup = "complete"
+		state.Worktree = "not-present-or-not-inspected"
+		state.Branch = "not-inspected"
+		state.Review = "terminal"
+		state.Cleanup = "complete"
+		switch status {
+		case "merged":
+			state.Cleanup = "unknown"
+		case "released":
+			state.Cleanup = "unknown"
+		}
+	}
+	if task.Worktree == "" {
+		state.Worktree = "not-recorded"
+		if task.PendingWorktreeID != "" {
+			state.Setup = "pending-worktree-id"
+		} else {
+			state.Setup = "missing-worktree-path"
+		}
+	} else {
+		state.Worktree = "recorded"
+	}
+	if task.Branch == "" {
+		state.Branch = "not-recorded"
+	} else {
+		state.Branch = "expected-recorded"
+	}
+	if gitStatus != "" {
+		state.Setup = "worktree-present"
+		state.Worktree = "present"
+		state.Branch = "matched"
+	}
+	switch signal {
+	case "pending-setup":
+		state.Setup = "pending-worktree-id"
+		state.Worktree = "not-recorded"
+		state.Branch = "not-recorded"
+	case "pending-setup-stale":
+		state.Setup = "pending-worktree-id-stale"
+		state.Worktree = "not-recorded"
+		state.Branch = "not-recorded"
+	case "missing-worktree":
+		state.Setup = "worktree-missing"
+		state.Worktree = "missing"
+		state.Branch = "not-inspected"
+	case "missing-worktree-stale":
+		state.Setup = "worktree-missing-stale"
+		state.Worktree = "missing"
+		state.Branch = "not-inspected"
+	case "missing-worktree-path":
+		state.Setup = "missing-worktree-path"
+		state.Worktree = "not-recorded"
+		state.Branch = "not-inspected"
+	case "git-status-error":
+		state.Setup = "worktree-present"
+		state.Worktree = "present"
+		state.Branch = "not-inspected"
+	case "branch-mismatch":
+		state.Branch = "mismatch"
+	case "branch-detached":
+		state.Branch = "detached"
+	case "dirty-uncommitted":
+		state.Diff = "dirty-uncommitted"
+	case "completed-clean-commit":
+		state.Diff = "clean-task-commit"
+		state.Review = "required"
+	case "active-clean":
+		state.Diff = "clean-no-task-commit"
+	case "stale-active":
+		state.Diff = "clean-no-task-commit-stale"
+	case "stale-no-base-commit", "no-base-commit":
+		state.Diff = "unknown-base"
+	case "cleanup-pending":
+		state.Cleanup = "needed"
+		state.Review = "accepted"
+	case "terminal-quiet":
+		state.Setup = "complete"
+		state.Worktree = "not-present-or-not-inspected"
+		state.Branch = "not-inspected"
+		state.Review = "terminal"
+		state.Cleanup = "complete"
+	}
+	switch status {
+	case "completed-unreviewed":
+		state.Review = "required"
+	case "cleanup-needed":
+		state.Cleanup = "needed"
+	case "blocked":
+		if state.Review == "not-ready" {
+			state.Review = "blocked"
+		}
+	case "merged", "released":
+		if state.Cleanup == "unknown" {
+			state.Cleanup = "not-present-or-not-inspected"
+		}
+	case "cleaned":
+		state.Cleanup = "complete"
+	}
+	return state
 }
 
 func inspectTask(task Task, staleAfter time.Duration) Observation {
@@ -3391,6 +3519,9 @@ func inspectTask(task Task, staleAfter time.Duration) Observation {
 	branch := currentBranch(status)
 	if task.Branch != "" && branch != "" && branch != task.Branch {
 		return taskObservation(task, "blocked", "fix branch mismatch before review", fmt.Sprintf("Expected %s, found %s.", task.Branch, branch), status, "branch-mismatch")
+	}
+	if task.Branch != "" && branch == "" {
+		return taskObservation(task, "blocked", "reattach worker worktree to the recorded task branch before review", fmt.Sprintf("Expected %s, but git status did not report an attached branch.", task.Branch), status, "branch-detached")
 	}
 	if hasDirtyChanges(status) {
 		return taskObservation(task, "stale-needs-inspection", "inspect uncommitted scoped diff or nudge same worker", "Worktree has uncommitted changes.", status, "dirty-uncommitted")
@@ -3810,6 +3941,9 @@ func renderSummary(summary ObserveSummary) string {
 			if item.PendingWorktreeID != "" {
 				fmt.Fprintf(&b, "  - pendingWorktreeId: `%s`\n", item.PendingWorktreeID)
 			}
+			if state := formatLocalTaskState(item.State); state != "" {
+				fmt.Fprintf(&b, "  - state: %s\n", state)
+			}
 			if item.Branch != "" {
 				fmt.Fprintf(&b, "  - branch: `%s`\n", item.Branch)
 			}
@@ -3887,6 +4021,9 @@ func renderRuntimeStatusCategoryMarkdown(b *strings.Builder, title string, items
 		if item.PendingWorktreeID != "" {
 			fmt.Fprintf(b, "  - pendingWorktreeId: `%s`\n", item.PendingWorktreeID)
 		}
+		if state := formatLocalTaskState(item.State); state != "" {
+			fmt.Fprintf(b, "  - state: %s\n", state)
+		}
 		if item.LastUpdatedAt != "" {
 			fmt.Fprintf(b, "  - lastUpdatedAt: `%s`\n", item.LastUpdatedAt)
 		}
@@ -3916,6 +4053,9 @@ func printRuntimeStatusCategory(title string, items []RuntimeStatusItem) {
 		}
 		if item.PendingWorktreeID != "" {
 			fmt.Printf(" pendingWorktreeId=%s", item.PendingWorktreeID)
+		}
+		if state := formatLocalTaskState(item.State); state != "" {
+			fmt.Printf(" state={%s}", state)
 		}
 		if item.LastUpdatedAt != "" {
 			fmt.Printf(" updated=%s", item.LastUpdatedAt)
@@ -3961,6 +4101,35 @@ func formatBudget(budget *BudgetMetadata) string {
 	}
 	if budget.Note != "" {
 		parts = append(parts, "note="+budget.Note)
+	}
+	return strings.Join(parts, " ")
+}
+
+func formatLocalTaskState(state LocalTaskState) string {
+	parts := []string{}
+	if state.Lifecycle != "" {
+		parts = append(parts, "lifecycle="+state.Lifecycle)
+	}
+	if state.Setup != "" {
+		parts = append(parts, "setup="+state.Setup)
+	}
+	if state.Worktree != "" {
+		parts = append(parts, "worktree="+state.Worktree)
+	}
+	if state.Branch != "" {
+		parts = append(parts, "branch="+state.Branch)
+	}
+	if state.Diff != "" {
+		parts = append(parts, "diff="+state.Diff)
+	}
+	if state.Review != "" {
+		parts = append(parts, "review="+state.Review)
+	}
+	if state.Cleanup != "" {
+		parts = append(parts, "cleanup="+state.Cleanup)
+	}
+	if state.EvidenceLabel != "" {
+		parts = append(parts, "evidence="+state.EvidenceLabel)
 	}
 	return strings.Join(parts, " ")
 }

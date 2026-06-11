@@ -294,6 +294,9 @@ func TestPendingWorktreeIDTaskLifecycle(t *testing.T) {
 	if got := summary.Observations[0].Status; got != "pending-setup" {
 		t.Fatalf("expected pending setup observation, got %q", got)
 	}
+	if got := summary.Observations[0].State.Setup; got != "pending-worktree-id" {
+		t.Fatalf("expected pending setup state, got %#v", summary.Observations[0].State)
+	}
 	if got := summary.Observations[0].PendingWorktreeID; got != "pwt_123" {
 		t.Fatalf("expected observation pendingWorktreeId, got %q", got)
 	}
@@ -330,6 +333,40 @@ func TestPendingWorktreeIDTaskLifecycle(t *testing.T) {
 	}
 	if got := summary.Observations[0].Status; got != "active" {
 		t.Fatalf("expected active after worktree reconciliation, got %q", got)
+	}
+	if state := summary.Observations[0].State; state.Setup != "worktree-present" || state.Worktree != "present" || state.Branch != "matched" {
+		t.Fatalf("expected reconciled real worktree state, got %#v", state)
+	}
+}
+
+func TestDetachedWorkerBranchBlocksSetupTruth(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	worker := filepath.Join(root, "detached")
+	git(t, project, "worktree", "add", "-q", "-b", "codex/detached", worker, "HEAD")
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "DETACHED", "--worktree", worker, "--branch", "codex/detached", "--base-commit", base}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "checkout", "-q", "--detach", "HEAD")
+
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := summary.Observations[0].Status; got != "blocked" {
+		t.Fatalf("expected detached worktree to be blocked, got %q", got)
+	}
+	state := summary.Observations[0].State
+	if state.Branch != "detached" || state.Worktree != "present" || state.Setup != "worktree-present" {
+		t.Fatalf("expected detached branch state, got %#v", state)
+	}
+	if len(summary.RuntimeStatus.Blockers) != 1 || summary.RuntimeStatus.Blockers[0].State.Branch != "detached" {
+		t.Fatalf("expected runtime blocker with detached state, got %#v", summary.RuntimeStatus.Blockers)
 	}
 }
 
@@ -808,17 +845,29 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 	if len(report.PendingSetup) != 1 || report.PendingSetup[0].ID != "PENDING" {
 		t.Fatalf("expected PENDING in pendingSetup, got %#v", report.PendingSetup)
 	}
+	if report.PendingSetup[0].State.Setup != "pending-worktree-id" {
+		t.Fatalf("expected pending setup state, got %#v", report.PendingSetup[0].State)
+	}
 	if len(report.DirtyUncommitted) != 1 || report.DirtyUncommitted[0].ID != "DIRTY" {
 		t.Fatalf("expected DIRTY in dirtyUncommitted, got %#v", report.DirtyUncommitted)
 	}
+	if report.DirtyUncommitted[0].State.Diff != "dirty-uncommitted" {
+		t.Fatalf("expected dirty diff state, got %#v", report.DirtyUncommitted[0].State)
+	}
 	if len(report.CompletedUnreviewed) != 1 || report.CompletedUnreviewed[0].ID != "REVIEW" {
 		t.Fatalf("expected REVIEW in completedUnreviewed, got %#v", report.CompletedUnreviewed)
+	}
+	if state := report.CompletedUnreviewed[0].State; state.Diff != "clean-task-commit" || state.Review != "required" {
+		t.Fatalf("expected clean commit review state, got %#v", state)
 	}
 	if len(report.Blockers) != 1 || report.Blockers[0].ID != "BLOCKED" {
 		t.Fatalf("expected BLOCKED in blockers, got %#v", report.Blockers)
 	}
 	if len(report.CleanupNeeded) != 1 || report.CleanupNeeded[0].ID != "CLEANUP" {
 		t.Fatalf("expected CLEANUP in cleanupNeeded, got %#v", report.CleanupNeeded)
+	}
+	if report.CleanupNeeded[0].State.Cleanup != "needed" {
+		t.Fatalf("expected cleanup-needed state, got %#v", report.CleanupNeeded[0].State)
 	}
 	if len(report.RecentMergedOrCleaned) != 1 || report.RecentMergedOrCleaned[0].ID != "DONE" || report.RecentMergedOrCleaned[0].ObservedStatus != "cleaned" {
 		t.Fatalf("expected DONE in recentMergedOrCleaned, got %#v", report.RecentMergedOrCleaned)

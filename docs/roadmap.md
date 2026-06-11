@@ -136,6 +136,8 @@ Future daemon/UI
   - `heartbeat`
 - integration checkout dirty/error 检查；
 - per-task `pending-setup` / `stale-needs-inspection` / `completed-unreviewed` / `blocked` / `cleanup-needed` 分类；
+- observations/runtimeStatus 现在暴露结构化 `state` 字段，分别记录
+  setup/worktree/branch/diff/review/cleanup 的本地静态状态；
 - `overallStatus`、recommended actions、counts 和 reviewPressure；
 - JSON report 和 Markdown summary；
 - 可在 Codex App 只返回 `pendingWorktreeId` 时先记录 `pending-setup`
@@ -425,11 +427,17 @@ roadmap。优先级如下：
    - 当前落地：helper 已在 `status` / `observe --json` / heartbeat summary 中输出
      `runtimeStatus` 本地静态报告；仍不代表 Codex App runtime/daemon direct proof。
 
-2. First-class setup/worktree state model。
+2. First-class setup/worktree state model：已补。
    - 目标：把 `pendingWorktreeId`、真实 worktree、branch、dirty diff、clean commit、
      completed-unreviewed、blocked、merged、cleaned 作为工具级状态，而不是靠聊天记忆。
    - 必须解决：pending setup 被误当成 active worker、重复派发同一任务、线程状态和 git
      状态不一致。
+   - 当前落地：`observe` / `status` / heartbeat JSON 的每个 observation 和
+     `runtimeStatus` item 都包含 `state`，把 setup/worktree/branch/diff/review/cleanup
+     拆开表达；detached `HEAD` 且 ledger 记录了 branch 时报告为 `blocked`；
+     clean task commit 始终报告为 `completed-unreviewed`，直到 orchestrator review。
+   - 边界：这仍然是 local/static helper evidence，不查询 Codex App runtime，不创建
+     session，不 merge/push/delete/cleanup。
 
 3. Automated review checklist。
    - 目标：在 merge 前自动生成 reviewer checklist，而不是只靠统领手工记得查。
