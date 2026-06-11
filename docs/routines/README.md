@@ -160,6 +160,15 @@ budget metadata coverage, local/static pressure warnings, and unknown timing
 states, but it must not start, stop, prioritize, reschedule, or kill workers, and
 must not make dispatch eligibility decisions without Codex App or human review.
 
+`budget-policy-report` is currently a contract and fixture only, not a
+`run-routine` command. It defines the next local/static report surface for
+budget policy work: summarize routine/task budget metadata coverage, copy
+recorded heartbeat budget warnings only as local/static evidence, separate
+unknown runtime or review timing into blocked evidence, and return advisory
+recommendations for the Codex App orchestrator or a human reviewer. A future
+runner may implement this contract only if it stays read-only and does not
+schedule, prioritize, pause, kill, dispatch, merge, push, or clean worktrees.
+
 ## Required Output Shape
 
 Every routine must produce a report with these fields:
@@ -216,6 +225,9 @@ Do not turn `local` or `proxy` evidence into `direct` proof in the final report.
 - `roadmap-next-task-suggester`: suggest the next safe bounded roadmap task
   from repo-local roadmap, runnable routine, routine-spec, and optional ledger
   state without mutating repository state.
+- `budget-policy-report`: define a review-only budget report contract for
+  metadata coverage, local/static pressure warnings, unknown timing states, and
+  human/App-layer recommendations. This spec is not runnable yet.
 - `browser-runtime-proof`: verify browser-visible behavior through a browser
   harness.
 - `log-proof`: verify behavior through current runtime logs.

@@ -1,0 +1,24 @@
+{
+  "routineId": "budget-policy-report",
+  "status": "passed",
+  "evidence": {
+    "direct": [],
+    "proxy": [],
+    "local": [
+      "Routine specs were inspected for maxRuntimeMinutes and reviewBudgetMinutes metadata.",
+      "Roadmap and routine docs were inspected for the review-only budget-policy boundary.",
+      "No scheduler, priority engine, automatic killing, dispatch enforcement, merge, push, or cleanup action was performed."
+    ],
+    "blocked": [
+      "Live Codex App session runtime and human review elapsed time were not available in the static inputs."
+    ]
+  },
+  "actionsTaken": [
+    "Separated budget metadata coverage from budget pressure warnings.",
+    "Recorded unknown timing states as blocked evidence.",
+    "Kept budget recommendations advisory for Codex App orchestrator or human review."
+  ],
+  "needsHuman": true,
+  "blockedReason": "",
+  "nextSuggestedAction": "Use this local/static report shape as the contract for a future read-only budget-policy-report runner; keep any dispatch or pause decision at the Codex App orchestrator or human-review layer."
+}

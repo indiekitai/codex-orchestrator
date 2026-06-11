@@ -181,6 +181,13 @@ exists. The helper may report metadata gaps, near/exceeded local thresholds, and
 unknown timing evidence, but dispatch, pause, merge, cleanup, or worker-control
 decisions remain with the Codex App orchestrator and human reviewer.
 
+The next budget-policy surface is the docs-only `budget-policy-report` contract
+under `routines/` plus its example report. It is not a runnable command yet. Its
+report shape keeps metadata coverage, local/static pressure warnings, unknown
+timing states, and human-review recommendations separate so future
+implementation work has a concrete contract without introducing budget
+enforcement.
+
 ## Record Review/Merge/Cleanup Outcomes
 
 The orchestrator should append events when it reviews, merges, rejects, blocks,

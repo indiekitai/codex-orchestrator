@@ -273,12 +273,23 @@ review timestamp unknown warnings。这些都是 local/static helper evidence，
 可以报告的预算事实、App orchestrator/人类 reviewer 可以做的决策，以及 helper
 仍然禁止触碰的调度、排序、worker control、dispatch 和预算强制执行边界。
 
+已完成 docs/spec budget policy report/eval local slice：
+`routines/budget-policy-report.json` 和
+`examples/routine-reports/budget-policy-report.review-only.json` 定义了下一层
+review-only 报告契约：预算 metadata coverage、local/static pressure warnings、
+unknown timing state 和 human/App-layer recommendation 必须分开表达。它不是
+`run-routine` 命令，也不引入 scheduler、priority engine、worker kill、dispatch
+enforcement、merge/push/delete 自动化或预算强制执行。
+
 剩余：
 
-- budget policy review report/eval：在 review-only design 之后，后续如果继续推进，
-  只能先做只读报告或静态 policy/eval，检查预算 metadata coverage、local/static
-  warning 状态和 unknown timing 状态；仍然不做调度、排序、worker kill、dispatch
-  或预算强制执行。
+- budget policy report runner：如果继续推进，下一步只能实现只读
+  `run-routine budget-policy-report`，读取 roadmap、routine specs、可选 ledger 和
+  可选 heartbeat report，输出上述契约形状的 local/static 报告；仍然不做调度、
+  排序、worker kill、dispatch enforcement 或预算强制执行。
+- budget policy static eval：只检查预算证据误用或边界漂移，例如把
+  local/static timestamp 写成 live session proof，或把 budget warning 写成 helper
+  已经 pause/kill worker。finding 只能作为 review prompt，不能成为自动调度决策。
 
 ## v3：Routine library
 
