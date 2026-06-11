@@ -36,19 +36,20 @@ type Ledger struct {
 }
 
 type Task struct {
-	ID              string              `json:"id"`
-	Title           string              `json:"title,omitempty"`
-	ThreadID        string              `json:"threadId,omitempty"`
-	Worktree        string              `json:"worktree"`
-	Branch          string              `json:"branch"`
-	BaseCommit      string              `json:"baseCommit,omitempty"`
-	Status          string              `json:"status"`
-	Budget          *BudgetMetadata     `json:"budget,omitempty"`
-	WriteSet        map[string][]string `json:"writeSet,omitempty"`
-	Gates           []string            `json:"gates,omitempty"`
-	Evidence        map[string]any      `json:"evidence,omitempty"`
-	LastObservation map[string]string   `json:"lastObservation,omitempty"`
-	History         []map[string]string `json:"history,omitempty"`
+	ID                string              `json:"id"`
+	Title             string              `json:"title,omitempty"`
+	ThreadID          string              `json:"threadId,omitempty"`
+	PendingWorktreeID string              `json:"pendingWorktreeId,omitempty"`
+	Worktree          string              `json:"worktree,omitempty"`
+	Branch            string              `json:"branch,omitempty"`
+	BaseCommit        string              `json:"baseCommit,omitempty"`
+	Status            string              `json:"status"`
+	Budget            *BudgetMetadata     `json:"budget,omitempty"`
+	WriteSet          map[string][]string `json:"writeSet,omitempty"`
+	Gates             []string            `json:"gates,omitempty"`
+	Evidence          map[string]any      `json:"evidence,omitempty"`
+	LastObservation   map[string]string   `json:"lastObservation,omitempty"`
+	History           []map[string]string `json:"history,omitempty"`
 }
 
 type BudgetMetadata struct {
@@ -69,12 +70,13 @@ func (s *stringList) Set(value string) error {
 }
 
 type Observation struct {
-	ID        string          `json:"id,omitempty"`
-	Status    string          `json:"status"`
-	Action    string          `json:"action"`
-	Note      string          `json:"note"`
-	GitStatus string          `json:"gitStatus,omitempty"`
-	Budget    *BudgetMetadata `json:"budget,omitempty"`
+	ID                string          `json:"id,omitempty"`
+	Status            string          `json:"status"`
+	Action            string          `json:"action"`
+	Note              string          `json:"note"`
+	GitStatus         string          `json:"gitStatus,omitempty"`
+	PendingWorktreeID string          `json:"pendingWorktreeId,omitempty"`
+	Budget            *BudgetMetadata `json:"budget,omitempty"`
 }
 
 type IntegrationState struct {
@@ -245,8 +247,8 @@ func usage() {
 
 Usage:
   codex-orchestrator init [--ledger PATH] [--project-root PATH]
-  codex-orchestrator record-task --id ID --worktree PATH --branch BRANCH [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N]
-  codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--note TEXT]
+  codex-orchestrator record-task --id ID (--worktree PATH --branch BRANCH | --pending-worktree-id ID) [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N]
+  codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
   codex-orchestrator status [--repo PATH] [--ledger PATH] [--json]
@@ -319,10 +321,10 @@ _codex_orchestrator()
       COMPREPLY=( $(compgen -W "--ledger --project-root --help" -- "$cur") )
       ;;
     record-task)
-      COMPREPLY=( $(compgen -W "--ledger --id --title --thread-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--ledger --id --title --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help" -- "$cur") )
       ;;
     append-event)
-      COMPREPLY=( $(compgen -W "--ledger --type --task-id --status --note --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--ledger --type --task-id --status --pending-worktree-id --worktree --branch --note --help" -- "$cur") )
       ;;
     observe|status)
       COMPREPLY=( $(compgen -W "--repo --ledger --json --write-report --write-summary --help" -- "$cur") )
@@ -446,10 +448,10 @@ case $state in
         _values 'options' --ledger --project-root --help
         ;;
       record-task)
-        _values 'options' --ledger --id --title --thread-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help
+        _values 'options' --ledger --id --title --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help
         ;;
       append-event)
-        _values 'options' --ledger --type --task-id --status --note --help
+        _values 'options' --ledger --type --task-id --status --pending-worktree-id --worktree --branch --note --help
         ;;
       observe|status)
         _values 'options' --repo --ledger --json --write-report --write-summary --help
@@ -495,6 +497,9 @@ complete -c codex-orchestrator -l json -d 'Print JSON'
 complete -c codex-orchestrator -l write-report -d 'Write JSON report'
 complete -c codex-orchestrator -l write-summary -d 'Write Markdown summary'
 complete -c codex-orchestrator -l task-id -d 'Task id'
+complete -c codex-orchestrator -l pending-worktree-id -d 'Opaque Codex App pending worktree setup id'
+complete -c codex-orchestrator -l worktree -d 'Task worktree path'
+complete -c codex-orchestrator -l branch -d 'Task branch'
 complete -c codex-orchestrator -l repo -d 'Repository path'
 complete -c codex-orchestrator -l tag -d 'Release tag'
 complete -c codex-orchestrator -l expected-asset -d 'Expected release asset'
@@ -564,6 +569,7 @@ func cmdRecordTask(args []string) error {
 	id := fs.String("id", "", "task id")
 	title := fs.String("title", "", "task title")
 	threadID := fs.String("thread-id", "", "Codex thread id")
+	pendingWorktreeID := fs.String("pending-worktree-id", "", "opaque Codex App pending worktree setup id")
 	worktree := fs.String("worktree", "", "task worktree path")
 	branch := fs.String("branch", "", "task branch")
 	baseCommit := fs.String("base-commit", "", "base commit")
@@ -586,11 +592,11 @@ func cmdRecordTask(args []string) error {
 	if *id == "" {
 		return errors.New("record-task requires --id")
 	}
-	if *worktree == "" {
-		return errors.New("record-task requires --worktree")
+	if *worktree == "" && *pendingWorktreeID == "" {
+		return errors.New("record-task requires --worktree or --pending-worktree-id")
 	}
-	if *branch == "" {
-		return errors.New("record-task requires --branch")
+	if *worktree != "" && *branch == "" {
+		return errors.New("record-task requires --branch when --worktree is set")
 	}
 	if *maxRuntimeMinutes < 0 {
 		return errors.New("record-task --max-runtime-minutes cannot be negative")
@@ -618,15 +624,24 @@ func cmdRecordTask(args []string) error {
 	if historyNote == "" {
 		historyNote = "Task recorded."
 	}
+	taskStatus := *status
+	if !flagProvided(fs, "status") && *worktree == "" && *pendingWorktreeID != "" {
+		taskStatus = "pending-setup"
+	}
+	observationNote := "Task recorded."
+	if *worktree == "" && *pendingWorktreeID != "" {
+		observationNote = "Pending worktree setup recorded."
+	}
 	task := Task{
-		ID:         *id,
-		Title:      taskTitle,
-		ThreadID:   *threadID,
-		Worktree:   *worktree,
-		Branch:     *branch,
-		BaseCommit: base,
-		Status:     *status,
-		Budget:     taskBudgetFromFlags(*maxRuntimeMinutes, *reviewBudgetMinutes, *budgetNote),
+		ID:                *id,
+		Title:             taskTitle,
+		ThreadID:          *threadID,
+		PendingWorktreeID: *pendingWorktreeID,
+		Worktree:          *worktree,
+		Branch:            *branch,
+		BaseCommit:        base,
+		Status:            taskStatus,
+		Budget:            taskBudgetFromFlags(*maxRuntimeMinutes, *reviewBudgetMinutes, *budgetNote),
 		WriteSet: map[string][]string{
 			"allowed":   []string(allowed),
 			"forbidden": []string(forbidden),
@@ -639,15 +654,18 @@ func cmdRecordTask(args []string) error {
 		},
 		LastObservation: map[string]string{
 			"at":     now,
-			"result": *status,
-			"note":   "Task recorded.",
+			"result": taskStatus,
+			"note":   observationNote,
 		},
 		History: []map[string]string{{
 			"at":     now,
 			"type":   "record-task",
-			"status": *status,
+			"status": taskStatus,
 			"note":   historyNote,
 		}},
+	}
+	if *pendingWorktreeID != "" {
+		task.History[0]["pendingWorktreeId"] = *pendingWorktreeID
 	}
 	ledger.Tasks = append(ledger.Tasks, task)
 	if err := saveLedger(*ledgerPath, &ledger); err != nil {
@@ -661,7 +679,16 @@ func cmdRecordTask(args []string) error {
 		"at":     nowISO(),
 		"type":   "record-task",
 		"taskId": *id,
-		"status": *status,
+		"status": taskStatus,
+	}
+	if *pendingWorktreeID != "" {
+		event["pendingWorktreeId"] = *pendingWorktreeID
+	}
+	if *worktree != "" {
+		event["worktree"] = *worktree
+	}
+	if *branch != "" {
+		event["branch"] = *branch
 	}
 	if task.Budget != nil {
 		event["budget"] = task.Budget
@@ -680,12 +707,18 @@ func cmdAppendEvent(args []string) error {
 	taskID := fs.String("task-id", "", "task id")
 	eventType := fs.String("type", "", "event type")
 	status := fs.String("status", "", "status")
+	pendingWorktreeID := fs.String("pending-worktree-id", "", "opaque Codex App pending worktree setup id")
+	worktree := fs.String("worktree", "", "task worktree path to record on the ledger task")
+	branch := fs.String("branch", "", "task branch to record on the ledger task")
 	note := fs.String("note", "", "event note")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *eventType == "" {
 		return errors.New("append-event requires --type")
+	}
+	if *taskID == "" && (*pendingWorktreeID != "" || *worktree != "" || *branch != "") {
+		return errors.New("append-event requires --task-id when updating pending-worktree-id, worktree, or branch")
 	}
 	ledger, err := loadLedger(*ledgerPath)
 	if err != nil {
@@ -706,6 +739,15 @@ func cmdAppendEvent(args []string) error {
 		"taskId": emptyToNil(*taskID),
 		"note":   *note,
 	}
+	if *pendingWorktreeID != "" {
+		event["pendingWorktreeId"] = *pendingWorktreeID
+	}
+	if *worktree != "" {
+		event["worktree"] = *worktree
+	}
+	if *branch != "" {
+		event["branch"] = *branch
+	}
 	resolvedEvents := *eventsPath
 	if resolvedEvents == "" {
 		resolvedEvents = eventsPathForLedger(*ledgerPath)
@@ -717,6 +759,15 @@ func cmdAppendEvent(args []string) error {
 		task := &ledger.Tasks[taskIndex]
 		if *status != "" {
 			task.Status = *status
+		}
+		if *pendingWorktreeID != "" {
+			task.PendingWorktreeID = *pendingWorktreeID
+		}
+		if *worktree != "" {
+			task.Worktree = *worktree
+		}
+		if *branch != "" {
+			task.Branch = *branch
 		}
 		task.LastObservation = map[string]string{
 			"at":     now,
@@ -860,6 +911,7 @@ func cmdStatus(args []string) error {
 		"taskCount":         len(ledger.Tasks),
 		"routineRunCount":   len(ledger.RoutineRuns),
 		"counts":            counts,
+		"tasks":             ledger.Tasks,
 		"recentRoutineRuns": recentRoutineRuns(ledger.RoutineRuns, 5),
 	}
 	if *jsonOut {
@@ -876,6 +928,12 @@ func cmdStatus(args []string) error {
 	sort.Strings(keys)
 	for _, key := range keys {
 		fmt.Printf("- %s: %d\n", key, counts[key])
+	}
+	for _, task := range ledger.Tasks {
+		if task.PendingWorktreeID == "" {
+			continue
+		}
+		fmt.Printf("Pending worktree: task=%s pendingWorktreeId=%s\n", task.ID, task.PendingWorktreeID)
 	}
 	if recent := recentRoutineRuns(ledger.RoutineRuns, 5); len(recent) > 0 {
 		fmt.Println("Recent routine runs:")
@@ -2707,12 +2765,13 @@ func summarizeTaskBudgets(tasks []Task) BudgetSummary {
 
 func taskObservation(task Task, status string, action string, note string, gitStatus string) Observation {
 	return Observation{
-		ID:        task.ID,
-		Status:    status,
-		Action:    action,
-		Note:      note,
-		GitStatus: gitStatus,
-		Budget:    task.Budget,
+		ID:                task.ID,
+		Status:            status,
+		Action:            action,
+		Note:              note,
+		GitStatus:         gitStatus,
+		PendingWorktreeID: task.PendingWorktreeID,
+		Budget:            task.Budget,
 	}
 }
 
@@ -2727,6 +2786,17 @@ func inspectTask(task Task, staleAfter time.Duration) Observation {
 		return taskObservation(task, task.Status, "quiet", fmt.Sprintf("Task is recorded as %s.", task.Status), "")
 	}
 	if task.Worktree == "" {
+		if task.PendingWorktreeID != "" {
+			statusValue := "pending-setup"
+			action := "wait for Codex App worktree setup to finish, then append worktree and branch"
+			note := fmt.Sprintf("Pending worktree setup id recorded: %s", task.PendingWorktreeID)
+			if isTaskStale(task, staleAfter) {
+				statusValue = "stale-needs-inspection"
+				action = "inspect pending setup and decide whether to re-dispatch or abandon"
+				note = fmt.Sprintf("Pending worktree setup id %s is older than %s.", task.PendingWorktreeID, staleAfter)
+			}
+			return taskObservation(task, statusValue, action, note, "")
+		}
 		return taskObservation(task, "blocked", "record missing worktree path", "Task has no worktree path in ledger.", "")
 	}
 	worktree := expandPath(task.Worktree)
@@ -3149,6 +3219,9 @@ func renderSummary(summary ObserveSummary) string {
 			if item.Note != "" {
 				fmt.Fprintf(&b, "  - note: %s\n", item.Note)
 			}
+			if item.PendingWorktreeID != "" {
+				fmt.Fprintf(&b, "  - pendingWorktreeId: `%s`\n", item.PendingWorktreeID)
+			}
 			if budget := formatBudget(item.Budget); budget != "" {
 				fmt.Fprintf(&b, "  - budget: %s\n", budget)
 			}
@@ -3175,7 +3248,7 @@ func renderSummary(summary ObserveSummary) string {
 
 func compactEvent(event map[string]any) map[string]string {
 	result := map[string]string{}
-	for _, key := range []string{"at", "type", "status", "taskId", "note"} {
+	for _, key := range []string{"at", "type", "status", "taskId", "pendingWorktreeId", "worktree", "branch", "note"} {
 		value, ok := event[key]
 		if !ok || value == nil {
 			continue
@@ -3243,6 +3316,9 @@ func printObservations(summary ObserveSummary) {
 		fmt.Printf("- %s: %s\n", item.ID, item.Status)
 		fmt.Printf("  action: %s\n", item.Action)
 		fmt.Printf("  note: %s\n", item.Note)
+		if item.PendingWorktreeID != "" {
+			fmt.Printf("  pendingWorktreeId: %s\n", item.PendingWorktreeID)
+		}
 		if budget := formatBudget(item.Budget); budget != "" {
 			fmt.Printf("  budget: %s\n", budget)
 		}
