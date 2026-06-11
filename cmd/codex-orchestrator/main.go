@@ -2544,12 +2544,25 @@ func runDocsDriftCheckerRoutine(repo string) RoutineRunReport {
 		return report
 	}
 
+	postMergeWarnings, err := inspectPostMergeDocsDriftGuard(repo)
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not inspect docs/reviews for post-merge docs drift guard: "+err.Error())
+		report.BlockedReason = "could not inspect review docs"
+		return report
+	}
+	if len(postMergeWarnings) > 0 {
+		failures = append(failures, postMergeWarnings...)
+	} else {
+		report.Evidence["local"] = append(report.Evidence["local"], "docs/reviews post-merge docs drift guard found no accepted/merged central-impact task notes missing a docs update decision.")
+	}
+	report.ActionsTaken = append(report.ActionsTaken, "Scanned docs/reviews for post-merge docs drift guard warnings")
+
 	report.ActionsTaken = append(report.ActionsTaken, "Compared runnable routines against JSON specs and key docs")
 	if len(failures) > 0 {
 		sort.Strings(failures)
 		report.Status = "failed"
 		report.Evidence["local"] = append(report.Evidence["local"], failures...)
-		report.NextSuggestedAction = "Update routine specs and key docs so the runnable command surface is documented, then rerun docs-drift-checker."
+		report.NextSuggestedAction = "Update routine specs, key docs, or the accepted-task review note's docs-drift decision so central docs ownership is explicit, then rerun docs-drift-checker."
 		return report
 	}
 
@@ -2566,6 +2579,83 @@ func routineReferenceDocs() []string {
 		"SKILL.md",
 		filepath.Join("docs", "routines", "README.md"),
 		filepath.Join("docs", "v2-usage.md"),
+	}
+}
+
+func inspectPostMergeDocsDriftGuard(repo string) ([]string, error) {
+	reviewDir := filepath.Join(repo, "docs", "reviews")
+	entries, err := os.ReadDir(reviewDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	warnings := []string{}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+		relPath := filepath.Join("docs", "reviews", entry.Name())
+		data, err := os.ReadFile(filepath.Join(repo, relPath))
+		if err != nil {
+			return nil, err
+		}
+		text := string(data)
+		if !looksLikeAcceptedOrMergedTaskNote(text) || !mentionsCentralDocsImpact(text) || recordsCentralDocsDecision(text) {
+			continue
+		}
+		warnings = append(warnings, fmt.Sprintf("%s may describe an accepted/merged central-impact task without an explicit central docs update or docs-drift decision.", relPath))
+	}
+	return warnings, nil
+}
+
+func looksLikeAcceptedOrMergedTaskNote(text string) bool {
+	return containsAnyFold(text, []string{
+		"accepted",
+		"accepted merge",
+		"after merge",
+		"merged",
+		"passed after merge",
+		"final handoff",
+	})
+}
+
+func mentionsCentralDocsImpact(text string) bool {
+	return containsAnyFold(text, []string{
+		"cmd/codex-orchestrator/main.go",
+		"cmd/codex-orchestrator/main_test.go",
+		"routines/",
+		"new command",
+		"new runnable routine",
+		"new routine",
+		"routine spec",
+		"routine runner",
+	})
+}
+
+func recordsCentralDocsDecision(text string) bool {
+	return containsAnyFold(text, append(centralDocsPaths(), []string{
+		"docs drift",
+		"docs-drift",
+		"documentation drift",
+		"central docs",
+		"key docs",
+		"no central docs",
+		"no docs update",
+		"docs update",
+	}...))
+}
+
+func centralDocsPaths() []string {
+	return []string{
+		"README.md",
+		"README.zh-CN.md",
+		"SKILL.md",
+		filepath.Join("docs", "routines", "README.md"),
+		filepath.Join("docs", "v2-usage.md"),
+		filepath.Join("docs", "roadmap.md"),
 	}
 }
 

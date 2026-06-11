@@ -463,8 +463,11 @@ roadmap。优先级如下：
    - 边界：仍然只输出 local/static suspicion，不检查真实 pre/prod/device/payment
      runtime，不产生 direct proof，不修改 ledger/git/worktree。
 
-5. Post-merge docs drift guard。
+5. Post-merge docs drift guard：已补 local/static helper slice。
    - 目标：accepted merge 后明确提示 central docs 是否需要 orchestrator-owned update。
+   - 当前落地：`docs-drift-checker` 会本地静态扫描 `docs/reviews/*.md`，当已接受或已合并
+     的任务记录提到 command/routine/source 这类中央文档影响面，却没有记录中央文档更新
+     或明确的 docs-drift 决策时，输出 `local` post-merge docs-drift guard 告警。
    - 允许结论：docs updated、docs-not-needed、central-docs-pending、docs-drift-blocked。
    - 边界：worker 默认不直接改中央 progress/roadmap；统领负责合并后的统一同步或显式说明。
 

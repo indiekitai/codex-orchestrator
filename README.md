@@ -392,10 +392,14 @@ read-only and does not load or update the ledger. It parses the local
 the runnable routine IDs with `routines/*.json`, and scans `README.md`,
 `README.zh-CN.md`, `SKILL.md`, `docs/routines/README.md`, `docs/v2-usage.md`,
 and `docs/roadmap.md` when present for obvious missing routine references or
-stale status text. Missing docs references or missing specs return `failed`; missing
-repository/source/spec access returns `blocked`. It does not stage, commit,
-merge, push, tag, release, clean worktrees, dispatch sessions, mutate the
-ledger, or claim runtime proof; MVP evidence is `local` or `blocked`.
+stale status text. It also scans `docs/reviews/*.md` for accepted or merged
+central-impact task notes that mention command/routine/source changes but do
+not record a central docs update or explicit docs-drift decision. Missing docs
+references, missing specs, or post-merge docs-drift guard warnings return
+`failed`; missing repository/source/spec/review-doc access returns `blocked`.
+It does not stage, commit, merge, push, tag, release, clean worktrees, dispatch
+sessions, mutate the ledger, or claim runtime proof; MVP evidence is `local`
+or `blocked`.
 
 `run-routine evidence-label-auditor` is the sixth runnable routine MVP. It is
 read-only and does not load or update the ledger. It scans explicit repo-local

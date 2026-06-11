@@ -90,12 +90,15 @@ or `blocked` evidence.
 does not load or update the ledger. It parses runnable routine IDs from
 `cmd/codex-orchestrator/main.go`, checks that each runnable routine has a JSON
 spec under `routines/`, and scans `README.md`, `README.zh-CN.md`, `SKILL.md`,
-`docs/routines/README.md`, and `docs/roadmap.md` when present for obvious
-missing routine references or stale status text. Missing specs or docs
-references fail; missing repository/source/spec access blocks. It does not
-stage, commit, merge, push, tag, release, clean worktrees, dispatch sessions,
-mutate the ledger, or claim runtime proof; this MVP emits `local` or `blocked`
-evidence.
+`docs/routines/README.md`, `docs/v2-usage.md`, and `docs/roadmap.md` when
+present for obvious missing routine references or stale status text. It also
+scans `docs/reviews/*.md` for accepted or merged central-impact task notes that
+mention command/routine/source changes but do not record a central docs update
+or explicit docs-drift decision. Missing specs, docs references, or
+post-merge docs-drift guard warnings fail; missing repository/source/spec or
+review-doc access blocks. It does not stage, commit, merge, push, tag, release,
+clean worktrees, dispatch sessions, mutate the ledger, or claim runtime proof;
+this MVP emits `local` or `blocked` evidence.
 
 `run-routine evidence-label-auditor` is a read-only local/static evidence-label
 checker. It does not load or update the ledger. It scans explicit repo-local
