@@ -141,6 +141,27 @@ This delta does not overturn the existing V4 work. It narrows the next product
 work from "more routines" to "ledger closure, acceptance artifacts, and
 project-aware next-task scoring."
 
+## Push-Confirmation Stop Incident
+
+A later TastyFuture orchestrator run exposed a narrower continuation failure.
+The orchestrator completed and cleaned its first two worker tasks, observed that
+the default branch was ahead of `origin/main`, then deleted the heartbeat
+because it thought it needed user confirmation before push or before dispatching
+the next batch.
+
+That behavior is wrong for an already-authorized continuous queue. If the ahead
+commits are orchestrator-owned, reviewed, accepted, and intended for the normal
+integration branch, push is part of closeout when project policy allows it. If
+push/auth/remote policy blocks closeout, the orchestrator should keep the
+heartbeat active, report the blocker, and avoid dispatching duplicate work. It
+should not delete the monitor and wait for the user to notice that the queue has
+stopped.
+
+This incident is local/project-feedback evidence. It is not direct runtime or
+daemon proof. It should be covered by the OPA003 continuation guard because the
+parent queue stopped after child completion without a valid queue-drained or
+blocked state.
+
 ## Candidate Fixtures
 
 - `pendingWorktreeId` exists but no worktree exists yet: should remain pending

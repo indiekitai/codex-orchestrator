@@ -631,6 +631,12 @@ task or replace the heartbeat with a next-task monitor. Delete the heartbeat
 only after the queue is drained, or after the next action is blocked and
 reported.
 
+In an already-authorized continuous loop, an integration branch that is ahead
+only because of reviewed orchestrator-owned commits is not a reason to stop and
+ask whether to push or continue. Push as part of the normal project closeout
+when policy allows it. If push/auth/remote policy blocks the closeout, keep the
+heartbeat active and report the blocker instead of deleting the monitor.
+
 ## 🧱 Architecture
 
 The orchestrator operates as a **state machine** over delegated sessions:

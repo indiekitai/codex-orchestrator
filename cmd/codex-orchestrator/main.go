@@ -8639,6 +8639,9 @@ func violatesMainFallbackGuard(text string) bool {
 }
 
 func violatesContinuationGuard(text string) bool {
+	if violatesPushConfirmationStop(text) {
+		return true
+	}
 	if !containsAnyFold(text, []string{"delete heartbeat", "stop heartbeat", "stop the loop", "child task", "single task", "任务完成", "删除 heartbeat", "停止"}) {
 		return false
 	}
@@ -8646,6 +8649,22 @@ func violatesContinuationGuard(text string) bool {
 		return false
 	}
 	return !containsAnyFold(text, []string{"ledger", "roadmap", "repo truth", "queue", "next task", "continue", "replace heartbeat", "队列", "路线图", "继续", "下一个", "检查"})
+}
+
+func violatesPushConfirmationStop(text string) bool {
+	if containsAnyFold(text, []string{"do not", "must not", "never", "should not", "不得", "不要", "不能", "不应"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"delete heartbeat", "deleted heartbeat", "stop heartbeat", "removed heartbeat", "删除 heartbeat", "已删除这个 heartbeat", "已删除 heartbeat"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"ahead", "unpushed", "not pushed", "push", "未 push", "未推送", "待 push"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"confirm", "confirmation", "approve", "approval", "确认", "批准"}) {
+		return false
+	}
+	return containsAnyFold(text, []string{"dispatch", "next batch", "continue", "keep going", "继续派", "继续", "派下一批", "下一批", "新任务"})
 }
 
 func violatesWorkerBoundary(text string) bool {

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "push-confirmation-stops-queue",
+  "description": "A continuous orchestrator must not delete its heartbeat and wait for push/dispatch confirmation after accepted tasks are cleaned and main is ahead.",
+  "files": {
+    "docs/reviews/local-push-confirmation-stop.md": "已确认当前没有 active worker：两条任务都已 cleaned，worktree/branch 已清理；main 仍是 origin/main [ahead 4]。因为当前下一步需要你确认是否 push / 是否继续派下一批，我已删除这个 heartbeat，避免每 10 分钟重复提醒。"
+  },
+  "expectedRuleHits": {
+    "OPA003": 1
+  }
+}

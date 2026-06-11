@@ -121,9 +121,9 @@ policy/eval checker. It does not load or update the ledger. It scans
 repo-local orchestration docs, prompts, routine specs, routine report JSON, and
 ledger/event files for deterministic orchestration policy rules (`OPA001`-
 `OPA008`): dry-run dispatch barrier, no-main-checkout fallback guard, heartbeat
-continuation guard, delegated worker boundary, evidence promotion boundary,
-heartbeat target binding guard, pending worktree ledger guard, and
-budget-policy evidence/control boundary drift.
+continuation guard, push-confirmation stop guard, delegated worker boundary,
+evidence promotion boundary, heartbeat target binding guard, pending worktree
+ledger guard, and budget-policy evidence/control boundary drift.
 Findings are heuristics and are reported as local/static suspicions, not
 semantic proof. It does not stage, commit, merge, push, tag, release, clean
 worktrees, dispatch sessions, mutate the ledger, or claim runtime proof; this

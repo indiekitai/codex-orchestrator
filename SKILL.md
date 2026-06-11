@@ -89,6 +89,11 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
    - no evidence exaggeration
 8. If accepted, merge to the default integration branch, push if requested or
    normal for this project, clean the worktree, and delete the local branch.
+   In an already-authorized continuous orchestration loop, an integration
+   branch that is ahead only because of reviewed orchestrator-owned commits is
+   not a reason to stop and ask whether to push or continue. Push as part of
+   the normal closeout when project policy allows it; if push/auth/remote policy
+   blocks the closeout, keep the heartbeat active and report the blocker.
 9. Prefer a generic continuous queue heartbeat for roadmap/queue work. It should
    dynamically read ledger, repo, worktree, and thread truth every run instead
    of embedding the current task IDs as a long-lived watchdog. The generic
@@ -615,7 +620,7 @@ safe tasks from the roadmap when capacity opens. Use dynamic discovery:
 ```text
 Check the orchestrator thread, recent delegated sessions, pending worktree setup, git worktree list, and integration-branch repo status. Identify tasks created by this thread that are active, pending, completed but unmerged, blocked, or stale.
 
-If a task completed with a commit, validate diff, self-review, boundaries, docs/reviews/artifacts, and gates. If it passes, merge to the default integration branch, push when normal for this project or explicitly requested, remove the task worktree, and delete the local branch. If it fails, report blocking findings and do not merge.
+If a task completed with a commit, validate diff, self-review, boundaries, docs/reviews/artifacts, and gates. If it passes, merge to the default integration branch, push when normal for this project or explicitly requested, remove the task worktree, and delete the local branch. In a continuous queue run that was already authorized, reviewed orchestrator-owned commits leaving the default branch ahead of origin are part of the closeout path, not a new user-confirmation checkpoint. If push fails or project policy forbids it, keep the heartbeat active and report the concrete blocker. If it fails review, report blocking findings and do not merge.
 
 If tasks are still running, reconcile thread status with git state. A thread
 that is `active` but has a clean task commit is not "still running" for

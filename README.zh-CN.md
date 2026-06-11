@@ -540,6 +540,11 @@ queue。如果还有安全可做的任务，应继续派发下一个有界任务
 下一任务 monitor。只有在队列耗尽，或下一步被明确 blocker 卡住并已报告后，才删除
 heartbeat。
 
+在已经授权的 continuous loop 里，如果默认分支 ahead 只是因为编排器自己已经验收
+并合并的提交，这不是新的人工确认点。项目策略允许时，应把 push 当作正常收口的一
+部分继续完成；如果 push/auth/remote policy 卡住，则保留 heartbeat 并报告具体
+blocker，不能删掉 monitor 后等用户追问。
+
 ## 🧱 架构
 
 编排器作为一个**状态机**管理所有委派会话：
