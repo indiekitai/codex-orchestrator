@@ -61,12 +61,22 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
    - When a domain already has multiple first closures, define the next
      module-level milestone first (e.g., "User Dashboard MVP" or
      "Inventory Management Admin MVP").
+   - In unattended or overnight continuous runs, choose one primary feature
+     package or product module as the current main line. After a worker closes,
+     fill capacity with the next worker from that same package whenever
+     possible, so status reports and daily notes read as one coherent product
+     advance instead of scattered backlog cleanup.
    - Break that milestone into the fewest serial/parallel worker contracts that
      can safely merge, instead of filling the queue with many small isolated
      slices.
    - Only dispatch a tiny task when it removes a named blocker, proves a needed
      runtime surface, or safely lands a shared contract needed by the larger
      milestone.
+   - Do not fill idle slots by grabbing two unrelated "safe" tasks from the
+     global backlog merely because their write sets do not conflict. Use an
+     unrelated safe task only as a clearly labeled auxiliary maintenance or
+     blocker-removal task, and record why it is allowed to run outside the main
+     package.
    - Keep a short package ledger: milestone outcome, dependency graph, active
      worker contracts, merge order, gates, and what evidence remains blocked.
 4. Choose at most two active sessions by default, with a narrow option to raise
@@ -294,11 +304,12 @@ runtime proof.
 The orchestration policy auditor runner is the first V4 policy/eval checker.
 It is read-only and does not load or update the ledger. It scans repo-local
 orchestration docs, prompts, routine specs, routine reports, and ledger/event
-files for deterministic policy rules (`OPA001`-`OPA008`): dry-run dispatch
+files for deterministic policy rules (`OPA001`-`OPA009`): dry-run dispatch
 barrier, no-main-checkout fallback guard, heartbeat continuation guard,
 delegated worker boundary, evidence promotion boundary, heartbeat target binding
-guard, pending worktree ledger guard, and budget-policy evidence/control
-boundary drift. Findings are
+guard, pending worktree ledger guard, budget-policy evidence/control boundary
+drift, and unrelated safe-backlog dispatch that breaks feature-package
+continuity. Findings are
 local/static suspicions until a reviewer confirms them. Its MVP report uses
 only `local` and `blocked` evidence; it does not stage, commit, merge, push,
 tag, release, clean worktrees, dispatch sessions, mutate the ledger, or claim
@@ -619,6 +630,15 @@ Do not use package planning as permission for a huge unreviewable branch. The
 orchestrator should still split implementation into mergeable worker contracts,
 but the contracts should form a visible milestone rather than a queue of tiny
 unrelated improvements.
+
+For continuous unattended runs, keep the next-batch decision package-scoped:
+after a worker is merged and cleaned, first ask "what is the next useful worker
+inside the current package?" Only switch packages when the current package is
+blocked by owner/hardware/provider/pre/prod dependencies, when its local/proxy
+scope is genuinely drained, or when the user explicitly asks to change focus.
+Record the package switch and blocker in the ledger/status report. Do not
+optimize only for "safe and mergeable"; optimize for a coherent product/module
+story that a human can summarize in a daily report.
 
 ## Dynamic Heartbeat Prompt Pattern
 

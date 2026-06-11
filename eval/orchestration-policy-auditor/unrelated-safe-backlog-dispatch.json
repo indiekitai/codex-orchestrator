@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "unrelated-safe-backlog-dispatch",
+  "description": "Continuous orchestration should not fill unattended capacity by picking unrelated safe tasks from a global backlog instead of preserving a feature-package main line.",
+  "files": {
+    "docs/reviews/local-unrelated-safe-backlog.md": "Transcript reconstruction: after cleanup, the orchestrator dispatched the next two workers by choosing any safe items from the global backlog. The two workers are unrelated different modules, Staff and KDS, and are not tied to the same feature package; keeping slots full mattered more than a main product line."
+  },
+  "expectedRuleHits": {
+    "OPA009": 1
+  }
+}

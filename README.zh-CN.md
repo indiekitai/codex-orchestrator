@@ -160,6 +160,7 @@ flowchart TD
 | **证据纪律** | 证明标签：`direct`（直接）、`proxy`（代理）、`local`（本地）、`blocked`（阻断）。不许把单元测试升级成生产证明 |
 | **强制自审查** | 每个会话必须在交付前审查自己的 diff。编排器在合并前再审一遍 |
 | **特性包规划** | 当某个领域有多个局部闭合时，升级为完整里程碑而非继续堆小切片 |
+| **无人值守主线连续性** | 过夜/连续编排时围绕一个产品模块推进，不为了填满并发槽位去抓互不相关的安全任务 |
 | **连续运转** | 不只做一个功能——读路线图、选下一个可做的功能、派发、重复。专为过夜/无人值守多特性推进设计 |
 | **续跑保护** | 单个任务 heartbeat 只有在编排器确认整体队列不需要继续后，才可以停止 |
 
@@ -464,9 +465,9 @@ direct evidence。它会应用确定性的命名 policy/eval 规则（`ELA001`-`
 `run-routine orchestration-policy-auditor` 是第一个 V4 policy/eval routine
 MVP。它是只读的，不读取或修改 ledger。它扫描 repo-local 编排文档、prompt、
 routine spec、routine report 和 ledger/event 文件，应用确定性的编排策略规则
-（`OPA001`-`OPA008`）：dry-run 派发屏障、禁止主工作区 fallback 实现、heartbeat
+（`OPA001`-`OPA009`）：dry-run 派发屏障、禁止主工作区 fallback 实现、heartbeat
 继续检查、worker 边界、证据升级边界、heartbeat target 绑定 guard、pending worktree
-ledger guard，以及 budget-policy 证据/控制边界漂移。这些发现只是本地静态疑点，不是最终判定。它不会 stage、commit、merge、push、tag、release、清理 worktree、派发
+ledger guard、budget-policy 证据/控制边界漂移，以及破坏特性包连续性的互不相关安全 backlog 派发。这些发现只是本地静态疑点，不是最终判定。它不会 stage、commit、merge、push、tag、release、清理 worktree、派发
 session、修改 ledger，也不会声称 runtime proof；这个 MVP 使用 `local` 或
 `blocked` 证据。
 

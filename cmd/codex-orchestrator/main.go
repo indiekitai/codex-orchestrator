@@ -2183,6 +2183,8 @@ func proposalForPolicyRule(ruleID string) (string, string) {
 		return "Require delegated worker boundary instructions", "Proposed rule: every delegated worker prompt must name its allowed paths, forbidden paths, branch/worktree boundary, verification gates, and the prohibition on nested delegation unless the user explicitly requests it."
 	case policyRuleEvidenceBoundary:
 		return "Prevent local or proxy evidence from becoming direct proof", "Proposed rule: local, static, fixture, or proxy checks must stay labeled as local or proxy evidence. Only the routine that directly observes the target runtime, device, deployment, or external surface may record direct evidence."
+	case policyRulePackageContinuity:
+		return "Keep unattended work on one feature package", "Proposed rule: unattended continuous orchestration must choose a primary feature package or product module before dispatching new workers. Fill capacity with workers that advance that package; use unrelated safe tasks only for explicitly named blocker-removal or maintenance work, and record the package switch."
 	default:
 		return "Review local orchestration rule update", "Proposed rule: convert the confirmed repeated failure into a narrow, reviewable rule with an explicit trigger, forbidden action, verification surface, and blocked-stop condition."
 	}
@@ -4576,7 +4578,7 @@ func runOrchestrationPolicyAuditorRoutine(repo string) RoutineRunReport {
 		}
 		findings = append(findings, auditOrchestrationPolicyText(path, string(data))...)
 	}
-	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static orchestration policy rules OPA001-OPA008")
+	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static orchestration policy rules OPA001-OPA009")
 	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Scanned %d repo-local orchestration policy input file(s).", len(paths)))
 	report.Evidence["local"] = append(report.Evidence["local"], summarizePolicyAuditFindings(findings))
 
@@ -7809,6 +7811,7 @@ const (
 	policyRuleHeartbeatBinding  = "OPA006"
 	policyRulePendingLedger     = "OPA007"
 	policyRuleBudgetBoundary    = "OPA008"
+	policyRulePackageContinuity = "OPA009"
 )
 
 func newEvidenceAuditFinding(ruleID string, format string, args ...any) evidenceAuditFinding {
@@ -8160,7 +8163,8 @@ func isKnownPolicyRule(ruleID string) bool {
 		policyRuleEvidenceBoundary,
 		policyRuleHeartbeatBinding,
 		policyRulePendingLedger,
-		policyRuleBudgetBoundary:
+		policyRuleBudgetBoundary,
+		policyRulePackageContinuity:
 		return true
 	default:
 		return false
@@ -8536,6 +8540,14 @@ func auditOrchestrationPolicyText(path string, text string) []policyAuditFinding
 				line,
 				compactForFinding(body),
 			))
+		case violatesPackageContinuityGuard(body):
+			findings = append(findings, newPolicyAuditFinding(
+				policyRulePackageContinuity,
+				"%s:%d: continuous orchestration wording appears to fill capacity with unrelated safe backlog tasks instead of preserving a feature-package/product-module main line: %s",
+				path,
+				line,
+				compactForFinding(body),
+			))
 		case violatesHeartbeatBindingGuard(body):
 			findings = append(findings, newPolicyAuditFinding(
 				policyRuleHeartbeatBinding,
@@ -8805,6 +8817,95 @@ func violatesBudgetBoundary(text string) bool {
 	return (strings.Contains(lower, "helper") || strings.Contains(lower, "heartbeat")) &&
 		strings.Contains(lower, "enforce") &&
 		(strings.Contains(lower, "dispatch") || strings.Contains(lower, "worker"))
+}
+
+func violatesPackageContinuityGuard(text string) bool {
+	if containsAnyFold(text, []string{"OPA009"}) || containsAnyFold(text, evidenceNegationTerms()) {
+		return false
+	}
+	if containsAnyFold(text, []string{
+		"must not",
+		"should not",
+		"do not",
+		"never",
+		"forbidden",
+		"reject",
+		"禁止",
+		"不要",
+		"不得",
+		"不能",
+		"不应",
+		"不再",
+		"拒绝",
+		"收紧",
+	}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{
+		"dispatch",
+		"dispatched",
+		"pick",
+		"choose",
+		"fill capacity",
+		"fill slots",
+		"next two",
+		"two workers",
+		"派发",
+		"选择",
+		"补两个",
+		"两个 worker",
+		"并发",
+	}) {
+		return false
+	}
+	globalPool := containsAnyFold(text, []string{
+		"global backlog",
+		"backlog pool",
+		"safe task pool",
+		"safety-first backlog",
+		"whole roadmap",
+		"any safe",
+		"安全任务池",
+		"全局 backlog",
+		"全局任务",
+		"安全 backlog",
+		"安全可做",
+		"能本地完成",
+	})
+	unrelated := containsAnyFold(text, []string{
+		"unrelated",
+		"not related",
+		"different domains",
+		"different modules",
+		"disjoint modules",
+		"scatter",
+		"random",
+		"Staff, KDS, Customer",
+		"KDS, Customer",
+		"Tip, Pre, Z-report",
+		"互不相关",
+		"不同模块",
+		"不同 domain",
+		"乱跳",
+		"东一榔头",
+		"西一棒槌",
+		"到处",
+		"随便",
+	})
+	packageMissing := containsAnyFold(text, []string{
+		"without a feature package",
+		"without package",
+		"no primary package",
+		"no main product line",
+		"instead of one package",
+		"not tied to the same package",
+		"不按 feature package",
+		"不按产品包",
+		"没有业务主线",
+		"不是一个产品包",
+		"不属于同一个",
+	})
+	return (globalPool && unrelated) || (globalPool && packageMissing) || (unrelated && packageMissing)
 }
 
 func violatesHeartbeatBindingGuard(text string) bool {

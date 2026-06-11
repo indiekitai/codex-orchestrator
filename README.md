@@ -175,6 +175,7 @@ flowchart TD
 | **Evidence discipline** | Labels proof as `direct`, `proxy`, `local`, or `blocked`. No upgrading unit tests into production proof |
 | **Self-review enforcement** | Every session must review its own diff before handoff. The orchestrator re-reviews before merging |
 | **Feature-package planning** | When a domain has multiple partial closures, promotes work to a coherent milestone instead of more tiny slices |
+| **Package continuity for unattended runs** | Keeps overnight/continuous dispatch focused on one product module instead of filling slots with unrelated safe backlog items |
 | **Continuous operation** | Doesn't stop after one feature — reads roadmap, picks the next buildable feature, dispatches, repeats. Designed for overnight/unattended multi-feature runs |
 | **Continuation guard** | A task-specific heartbeat can stop only after the orchestrator checks whether the broader queue should continue |
 
@@ -534,10 +535,11 @@ evidence is `local` or `blocked`.
 MVP. It is read-only and does not load or update the ledger. It scans
 repo-local orchestration docs, prompts, routine specs, routine reports, and
 ledger/event files for deterministic orchestration policy rules (`OPA001`-
-`OPA008`): dry-run dispatch barrier, no-main-checkout fallback guard, heartbeat
+`OPA009`): dry-run dispatch barrier, no-main-checkout fallback guard, heartbeat
 continuation guard, delegated worker boundaries, evidence promotion boundaries,
-heartbeat target binding guard, pending worktree ledger guard, and budget-policy
-evidence/control boundary drift. Findings are
+heartbeat target binding guard, pending worktree ledger guard, budget-policy
+evidence/control boundary drift, and unrelated safe-backlog dispatch that breaks
+feature-package continuity. Findings are
 local/static suspicions, not proof of wrongdoing. It
 does not stage, commit, merge, push, tag, release, clean worktrees, dispatch
 sessions, mutate the ledger, or claim runtime proof; MVP evidence is `local`
