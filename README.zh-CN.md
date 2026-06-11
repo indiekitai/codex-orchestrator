@@ -107,31 +107,31 @@ CLI worker，那上面两个方向会更贴近。
 
 ## 🏗️ 工作原理
 
-```
-                    ┌─────────────────────┐
-                    │   编排器            │
-                    │   (主线程)          │
-                    └──────┬──────────────┘
-                           │
-              ┌────────────┼────────────────┐
-              ▼            ▼                ▼
-     ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-     │  会话 A      │ │  会话 B      │ │  会话 C      │
-     │  worktree/a  │ │  worktree/b  │ │  worktree/c  │
-     │  branch: a   │ │  branch: b   │ │  branch: c   │
-     └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
-            │                │                │
-            ▼                ▼                ▼
-     ┌──────────────────────────────────────────────┐
-     │            5 分钟心跳巡检                     │
-     │  ┌─ 检查 git 状态 ───────────────────────┐   │
-     │  │  已提交? → 审查 → 合并 → 清理          │   │
-     │  │  卡住+有commit? → 审查 → 合并           │   │
-     │  │  卡住+有diff?   → 补发prompt继续       │   │
-     │  │  还在跑? → 继续等                      │   │
-     │  └───────────────────────────────────────┘   │
-     │  全部完成? → 派发下一批                      │
-     └──────────────────────────────────────────────┘
+简单说，`codex-orchestrator` 是包在 Codex App worker session 外面的一层工程循环：
+
+```mermaid
+flowchart TD
+    app["Codex App 主会话"] --> read["读取 repo truth<br/>git status、worktree、路线图、文档"]
+    read --> plan["生成有界任务契约<br/>允许路径、禁止路径、验收 gate"]
+    plan --> workerA["Worker 会话 A<br/>git worktree + branch"]
+    plan --> workerB["Worker 会话 B<br/>git worktree + branch"]
+    plan --> workerC["Worker 会话 C<br/>git worktree + branch"]
+
+    workerA --> heartbeat["通用 heartbeat 巡检"]
+    workerB --> heartbeat
+    workerC --> heartbeat
+    ledger["持久 ledger<br/>.codex-orchestrator/ledger.json"] -.-> heartbeat
+    heartbeat --> inspect["用 git truth 对账线程状态"]
+    inspect --> active{"当前状态？"}
+    active -->|"active 或 dirty progress"| wait["等待，或发送有范围的继续提示"]
+    active -->|"干净 task commit"| review["审查 diff、gate、文档、证据标签"]
+    active -->|"stale 或 unsafe"| block["标记 blocked 或 rejected"]
+    review --> accepted{"验收通过？"}
+    accepted -->|"是"| merge["merge、push、同步 skill、清理 worktree"]
+    accepted -->|"否"| block
+    merge --> next["运行 observe + roadmap suggester"]
+    next -->|"还有容量"| plan
+    next -->|"队列清空"| done["停止，或等待新任务"]
 ```
 
 ## ✨ 核心能力

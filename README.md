@@ -118,31 +118,32 @@ Running one Codex session at a time is fine for small tasks. But for anything la
 
 ## 🏗️ How It Works
 
-```
-                    ┌─────────────────────┐
-                    │   Orchestrator      │
-                    │   (main thread)     │
-                    └──────┬──────────────┘
-                           │
-              ┌────────────┼────────────────┐
-              ▼            ▼                ▼
-     ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-     │  Session A   │ │  Session B   │ │  Session C   │
-     │  worktree/a  │ │  worktree/b  │ │  worktree/c  │
-     │  branch: a   │ │  branch: b   │ │  branch: c   │
-     └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
-            │                │                │
-            ▼                ▼                ▼
-     ┌──────────────────────────────────────────────┐
-     │            5-min heartbeat loop              │
-     │  ┌─ check git state ──────────────────────┐  │
-     │  │  committed? → review → merge → cleanup │  │
-     │  │  stuck + commit? → review → merge       │  │
-     │  │  stuck + diff?   → nudge to continue   │  │
-     │  │  active?    → let it cook              │  │
-     │  └────────────────────────────────────────┘  │
-     │  All done? → dispatch next batch             │
-     └──────────────────────────────────────────────┘
+At a glance, `codex-orchestrator` is the supervisory loop around Codex
+App-created worker sessions:
+
+```mermaid
+flowchart TD
+    app["Codex App main session"] --> read["Read repo truth<br/>git status, worktrees, roadmap, docs"]
+    read --> plan["Create bounded task contracts<br/>allowed paths, forbidden paths, gates"]
+    plan --> workerA["Worker session A<br/>git worktree + branch"]
+    plan --> workerB["Worker session B<br/>git worktree + branch"]
+    plan --> workerC["Worker session C<br/>git worktree + branch"]
+
+    workerA --> heartbeat["Generic heartbeat monitor"]
+    workerB --> heartbeat
+    workerC --> heartbeat
+    ledger["Persistent ledger<br/>.codex-orchestrator/ledger.json"] -.-> heartbeat
+    heartbeat --> inspect["Reconcile thread state with git truth"]
+    inspect --> active{"State?"}
+    active -->|"active or dirty progress"| wait["Wait or send a scoped nudge"]
+    active -->|"clean task commit"| review["Review diff, gates, docs, evidence labels"]
+    active -->|"stale or unsafe"| block["Mark blocked or rejected"]
+    review --> accepted{"Accepted?"}
+    accepted -->|"yes"| merge["Merge, push, sync skill, cleanup worktree"]
+    accepted -->|"no"| block
+    merge --> next["Run observe + roadmap suggester"]
+    next -->|"capacity available"| plan
+    next -->|"queue drained"| done["Stop or wait for new work"]
 ```
 
 ## ✨ Key Features
