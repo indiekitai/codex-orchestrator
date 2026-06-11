@@ -1699,6 +1699,15 @@ func TestPackMergeReadinessWritesStandardLocalReport(t *testing.T) {
 	if !strings.Contains(report.Boundary, "local/static review evidence only") || !strings.Contains(report.Boundary, "does not merge, push, cleanup, dispatch, or edit git state") {
 		t.Fatalf("expected conservative evidence boundary, got %q", report.Boundary)
 	}
+	if report.AcceptanceReport.Decision != "review-ready" || !strings.Contains(report.AcceptanceReport.NextAction, "separate accept/reject decision") {
+		t.Fatalf("expected review-ready acceptance report, got %#v", report.AcceptanceReport)
+	}
+	if len(report.AuthorizationMatrix) == 0 || !containsAuthorizationStatus(report.AuthorizationMatrix, "merge", "requires-separate-orchestrator-acceptance") {
+		t.Fatalf("expected merge authorization boundary, got %#v", report.AuthorizationMatrix)
+	}
+	if report.LiveProofGate.Status == "" || report.LiveProofGate.Boundary == "" || report.LiveProofGate.WaiverRequired {
+		t.Fatalf("expected conservative non-waiver live proof gate, got %#v", report.LiveProofGate)
+	}
 	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
 		t.Fatalf("expected only local evidence, got %#v", report.Evidence)
 	}
@@ -1844,6 +1853,12 @@ func TestPackConsultationSummarizesBlockedLedgerTask(t *testing.T) {
 	if len(report.DecisionOptions) < 3 {
 		t.Fatalf("expected decision options, got %#v", report.DecisionOptions)
 	}
+	if report.OwnerDecisionBrief.Title != "Blocked owner decision" || !strings.Contains(report.OwnerDecisionBrief.WhyNeededNow, "Product decision required") {
+		t.Fatalf("expected owner decision brief, got %#v", report.OwnerDecisionBrief)
+	}
+	if len(report.AuthorizationMatrix) == 0 || !containsAuthorizationStatus(report.AuthorizationMatrix, "merge", "not-authorized-by-consultation") {
+		t.Fatalf("expected consultation authorization matrix, got %#v", report.AuthorizationMatrix)
+	}
 	if report.BranchWorktreeDisposition.Recommendation != "keep" {
 		t.Fatalf("expected keep disposition for blocked task, got %#v", report.BranchWorktreeDisposition)
 	}
@@ -1898,6 +1913,12 @@ func TestPackConsultationDetectsHumanDeviceAction(t *testing.T) {
 	}
 	if !foundDeviceInput {
 		t.Fatalf("expected human/device request, got %#v", report.RequiredHumanInput)
+	}
+	if report.LiveProofGate.Status != "blocked-outside-pack" || !report.LiveProofGate.Required || !report.LiveProofGate.WaiverRequired {
+		t.Fatalf("expected blocked live proof gate for device action, got %#v", report.LiveProofGate)
+	}
+	if got := strings.Join(report.OwnerDecisionBrief.MissingEvidence, "\n"); !strings.Contains(got, "human-physical-action") || !strings.Contains(got, "Direct live/runtime/device/provider proof") {
+		t.Fatalf("expected owner brief missing device evidence, got %#v", report.OwnerDecisionBrief)
 	}
 	if !strings.Contains(report.Blocker, "PAX device") {
 		t.Fatalf("expected PAX blocker, got %q", report.Blocker)
@@ -4062,6 +4083,15 @@ func writePolicyEvalFixture(t *testing.T, dir string, fixture policyEvalFixture)
 	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func containsAuthorizationStatus(matrix []AuthorizationCheck, action string, status string) bool {
+	for _, entry := range matrix {
+		if entry.Action == action && entry.Status == status {
+			return true
+		}
+	}
+	return false
 }
 
 func writeEvidenceAuditRoutineSpec(t *testing.T, project string, id string, directEvidence string) {

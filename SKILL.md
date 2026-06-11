@@ -97,6 +97,11 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
    - docs/progress/reviews/artifacts synchronized
    - gates run and credible
    - no evidence exaggeration
+   - authorization matrix reviewed: review evidence does not by itself
+     authorize merge, push, cleanup, release, deploy, or external mutation
+   - live proof gate reviewed: if the task changes a runtime, production,
+     device, payment, hardware, provider, or external-service boundary, direct
+     proof or an explicit item-specific waiver is required before landing
 8. If accepted, merge to the default integration branch, push if requested or
    normal for this project, clean the worktree, and delete the local branch.
    In an already-authorized continuous orchestration loop, an integration
@@ -639,6 +644,43 @@ scope is genuinely drained, or when the user explicitly asks to change focus.
 Record the package switch and blocker in the ledger/status report. Do not
 optimize only for "safe and mergeable"; optimize for a coherent product/module
 story that a human can summarize in a daily report.
+
+## Decision Brief / Authorization / Live Proof Discipline
+
+When a task needs owner input, do not ask with only a URL, task id, or vague
+blocker. Produce a decision-ready consultation brief:
+
+- what changes or is blocked;
+- why the decision is needed now;
+- what local/proxy/direct evidence has already been gathered;
+- what proof is still missing;
+- the exact choices available and the tradeoff of each;
+- the orchestrator recommendation;
+- whether the task branch/worktree should be kept, retried, or cleaned later.
+
+When a worker appears merge-ready, separate these decisions:
+
+- review evidence exists;
+- merge is accepted;
+- push is allowed as closeout;
+- worktree/branch cleanup is safe;
+- release/deploy/tag/provider/device action is authorized.
+
+Use helper reports when available:
+
+```bash
+codex-orchestrator pack merge-readiness --task-id TASK --json
+codex-orchestrator pack consultation --task-id TASK --json
+```
+
+`pack merge-readiness` is local/static review evidence. Its
+`acceptanceReport`, `authorizationMatrix`, and `liveProofGate` are review aids,
+not automatic authorization.
+
+`pack consultation` is a local/static owner decision brief. Its
+`ownerDecisionBrief`, `authorizationMatrix`, and `liveProofGate` help format the
+ask, but the actual decision, physical action, live proof, or waiver remains
+`blocked` until the owner provides it.
 
 ## Dynamic Heartbeat Prompt Pattern
 

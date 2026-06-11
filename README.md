@@ -433,8 +433,11 @@ git status, commit count after `baseCommit`, `git diff --name-status`,
 allowed/forbidden path checks from the ledger write set, `git diff --check`,
 review doc/artifact/self-review/evidence-label/docs-drift signals, recorded and
 suggested gates, residual risks, and `needsHuman` when evidence is missing. It
-does not merge, push, cleanup, dispatch, edit git state, or claim runtime,
-production, device, or direct worker proof.
+also emits an `authorizationMatrix`, a `liveProofGate`, and an
+`acceptanceReport` draft so the orchestrator can separate "review evidence
+exists" from "merge/push/cleanup/release is authorized." It does not merge,
+push, cleanup, dispatch, edit git state, or claim runtime, production, device,
+or direct worker proof.
 
 `pack consultation` converts a blocked, stale, decision-gated, or human-action
 ledger task into a concise local/static consultation request. The JSON report
@@ -442,9 +445,12 @@ includes task metadata, observed local status, inferred blocker, attempted
 paths from task history and routine runs, recorded gates, evidence labels,
 required human input or physical action, decision options with tradeoffs, the
 next safe action, and whether to keep or clean the task branch/worktree. It does
-not dispatch, merge, push, cleanup, mutate the ledger, edit git state, call the
-network, or claim runtime, product, device, or direct proof; the actual decision
-or human action remains `blocked` outside the pack.
+now also includes an `ownerDecisionBrief`, an `authorizationMatrix`, and a
+`liveProofGate`, borrowing the useful maintainer-orchestrator discipline that a
+human request should be decision-ready rather than a bare URL or vague blocker.
+It does not dispatch, merge, push, cleanup, mutate the ledger, edit git state,
+call the network, or claim runtime, product, device, or direct proof; the actual
+decision or human action remains `blocked` outside the pack.
 
 Codex App worktree dispatch is App-first. Save the repository as a Codex App
 project before relying on project worktree sessions. If dispatch fails because

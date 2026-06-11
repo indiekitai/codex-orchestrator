@@ -423,6 +423,9 @@ type MergeReadinessPack struct {
 	ActionsTaken         []string                  `json:"actionsTaken"`
 	BlockedReason        string                    `json:"blockedReason,omitempty"`
 	NextSuggestedAction  string                    `json:"nextSuggestedAction"`
+	AuthorizationMatrix  []AuthorizationCheck      `json:"authorizationMatrix"`
+	LiveProofGate        LiveProofGate             `json:"liveProofGate"`
+	AcceptanceReport     AcceptanceReport          `json:"acceptanceReport"`
 }
 
 type MergeReadinessTaskSummary struct {
@@ -491,6 +494,47 @@ type ConsultationRequestPack struct {
 	Evidence                  map[string][]string           `json:"evidence"`
 	ActionsTaken              []string                      `json:"actionsTaken"`
 	NextSuggestedAction       string                        `json:"nextSuggestedAction"`
+	OwnerDecisionBrief        OwnerDecisionBrief            `json:"ownerDecisionBrief"`
+	AuthorizationMatrix       []AuthorizationCheck          `json:"authorizationMatrix"`
+	LiveProofGate             LiveProofGate                 `json:"liveProofGate"`
+}
+
+type OwnerDecisionBrief struct {
+	Title           string                       `json:"title"`
+	WhyNeededNow    string                       `json:"whyNeededNow"`
+	WhatChanges     string                       `json:"whatChanges"`
+	CompletedProof  []string                     `json:"completedProof,omitempty"`
+	Tradeoffs       []string                     `json:"tradeoffs,omitempty"`
+	Recommendation  string                       `json:"recommendation"`
+	Choices         []ConsultationDecisionOption `json:"choices,omitempty"`
+	ResidualRisks   []string                     `json:"residualRisks,omitempty"`
+	MissingEvidence []string                     `json:"missingEvidence,omitempty"`
+}
+
+type AuthorizationCheck struct {
+	Action string `json:"action"`
+	Status string `json:"status"`
+	Reason string `json:"reason"`
+}
+
+type LiveProofGate struct {
+	Status          string   `json:"status"`
+	Required        bool     `json:"required"`
+	WaiverRequired  bool     `json:"waiverRequired"`
+	Evidence        []string `json:"evidence,omitempty"`
+	MissingEvidence []string `json:"missingEvidence,omitempty"`
+	Boundary        string   `json:"boundary"`
+}
+
+type AcceptanceReport struct {
+	Decision            string               `json:"decision"`
+	Why                 []string             `json:"why"`
+	EvidenceReviewed    []string             `json:"evidenceReviewed"`
+	GatesReviewed       []string             `json:"gatesReviewed,omitempty"`
+	AuthorizationMatrix []AuthorizationCheck `json:"authorizationMatrix"`
+	LiveProofGate       LiveProofGate        `json:"liveProofGate"`
+	ResidualRisks       []string             `json:"residualRisks,omitempty"`
+	NextAction          string               `json:"nextAction"`
 }
 
 type ConsultationTaskSummary struct {
@@ -2891,6 +2935,8 @@ func finalizeMergeReadinessPack(report MergeReadinessPack) MergeReadinessPack {
 	report.SuggestedGates = uniqueSortedStrings(report.SuggestedGates)
 	report.ChangedPaths = uniqueSortedStrings(report.ChangedPaths)
 	report.Evidence = normalizedEvidence(report.Evidence)
+	report.LiveProofGate = mergeReadinessLiveProofGate(report)
+	report.AuthorizationMatrix = mergeReadinessAuthorizationMatrix(report)
 	if report.Status == "blocked" && report.BlockedReason == "" {
 		report.BlockedReason = "merge-readiness pack could not collect required local/static evidence"
 	}
@@ -2900,6 +2946,7 @@ func finalizeMergeReadinessPack(report MergeReadinessPack) MergeReadinessPack {
 	if report.Status == "blocked" {
 		report.NextSuggestedAction = "Resolve the blocked local/static evidence precondition, then regenerate the merge-readiness pack."
 	}
+	report.AcceptanceReport = mergeReadinessAcceptanceReport(report)
 	return report
 }
 
@@ -3037,7 +3084,277 @@ func finalizeConsultationRequestPack(report ConsultationRequestPack) Consultatio
 		report.NextSuggestedAction = report.NextSafeAction
 	}
 	report.NeedsHuman = report.NeedsHuman || len(report.RequiredHumanInput) > 0 || report.Status == "blocked"
+	report.LiveProofGate = consultationLiveProofGate(report)
+	report.AuthorizationMatrix = consultationAuthorizationMatrix(report)
+	report.OwnerDecisionBrief = consultationOwnerDecisionBrief(report)
 	return report
+}
+
+func mergeReadinessAuthorizationMatrix(report MergeReadinessPack) []AuthorizationCheck {
+	status := "available-for-review"
+	reason := "The pack collected local/static review evidence, but the acceptance decision remains separate."
+	if report.Status == "failed" {
+		status = "blocked"
+		reason = "The pack found a local/static failure; return to the worker before any merge decision."
+	}
+	if report.Status == "blocked" {
+		status = "blocked"
+		reason = firstNonEmpty(report.BlockedReason, "The pack could not collect required local/static evidence.")
+	}
+	return []AuthorizationCheck{
+		{
+			Action: "review",
+			Status: status,
+			Reason: reason,
+		},
+		{
+			Action: "merge",
+			Status: "requires-separate-orchestrator-acceptance",
+			Reason: "This pack is an input to review, not authorization to merge.",
+		},
+		{
+			Action: "push",
+			Status: "requires-separate-closeout-authorization",
+			Reason: "Push is only a closeout step after an accepted merge decision and project policy check.",
+		},
+		{
+			Action: "cleanup",
+			Status: "requires-separate-closeout-authorization",
+			Reason: "Branch/worktree cleanup must happen only after the merge/reject/abandon decision is recorded.",
+		},
+		{
+			Action: "release",
+			Status: "not-authorized-by-pack",
+			Reason: "Release, tag, registry publish, deploy, or production mutation requires explicit release authorization.",
+		},
+	}
+}
+
+func consultationAuthorizationMatrix(report ConsultationRequestPack) []AuthorizationCheck {
+	return []AuthorizationCheck{
+		{
+			Action: "ask-owner",
+			Status: "authorized-output",
+			Reason: "The consultation pack may be sent as a decision brief because it does not mutate git, ledger, worktrees, network, or external systems.",
+		},
+		{
+			Action: "implementation",
+			Status: "blocked-until-decision",
+			Reason: "Implementation should wait for the required human input or owner decision named in the pack.",
+		},
+		{
+			Action: "merge",
+			Status: "not-authorized-by-consultation",
+			Reason: "A consultation request is not an acceptance report and cannot authorize merge.",
+		},
+		{
+			Action: "push",
+			Status: "not-authorized-by-consultation",
+			Reason: "Push is outside this local/static pack and requires a separate accepted closeout path.",
+		},
+		{
+			Action: "cleanup",
+			Status: "defer-to-branch-worktree-disposition",
+			Reason: report.BranchWorktreeDisposition.Reason,
+		},
+		{
+			Action: "release",
+			Status: "not-authorized-by-consultation",
+			Reason: "Release, deploy, tag, registry publish, or production mutation requires explicit release authorization.",
+		},
+	}
+}
+
+func mergeReadinessLiveProofGate(report MergeReadinessPack) LiveProofGate {
+	combined := strings.Join(append(append([]string{
+		report.Task.ID,
+		report.Task.Title,
+		report.ObservedStatus,
+		report.BlockedReason,
+		strings.Join(report.RecordedGates, " "),
+		strings.Join(report.SuggestedGates, " "),
+	}, report.ChangedPaths...), report.ResidualRisks...), "\n")
+	required := textSuggestsLiveProofRequired(combined)
+	evidence := proofEvidenceFromMap(report.Evidence)
+	gate := LiveProofGate{
+		Status:   "not-required-by-local-static-pack",
+		Required: required,
+		Boundary: "Live proof must be verified on the real affected boundary when the task changes runtime, production, device, payment, hardware, provider, or external-service behavior. This local/static pack only reports recorded evidence.",
+	}
+	if len(evidence) > 0 {
+		gate.Status = "recorded-direct-evidence-needs-review"
+		gate.Evidence = evidence
+		return gate
+	}
+	if required {
+		gate.Status = "blocked-or-waiver-required"
+		gate.WaiverRequired = true
+		gate.MissingEvidence = []string{
+			"No direct live/runtime/device/provider proof is recorded in this local/static pack.",
+			"Either collect direct proof on the real affected boundary or record an explicit item-specific waiver before landing.",
+		}
+		return gate
+	}
+	gate.MissingEvidence = []string{
+		"No direct proof was collected by this pack; reviewer must confirm whether the task actually needs live proof.",
+	}
+	return gate
+}
+
+func consultationLiveProofGate(report ConsultationRequestPack) LiveProofGate {
+	combined := strings.Join([]string{
+		report.Task.ID,
+		report.Task.Title,
+		report.Blocker,
+		report.BlockedReason,
+		strings.Join(report.RecordedGates, " "),
+		strings.Join(report.EvidenceLabels, " "),
+		consultationInputsText(report.RequiredHumanInput),
+	}, "\n")
+	required := textSuggestsLiveProofRequired(combined)
+	evidence := proofEvidenceFromMap(report.Evidence)
+	gate := LiveProofGate{
+		Status:   "blocked-outside-pack",
+		Required: required,
+		Boundary: "A consultation pack can name missing live proof, access, or human action, but the actual live proof or waiver remains outside this local/static report.",
+	}
+	if len(evidence) > 0 {
+		gate.Status = "recorded-direct-evidence-needs-review"
+		gate.Evidence = evidence
+		return gate
+	}
+	if required {
+		gate.WaiverRequired = true
+		gate.MissingEvidence = []string{
+			"Direct live/runtime/device/provider proof is not present in this consultation pack.",
+			"Ask for the exact access, physical action, live target, or item-specific waiver named in the owner decision brief.",
+		}
+		return gate
+	}
+	gate.Status = "not-determined"
+	gate.MissingEvidence = []string{
+		"The pack did not infer a live-proof requirement from local metadata; reviewer must still check the task's real affected boundary.",
+	}
+	return gate
+}
+
+func mergeReadinessAcceptanceReport(report MergeReadinessPack) AcceptanceReport {
+	decision := "review-ready"
+	next := "Review this pack, rerun appropriate gates, then record a separate accept/reject decision."
+	why := []string{
+		"Local/static merge-readiness evidence was collected from ledger and git worktree truth.",
+	}
+	if report.Status == "failed" {
+		decision = "reject-for-fixup"
+		next = "Return to the same worker for bounded fixups, then regenerate the pack."
+		why = append(why, "The pack found a failed local/static precondition.")
+	}
+	if report.Status == "blocked" {
+		decision = "blocked"
+		next = "Resolve the blocked local/static precondition before review continues."
+		why = append(why, firstNonEmpty(report.BlockedReason, "The pack could not collect required local/static evidence."))
+	}
+	if report.NeedsHuman && report.Status == "passed" {
+		decision = "needs-review"
+		why = append(why, "Some review signals are missing or advisory, so a human/orchestrator reviewer must decide.")
+	}
+	evidenceReviewed := []string{
+		"ledger task metadata",
+		"worker git status",
+		"commit count after baseCommit",
+		"diff name-status",
+		"allowed/forbidden path check",
+		"git diff --check",
+		"review/self-review/docs/evidence-label signals",
+	}
+	if report.LiveProofGate.Status != "" {
+		evidenceReviewed = append(evidenceReviewed, "live proof gate: "+report.LiveProofGate.Status)
+	}
+	return AcceptanceReport{
+		Decision:            decision,
+		Why:                 uniqueSortedStrings(why),
+		EvidenceReviewed:    uniqueSortedStrings(evidenceReviewed),
+		GatesReviewed:       append([]string(nil), report.RecordedGates...),
+		AuthorizationMatrix: append([]AuthorizationCheck(nil), report.AuthorizationMatrix...),
+		LiveProofGate:       report.LiveProofGate,
+		ResidualRisks:       append([]string(nil), report.ResidualRisks...),
+		NextAction:          next,
+	}
+}
+
+func consultationOwnerDecisionBrief(report ConsultationRequestPack) OwnerDecisionBrief {
+	choices := append([]ConsultationDecisionOption(nil), report.DecisionOptions...)
+	proof := []string{}
+	for _, attempt := range report.AttemptedPaths {
+		piece := strings.TrimSpace(strings.Join([]string{attempt.Type, attempt.Status, attempt.Note, attempt.Evidence}, " | "))
+		if piece != "" {
+			proof = append(proof, piece)
+		}
+	}
+	if len(report.RecordedGates) > 0 {
+		proof = append(proof, "Recorded gates: "+strings.Join(report.RecordedGates, " | "))
+	}
+	if len(report.EvidenceLabels) > 0 {
+		proof = append(proof, "Evidence labels: "+strings.Join(report.EvidenceLabels, ", "))
+	}
+	missing := append([]string(nil), report.LiveProofGate.MissingEvidence...)
+	for _, input := range report.RequiredHumanInput {
+		if input.Required {
+			missing = append(missing, input.Kind+": "+input.Request)
+		}
+	}
+	recommendation := report.NextSafeAction
+	if recommendation == "" {
+		recommendation = "Ask the owner for the exact missing decision or action before continuing."
+	}
+	return OwnerDecisionBrief{
+		Title:           firstNonEmpty(report.Task.Title, report.Task.ID),
+		WhyNeededNow:    firstNonEmpty(report.Blocker, report.BlockedReason, "A human decision or review is required before the orchestrator can safely continue."),
+		WhatChanges:     fmt.Sprintf("Task %s is at %s; this brief summarizes what is blocked and what choices are safe.", report.Task.ID, emptyToUnknown(firstNonEmpty(report.ObservedStatus, report.Task.Status))),
+		CompletedProof:  uniqueSortedStrings(proof),
+		Tradeoffs:       consultationDecisionTradeoffs(choices),
+		Recommendation:  recommendation,
+		Choices:         choices,
+		ResidualRisks:   append([]string(nil), report.ResidualRisks...),
+		MissingEvidence: uniqueSortedStrings(missing),
+	}
+}
+
+func consultationDecisionTradeoffs(options []ConsultationDecisionOption) []string {
+	tradeoffs := []string{}
+	for _, option := range options {
+		if strings.TrimSpace(option.Tradeoff) != "" {
+			tradeoffs = append(tradeoffs, option.Option+": "+option.Tradeoff)
+		}
+	}
+	return uniqueSortedStrings(tradeoffs)
+}
+
+func consultationInputsText(inputs []ConsultationHumanInput) string {
+	parts := []string{}
+	for _, input := range inputs {
+		parts = append(parts, input.Kind, input.Request, input.Reason)
+	}
+	return strings.Join(parts, "\n")
+}
+
+func proofEvidenceFromMap(evidence map[string][]string) []string {
+	proof := []string{}
+	for _, item := range evidence["direct"] {
+		if strings.TrimSpace(item) != "" {
+			proof = append(proof, item)
+		}
+	}
+	return uniqueSortedStrings(proof)
+}
+
+func textSuggestsLiveProofRequired(text string) bool {
+	return containsAnyFold(text, []string{
+		"live", "runtime", "production", "prod", "pre", "device", "hardware",
+		"payment", "pax", "printer", "sms", "provider", "webhook", "dns", "ssl",
+		"external service", "real service", "real account", "real device",
+		"真实", "生产", "设备", "硬件", "支付", "打印", "短信", "域名", "部署",
+	})
 }
 
 func consultationTaskSummary(task Task) ConsultationTaskSummary {

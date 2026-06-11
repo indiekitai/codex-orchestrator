@@ -380,7 +380,8 @@ local/static 验收包。JSON report 会包含 task metadata、git status、
 self-review/evidence-label/docs-drift 信号、已记录 gates、建议复跑 gates、
 residual risks，以及证据缺失时的 `needsHuman`。它不会 merge、push、cleanup、
 dispatch、修改 git state，也不会声称 runtime、production、device 或 direct worker
-proof。
+proof。它还会输出 `authorizationMatrix`、`liveProofGate` 和 `acceptanceReport`
+草案，把“已有本地审查证据”和“是否授权 merge/push/cleanup/release”分开。
 
 `pack consultation` 会把 blocked、stale、需要产品决策或需要人做物理动作的
 ledger task 转成简洁的 local/static 求助包。JSON report 会包含 task metadata、
@@ -388,8 +389,10 @@ ledger task 转成简洁的 local/static 求助包。JSON report 会包含 task 
 paths、已记录 gates、evidence labels、需要人的输入或物理动作、带取舍的决策选项、
 next safe action，以及 task branch/worktree 应该保留还是清理。它不会 dispatch、
 merge、push、cleanup、修改 ledger、修改 git state、联网，也不会声称 runtime、
-product、device 或 direct proof；真正的决策或人的动作仍然是 pack 外部的
-`blocked` 项。
+product、device 或 direct proof。它还会输出 `ownerDecisionBrief`、
+`authorizationMatrix` 和 `liveProofGate`，吸收 maintainer-orchestrator 里“不要只丢
+URL 或模糊 blocker，要给 owner 一个可决策简报”的纪律；真正的决策或人的动作仍然是
+pack 外部的 `blocked` 项。
 
 Codex App worktree 派发是 App-first。要用 project worktree session 前，先确认
 这个仓库已经保存为 Codex App project。如果因为 unknown project、没有 saved
