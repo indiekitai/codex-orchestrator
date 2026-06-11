@@ -3,9 +3,8 @@
 This document is the beta distribution path for external users. It keeps the
 human-facing setup simple: Codex App remains the primary entrypoint, while the
 Go helper can be installed from source or release assets when Codex App wants
-durable ledger/routine support. Homebrew is intentionally treated as an
-optional later convenience because this project is Codex App-first, not
-CLI-first.
+durable ledger/routine support. Homebrew, npm wrappers, taps, and other
+package-manager distribution routes are out of scope for this product path.
 
 ## Status
 
@@ -19,16 +18,18 @@ Implemented:
 - `scripts/install.sh` source install path for users with Go.
 - Release asset download smoke for `darwin_arm64`.
 - Shell completion generation for bash, zsh, and fish.
-- Optional Homebrew formula draft at `Formula/codex-orchestrator.rb` that
-  builds from the release tag.
 - Release verifier routine for local tag and proxy GitHub release metadata.
 - Release publishing helper that creates/releases assets through `gh api`.
 
 Blocked or not yet implemented:
 
-- Dedicated `homebrew-tap` repository.
-- npm wrapper.
 - Background daemon.
+
+Out of scope:
+
+- Homebrew formula or tap distribution.
+- npm wrapper distribution.
+- Any other package-manager route for the helper binary.
 
 ## Recommended User Flow
 
@@ -38,6 +39,10 @@ The human should not need to learn the helper CLI before the dry run.
 
 Release binaries are useful when Codex App decides durable helper state is
 worth installing. They are not the product's primary entrypoint.
+
+The expected mental model is: give the GitHub repository to Codex App; let
+Codex read this repository, install the Codex App skill if needed, and install
+or build the helper only when the run benefits from durable local state.
 
 ## Install From Release Asset
 
@@ -100,30 +105,15 @@ codex-orchestrator completion fish > ~/.config/fish/completions/codex-orchestrat
 
 For zsh, ensure `~/.zsh/completions` is in `fpath` before `compinit`.
 
-## Optional Homebrew Formula Draft
+## No Package-Manager Distribution
 
-This repository includes a formula draft:
+Do not present Homebrew, npm, taps, or package-manager wrappers as planned or
+desirable user routes. They are outside the current product scope.
 
-```text
-Formula/codex-orchestrator.rb
-```
-
-Homebrew is not required for normal use because the user still starts from
-Codex App. The formula exists as a tap-ready draft for users who explicitly
-prefer Homebrew-managed helper binaries.
-
-Homebrew 5 rejects arbitrary local formula files outside a tap. If a tap is
-ever worth publishing, use the draft like this:
-
-```bash
-brew tap-new indiekitai/codex-orchestrator-tap
-cp Formula/codex-orchestrator.rb "$(brew --repository indiekitai/codex-orchestrator-tap)/Formula/"
-brew install indiekitai/codex-orchestrator-tap/codex-orchestrator
-```
-
-The formula builds from the release tag and installs completions from the built
-helper. This is not yet a dedicated Homebrew tap, and publishing one is not a
-near-term blocker for the Codex App-first beta.
+Manual source install and GitHub release binaries may remain available as
+advanced helper paths, but the primary distribution route is still Codex
+App-first: the user gives Codex App this GitHub repository and lets Codex decide
+whether installing the helper is useful.
 
 ## Release Notes
 
@@ -180,15 +170,15 @@ go run ./cmd/codex-orchestrator run-routine release-verifier --tag v0.3.0-beta.4
 
 Evidence labels:
 
-- `local`: source build, completion generation, formula syntax inspection, local
+- `local`: source build, completion generation, release binary smoke, and local
   tag inspection.
 - `proxy`: GitHub Release metadata, release asset names from `gh`, and release
   asset download smoke from GitHub.
 - `failed`: local tag exists but the GitHub Release is missing or missing
   expected assets.
 - `blocked`: GitHub Release API auth/network failures or metadata that cannot
-  be inspected. A missing Homebrew tap is an optional packaging gap, not a
-  blocker for the App-first beta.
+  be inspected. Missing Homebrew, npm, tap, or package-manager distribution is
+  not a blocker because those routes are out of scope.
 
 Do not claim direct production, daemon, deployed runtime, payment, hardware, or
 Codex App session-launch proof from this distribution package.

@@ -147,8 +147,9 @@ Future daemon/UI
 1. 发布第一个 tag，验证 GitHub release artifacts。已完成到
    `v0.3.0-beta.4`。
 
-2. 继续打磨 Codex App-first install UX。Homebrew tap 或 npm wrapper 只有在
-   用户明确想用包管理器维护 helper binary 时才值得做。
+2. 继续打磨 Codex App-first install UX。Homebrew、npm wrapper、tap 或其他
+   package-manager 分发路线不在当前产品范围内；helper binary 只能作为 Codex App
+   需要持久 ledger/routine 支持时的高级辅助路径。
 
 3. 继续扩展 heartbeat policy：
 
