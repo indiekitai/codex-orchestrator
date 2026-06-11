@@ -1,100 +1,98 @@
-# v0.3.1 Release Notes
+# v0.3.2 Release Notes
 
-`v0.3.1` is a docs and visibility release. It does not change the helper's
-runtime behavior. The goal is to make the project easier to understand from the
-GitHub first screen and to show a concrete, evidence-labeled real-project case.
+`v0.3.2` strengthens the review and decision handoff layer around
+`codex-orchestrator`. The release keeps the same Codex App-first workflow, but
+makes local/static packs more decision-ready for humans, orchestrators, and
+external reviewers.
 
 ## Highlights
 
-- Reworked the README hero around the actual product shape:
-  Codex App-first Loop Engineering for real repositories.
-- Made the boundary explicit: this is not a daemon, package-manager-first
-  install path, full agent OS, or unreviewed autonomous coding bot.
-- Added a clearer first-use path: paste the Quick Start prompt into Codex App,
-  let Codex read the repository, install/update the skill if needed, and start
-  with a dry run.
-- Updated the Chinese README with a more natural explanation of the same
-  positioning.
-- Added a TastyFuture case article:
-  `docs/articles/tastyfuture-loop-engineering-case.md`.
-- Updated roadmap status to mark the App-first README explanation and
-  TastyFuture case/bootstrap docs as completed.
-- Fixed a Go 1.22 test compatibility issue in the release workflow by replacing
-  `testing.T.Chdir` with explicit `os.Chdir` cleanup.
+- Added model-agnostic loop strategy notes:
+  `docs/research/model-plateau-loop-engineering.md`.
+- Updated the roadmap to prioritize portable review artifacts over
+  model-specific prompt tricks.
+- Strengthened `pack consultation` with:
+  - `ownerDecisionBrief`
+  - `authorizationMatrix`
+  - `liveProofGate`
+- Strengthened `pack merge-readiness` with:
+  - `authorizationMatrix`
+  - `liveProofGate`
+  - `acceptanceReport`
+- Updated `SKILL.md` so orchestrators separate review evidence, merge
+  acceptance, push closeout, cleanup, release/deploy authorization, and live
+  proof or waiver requirements.
+- Added review documentation:
+  `docs/reviews/2026-06-11-decision-brief-authorization-live-proof-pack.md`.
 
-## Case Article
+## Why This Release
 
-The new article explains why the problem is not simply "more agents." The
-useful layer is a supervised engineering loop around Codex worker sessions:
+Recent maintainer-orchestrator practice converges on the same lesson:
+delegated work should not hand a human a vague blocker or a bare URL. A useful
+orchestrator should prepare a decision-ready brief, name the evidence, separate
+permissions, and make live-proof gaps explicit.
 
-- bounded task contracts;
-- isolated Codex App worktree sessions;
-- repo-truth heartbeat reconciliation;
-- `completed-unreviewed` as a first-class state;
-- reviewer-owned review / merge / push / cleanup;
-- conservative `direct`, `proxy`, `local`, and `blocked` evidence labels.
+`v0.3.2` brings that discipline into the existing consultation and
+merge-readiness packs without turning the helper into a daemon, release bot, or
+GitHub-specific maintainer tool.
 
-Evidence boundary: the article is `local/case-study` evidence based on
-repository docs and local review notes. It does not claim external adoption,
-SEO, production, payment, hardware, device, pre/prod, daemon, or runtime proof.
+## New Pack Fields
 
-## Install / Trial Path
+`pack consultation` now includes:
 
-The recommended trial path remains Codex App-first:
+- `ownerDecisionBrief`: what is blocked, why a decision is needed now, what
+  proof exists, what is missing, available choices, tradeoffs, and the
+  recommendation.
+- `authorizationMatrix`: records that consultation only authorizes asking the
+  owner, not implementation, merge, push, cleanup, or release.
+- `liveProofGate`: records whether live/runtime/device/provider proof appears
+  required, whether it exists, and whether a waiver would be needed.
 
-```text
-I want to try codex-orchestrator in this repository.
+`pack merge-readiness` now includes:
 
-Read https://github.com/indiekitai/codex-orchestrator and use it as a
-Codex App-first orchestration workflow.
+- `authorizationMatrix`: review evidence is not the same as merge, push,
+  cleanup, or release authorization.
+- `liveProofGate`: runtime/device/provider proof remains separate from local
+  static review evidence.
+- `acceptanceReport`: a draft review outcome such as `review-ready`,
+  `needs-review`, `reject-for-fixup`, or `blocked`, with evidence and residual
+  risks.
 
-If the Codex App skill from that repository is not installed, install it into
-~/.codex/skills/codex-orchestrator.
+## Evidence Boundary
 
-Start with a dry run:
-- inspect git status, worktrees, and project docs;
-- explain how you would split work into isolated Codex worktree sessions;
-- explain what you would monitor, review, merge, push, and clean up;
-- label evidence as direct, proxy, local, or blocked.
+The new fields are still `local/static` review aids. They do not:
 
-Do not push, deploy, delete worktrees, or make destructive changes unless I
-explicitly approve.
-```
+- create Codex App sessions,
+- dispatch workers,
+- merge or push,
+- clean worktrees,
+- edit ledger or git state,
+- call the network,
+- perform live runtime/device/provider checks,
+- authorize release, deploy, tag, registry publish, production mutation, or
+  external-service action.
 
-The Go helper remains optional support for local ledger state, status reports,
-heartbeat summaries, and routine checks. Users should not need to learn the CLI
-before trying the workflow in Codex App.
+Direct proof and item-specific waivers remain outside the pack until a human or
+orchestrator records them explicitly.
 
 ## Verification Before Publishing
 
-Docs/review checks used for this release:
+Checks used for this release:
 
-- `git diff --check`
-- local Markdown link/path sanity checks
-- `codex-orchestrator pack merge-readiness`
-- `codex-orchestrator run-routine pr-reviewer`
-- `codex-orchestrator run-routine docs-drift-checker`
-- `codex-orchestrator run-routine evidence-label-auditor`
+- `go test ./cmd/codex-orchestrator -run 'TestPackConsultation|TestPackMergeReadiness'`
 - `go test ./...`
+- `go run ./cmd/codex-orchestrator policy check --repo .`
+- `go run ./cmd/codex-orchestrator run-routine docs-drift-checker --repo . --json`
+- `go run ./cmd/codex-orchestrator run-routine evidence-label-auditor --repo . --json`
+- `git diff --check`
 
-No helper runtime behavior changed in this release.
-
-## Boundaries
-
-This release does not:
-
-- create Codex App sessions from the CLI,
-- run as a background daemon,
-- merge or push automatically from the helper,
-- clean worktrees automatically,
-- replace human engineering review,
-- add Homebrew/npm/tap/package-manager distribution,
-- prove production, hardware, payment, device, pre/prod, SEO, adoption, or
-  deployed runtime behavior.
+The local helper was rebuilt and the installed Codex skill was synced before
+publishing.
 
 ## Suggested Announcement
 
-`codex-orchestrator v0.3.1` tightens the GitHub first screen and adds a
-TastyFuture case article. The project is now easier to explain: Codex App-first
-Loop Engineering with task contracts, isolated worktree sessions, heartbeat
-status, review-before-merge, cleanup discipline, and honest evidence labels.
+`codex-orchestrator v0.3.2` adds decision-ready handoff fields to consultation
+and merge-readiness packs: owner decision briefs, authorization matrices, live
+proof gates, and acceptance report drafts. The goal is still App-first Loop
+Engineering: isolate work, review evidence, keep permissions explicit, and
+never confuse local/static proof with live/direct proof.
