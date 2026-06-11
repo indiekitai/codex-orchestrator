@@ -178,6 +178,33 @@ type RuntimeStatusReport struct {
 	RecentMergedOrCleaned  []RuntimeStatusItem `json:"recentMergedOrCleaned,omitempty"`
 }
 
+type JobSummary struct {
+	EvidenceLabel string          `json:"evidenceLabel"`
+	Total         int             `json:"total"`
+	Counts        map[string]int  `json:"counts"`
+	Rows          []JobStatusItem `json:"rows,omitempty"`
+}
+
+type JobStatusItem struct {
+	ID                string `json:"id"`
+	Status            string `json:"status"`
+	Signal            string `json:"signal,omitempty"`
+	Title             string `json:"title,omitempty"`
+	Branch            string `json:"branch,omitempty"`
+	Worktree          string `json:"worktree,omitempty"`
+	PendingWorktreeID string `json:"pendingWorktreeId,omitempty"`
+	LastUpdatedAt     string `json:"lastUpdatedAt,omitempty"`
+	Action            string `json:"action,omitempty"`
+}
+
+type ProjectMapStatus struct {
+	EvidenceLabel     string   `json:"evidenceLabel"`
+	Status            string   `json:"status"`
+	Path              string   `json:"path,omitempty"`
+	CheckedPaths      []string `json:"checkedPaths"`
+	RecommendedAction string   `json:"recommendedAction,omitempty"`
+}
+
 type routineBudgetCoverage struct {
 	Total               int
 	WithMaxRuntime      int
@@ -203,6 +230,8 @@ type ObserveSummary struct {
 	BudgetPressure     BudgetPressureSummary `json:"budgetPressure"`
 	Integration        IntegrationState      `json:"integration"`
 	RuntimeStatus      RuntimeStatusReport   `json:"runtimeStatus"`
+	JobSummary         JobSummary            `json:"jobSummary"`
+	ProjectMap         ProjectMapStatus      `json:"projectMap"`
 	Observations       []Observation         `json:"observations"`
 	RecentRoutineRuns  []RoutineRun          `json:"recentRoutineRuns,omitempty"`
 }
@@ -1019,6 +1048,8 @@ func cmdStatus(args []string) error {
 		"budgetPressure":    summary.BudgetPressure,
 		"integration":       summary.Integration,
 		"runtimeStatus":     summary.RuntimeStatus,
+		"jobSummary":        summary.JobSummary,
+		"projectMap":        summary.ProjectMap,
 		"tasks":             ledger.Tasks,
 		"observations":      summary.Observations,
 		"recentRoutineRuns": summary.RecentRoutineRuns,
@@ -1030,6 +1061,12 @@ func cmdStatus(args []string) error {
 	fmt.Printf("Project: %s default=%s\n", ledger.ProjectRoot, ledger.DefaultBranch)
 	fmt.Printf("Tasks: %d overall=%s\n", len(ledger.Tasks), summary.OverallStatus)
 	fmt.Printf("Runtime status (%s): %s\n", summary.RuntimeStatus.EvidenceLabel, summary.RuntimeStatus.Summary)
+	fmt.Printf("Jobs: total=%d counts=%s\n", summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
+	fmt.Printf("Project map (%s): %s", summary.ProjectMap.EvidenceLabel, summary.ProjectMap.Status)
+	if summary.ProjectMap.Path != "" {
+		fmt.Printf(" path=%s", summary.ProjectMap.Path)
+	}
+	fmt.Println()
 	fmt.Printf("Dispatch slots: used=%d/%d available=%d\n",
 		summary.RuntimeStatus.UsedDispatchSlots,
 		summary.RuntimeStatus.MaxConcurrency,
@@ -3271,6 +3308,8 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	addRoutineBudgetSummary(&budget, filepath.Join(expandPath(ledger.ProjectRoot), "routines"))
 	budgetPressure := calculateBudgetPressure(ledger.Tasks, observations, observedAt, budget.RoutineSpecsMissingBudget)
 	runtimeStatus := buildRuntimeStatusReport(ledger.Tasks, observations, pressure, observedAt)
+	jobSummary := buildJobSummary(ledger.Tasks, observations, counts)
+	projectMap := inspectProjectMap(ledger.ProjectRoot)
 	overall, actions := summarizeObservations(integration, counts, pressure)
 	return ObserveSummary{
 		Ledger:             ledgerPath,
@@ -3286,6 +3325,8 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		BudgetPressure:     budgetPressure,
 		Integration:        integration,
 		RuntimeStatus:      runtimeStatus,
+		JobSummary:         jobSummary,
+		ProjectMap:         projectMap,
 		Observations:       observations,
 		RecentRoutineRuns:  recentRoutineRuns(ledger.RoutineRuns, 5),
 	}, nil
@@ -3416,6 +3457,61 @@ func buildRuntimeStatusReport(tasks []Task, observations []Observation, pressure
 	sortRuntimeStatusItemsByLatest(report.RecentMergedOrCleaned)
 	report.Summary = runtimeStatusSummary(report)
 	return report
+}
+
+func buildJobSummary(tasks []Task, observations []Observation, counts map[string]int) JobSummary {
+	rows := make([]JobStatusItem, 0, len(observations))
+	for index, observation := range observations {
+		task := tasks[index]
+		title := task.Title
+		if title == task.ID {
+			title = ""
+		}
+		rows = append(rows, JobStatusItem{
+			ID:                task.ID,
+			Status:            observation.Status,
+			Signal:            observation.Signal,
+			Title:             title,
+			Branch:            task.Branch,
+			Worktree:          task.Worktree,
+			PendingWorktreeID: task.PendingWorktreeID,
+			LastUpdatedAt:     observation.LastUpdatedAt,
+			Action:            observation.Action,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Status == rows[j].Status {
+			return rows[i].ID < rows[j].ID
+		}
+		return jobStatusRank(rows[i].Status) < jobStatusRank(rows[j].Status)
+	})
+	return JobSummary{
+		EvidenceLabel: "local/static",
+		Total:         len(observations),
+		Counts:        copyStringIntMap(counts),
+		Rows:          rows,
+	}
+}
+
+func jobStatusRank(status string) int {
+	switch status {
+	case "blocked":
+		return 0
+	case "completed-unreviewed":
+		return 1
+	case "cleanup-needed":
+		return 2
+	case "stale-needs-inspection":
+		return 3
+	case "pending-setup":
+		return 4
+	case "active":
+		return 5
+	case "merged", "released", "cleaned", "rejected", "abandoned":
+		return 6
+	default:
+		return 7
+	}
 }
 
 func runtimeStatusItem(task Task, observation Observation) RuntimeStatusItem {
@@ -4204,6 +4300,12 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- cleanupNeeded: `%d`\n", summary.ReviewPressure.CleanupNeeded)
 	fmt.Fprintf(&b, "- availableSlots: `%d`\n", summary.ReviewPressure.AvailableSlots)
 	fmt.Fprintf(&b, "- runtimeStatus: `%s`\n", summary.RuntimeStatus.Summary)
+	fmt.Fprintf(&b, "- jobs: `total=%d %s`\n", summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
+	fmt.Fprintf(&b, "- projectMap: `%s`", summary.ProjectMap.Status)
+	if summary.ProjectMap.Path != "" {
+		fmt.Fprintf(&b, " path=`%s`", summary.ProjectMap.Path)
+	}
+	fmt.Fprintf(&b, "\n")
 	fmt.Fprintf(&b, "- tasksWithBudget: `%d`\n", summary.BudgetSummary.TasksWithBudget)
 	if summary.BudgetSummary.TotalMaxRuntimeMinutes > 0 {
 		fmt.Fprintf(&b, "- totalMaxRuntimeMinutes: `%d`\n", summary.BudgetSummary.TotalMaxRuntimeMinutes)
@@ -4234,6 +4336,8 @@ func renderSummary(summary ObserveSummary) string {
 		}
 	}
 	renderRuntimeStatusMarkdown(&b, summary.RuntimeStatus)
+	renderJobSummaryMarkdown(&b, summary.JobSummary)
+	renderProjectMapMarkdown(&b, summary.ProjectMap)
 	fmt.Fprintf(&b, "\n## Tasks\n\n")
 	if len(summary.Observations) == 0 {
 		fmt.Fprintf(&b, "- No tasks recorded.\n")
@@ -4378,6 +4482,46 @@ func printRuntimeStatusCategory(title string, items []RuntimeStatusItem) {
 	}
 }
 
+func renderJobSummaryMarkdown(b *strings.Builder, summary JobSummary) {
+	fmt.Fprintf(b, "\n## Job Summary\n\n")
+	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", summary.EvidenceLabel)
+	fmt.Fprintf(b, "- total: `%d`\n", summary.Total)
+	fmt.Fprintf(b, "- counts: `%s`\n", formatIntMap(summary.Counts))
+	if len(summary.Rows) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n| Job | Status | Signal | Branch | Updated | Action |\n")
+	fmt.Fprintf(b, "|---|---|---|---|---|---|\n")
+	for _, row := range summary.Rows {
+		fmt.Fprintf(b, "| `%s` | `%s` | `%s` | `%s` | `%s` | %s |\n",
+			row.ID,
+			row.Status,
+			row.Signal,
+			row.Branch,
+			row.LastUpdatedAt,
+			escapeMarkdownTable(row.Action),
+		)
+	}
+}
+
+func renderProjectMapMarkdown(b *strings.Builder, status ProjectMapStatus) {
+	fmt.Fprintf(b, "\n## Project Map\n\n")
+	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", status.EvidenceLabel)
+	fmt.Fprintf(b, "- status: `%s`\n", status.Status)
+	if status.Path != "" {
+		fmt.Fprintf(b, "- path: `%s`\n", status.Path)
+	}
+	if status.RecommendedAction != "" {
+		fmt.Fprintf(b, "- recommendedAction: %s\n", status.RecommendedAction)
+	}
+}
+
+func escapeMarkdownTable(value string) string {
+	value = strings.ReplaceAll(value, "|", "\\|")
+	value = strings.ReplaceAll(value, "\n", " ")
+	return value
+}
+
 func compactEvent(event map[string]any) map[string]string {
 	result := map[string]string{}
 	for _, key := range []string{"at", "type", "status", "taskId", "pendingWorktreeId", "worktree", "branch", "note"} {
@@ -4439,6 +4583,65 @@ func formatLocalTaskState(state LocalTaskState) string {
 	return strings.Join(parts, " ")
 }
 
+func inspectProjectMap(projectRoot string) ProjectMapStatus {
+	root := expandPath(projectRoot)
+	if root == "" {
+		root = "."
+	}
+	candidates := []string{
+		filepath.Join("docs", "CODEBASE_MAP.md"),
+		filepath.Join("docs", "codebase-map.md"),
+		filepath.Join("docs", "PROJECT_MAP.md"),
+		filepath.Join("docs", "project-map.md"),
+		filepath.Join("docs", "architecture.md"),
+		"CODEBASE_MAP.md",
+		"PROJECT_MAP.md",
+	}
+	status := ProjectMapStatus{
+		EvidenceLabel: "local/static",
+		Status:        "missing",
+		CheckedPaths:  append([]string(nil), candidates...),
+		RecommendedAction: "Ask Codex App to generate or read a concise project map before first orchestration. " +
+			"A useful map names module boundaries, owner docs, test commands, shared contracts, and high-risk paths.",
+	}
+	for _, candidate := range candidates {
+		fullPath := filepath.Join(root, candidate)
+		info, err := os.Stat(fullPath)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		status.Status = "present"
+		status.Path = candidate
+		status.RecommendedAction = "Use the project map as orientation context before creating worker task contracts."
+		return status
+	}
+	return status
+}
+
+func copyStringIntMap(values map[string]int) map[string]int {
+	copied := map[string]int{}
+	for key, value := range values {
+		copied[key] = value
+	}
+	return copied
+}
+
+func formatIntMap(values map[string]int) string {
+	if len(values) == 0 {
+		return "{}"
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", key, values[key]))
+	}
+	return strings.Join(parts, " ")
+}
+
 func emptyToNil(value string) any {
 	if value == "" {
 		return nil
@@ -4460,6 +4663,15 @@ func printObservations(summary ObserveSummary) {
 	fmt.Printf("Project: %s default=%s\n", summary.ProjectRoot, summary.DefaultBranch)
 	fmt.Printf("Overall: %s\n", summary.OverallStatus)
 	fmt.Printf("Runtime status (%s): %s\n", summary.RuntimeStatus.EvidenceLabel, summary.RuntimeStatus.Summary)
+	fmt.Printf("Jobs (%s): total=%d counts=%s\n", summary.JobSummary.EvidenceLabel, summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
+	fmt.Printf("Project map (%s): %s", summary.ProjectMap.EvidenceLabel, summary.ProjectMap.Status)
+	if summary.ProjectMap.Path != "" {
+		fmt.Printf(" path=%s", summary.ProjectMap.Path)
+	}
+	if summary.ProjectMap.Status == "missing" && summary.ProjectMap.RecommendedAction != "" {
+		fmt.Printf(" - %s", summary.ProjectMap.RecommendedAction)
+	}
+	fmt.Println()
 	fmt.Printf("Dispatch slots: used=%d/%d available=%d\n",
 		summary.RuntimeStatus.UsedDispatchSlots,
 		summary.RuntimeStatus.MaxConcurrency,

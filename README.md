@@ -342,6 +342,8 @@ For a research note on how this maps to Loop Engineering, see
 [docs/research/loop-engineering-alignment.md](docs/research/loop-engineering-alignment.md).
 For the harness reading notes that de-scope the agent-OS route, see
 [docs/research/harness-reading-notes.md](docs/research/harness-reading-notes.md).
+For this repository's own project map example, see
+[docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md).
 For the broader roadmap, see [docs/roadmap.md](docs/roadmap.md).
 
 The v2 helper CLI currently supports:
@@ -374,12 +376,19 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 
 The JSON heartbeat report includes `overallStatus`, per-status `counts`, a
 `reviewPressure` block, read-only `budgetSummary`, and additive
-`budgetPressure` warnings. Per-task runtime/review budgets recorded with
-`record-task` are surfaced in `observe`, `status`, and heartbeat summaries for
-visibility only. Runtime pressure is computed from local ledger timestamps;
-review pressure is computed only when a review-ready timestamp is recorded.
-Missing or indeterminate budget data is labeled as local/static helper evidence.
-The helper does not kill processes, schedule sessions, or enforce budgets.
+`budgetPressure` warnings. It also includes a `jobSummary` block inspired by
+jobs/status dashboards: total tasks, per-status counts, and compact rows for
+each tracked task. `observe`, `status`, and heartbeat summaries also expose a
+read-only `projectMap` signal. The helper checks for common project-map files
+such as `docs/CODEBASE_MAP.md`; when none exists, it asks Codex App to generate
+or read a concise map before first orchestration.
+
+Per-task runtime/review budgets recorded with `record-task` are surfaced in
+`observe`, `status`, and heartbeat summaries for visibility only. Runtime
+pressure is computed from local ledger timestamps; review pressure is computed
+only when a review-ready timestamp is recorded. Missing or indeterminate budget
+data is labeled as local/static helper evidence. The helper does not kill
+processes, schedule sessions, or enforce budgets.
 
 Codex App worktree dispatch is App-first. Save the repository as a Codex App
 project before relying on project worktree sessions. If dispatch fails because

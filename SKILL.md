@@ -160,6 +160,14 @@ review budgets, and unknown review elapsed time. Treat those warnings as
 coordinator attention signals only; the helper must not kill processes,
 schedule sessions, prioritize tasks, or enforce budget decisions.
 
+Use the helper's `jobSummary` and `projectMap` signals when available.
+`jobSummary` is a local/static jobs/status-style task table for human-readable
+queue status. `projectMap` checks for common files such as
+`docs/CODEBASE_MAP.md` or `docs/project-map.md`; if missing before first
+orchestration, ask Codex App to generate or read a concise project map covering
+module boundaries, owner docs, test commands, shared contracts, and high-risk
+paths before dispatching broad work.
+
 If the repository includes v2.5 routine contracts, validate them before relying
 on routine names in a plan:
 

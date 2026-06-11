@@ -296,6 +296,7 @@ Loop Engineering 对齐调研见
 [docs/research/loop-engineering-alignment.md](docs/research/loop-engineering-alignment.md)。
 两本 harness/Claude Code 小书的读书结论见
 [docs/research/harness-reading-notes.md](docs/research/harness-reading-notes.md)。
+本仓库自己的项目地图示例见 [docs/CODEBASE_MAP.md](docs/CODEBASE_MAP.md)。
 完整路线图见 [docs/roadmap.md](docs/roadmap.md)。
 
 当前 v2 helper CLI 已支持：
@@ -328,6 +329,11 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 
 JSON heartbeat report 会包含 `overallStatus`、按状态聚合的 `counts`、
 `reviewPressure`、只读 `budgetSummary`，以及追加型 `budgetPressure` warnings。
+它还包含一个 `jobSummary` 区块，借鉴 jobs/status 面板：展示任务总数、各状态计数，
+以及每个任务的紧凑行。`observe`、`status` 和 heartbeat summary 也会展示只读
+`projectMap` 信号。helper 会检查常见项目地图文件，例如 `docs/CODEBASE_MAP.md`；
+如果不存在，会提示让 Codex App 在首次编排前生成或读取一份简洁 project map。
+
 通过 `record-task` 记录的 runtime/review budget 会在 `observe`、`status` 和
 heartbeat summary 中展示。runtime pressure 只根据本地 ledger timestamp 计算；
 review pressure 只有在 ledger 里有 review-ready timestamp 时才计算。缺失或无法

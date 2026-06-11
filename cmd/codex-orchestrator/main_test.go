@@ -893,6 +893,69 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 	}
 }
 
+func TestObserveJobSummaryAndProjectMap(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := os.MkdirAll(filepath.Join(project, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "docs", "CODEBASE_MAP.md"), []byte("# Codebase map\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	worker := filepath.Join(root, "worker")
+	git(t, project, "worktree", "add", "-q", "-b", "codex/status", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "STATUS-ROW",
+		"--title", "Status row",
+		"--worktree", worker,
+		"--branch", "codex/status",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.JobSummary.EvidenceLabel != "local/static" || summary.JobSummary.Total != 1 {
+		t.Fatalf("expected local/static one-job summary, got %#v", summary.JobSummary)
+	}
+	if len(summary.JobSummary.Rows) != 1 || summary.JobSummary.Rows[0].ID != "STATUS-ROW" || summary.JobSummary.Rows[0].Title != "Status row" {
+		t.Fatalf("expected job summary row, got %#v", summary.JobSummary.Rows)
+	}
+	if summary.JobSummary.Counts["active"] != 1 {
+		t.Fatalf("expected active job count, got %#v", summary.JobSummary.Counts)
+	}
+	if summary.ProjectMap.Status != "present" || summary.ProjectMap.Path != filepath.Join("docs", "CODEBASE_MAP.md") {
+		t.Fatalf("expected detected project map, got %#v", summary.ProjectMap)
+	}
+	rendered := renderSummary(summary)
+	for _, want := range []string{"## Job Summary", "| `STATUS-ROW` | `active`", "## Project Map", "docs/CODEBASE_MAP.md"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected rendered summary to include %q:\n%s", want, rendered)
+		}
+	}
+
+	statusJSON := captureStdout(t, func() error {
+		return cmdStatus([]string{"--ledger", ledger, "--json"})
+	})
+	var statusPayload struct {
+		JobSummary JobSummary       `json:"jobSummary"`
+		ProjectMap ProjectMapStatus `json:"projectMap"`
+	}
+	if err := json.Unmarshal([]byte(statusJSON), &statusPayload); err != nil {
+		t.Fatalf("expected status JSON, got %q: %v", statusJSON, err)
+	}
+	if statusPayload.JobSummary.Total != 1 || statusPayload.ProjectMap.Status != "present" {
+		t.Fatalf("expected status JSON jobSummary/projectMap, got %#v", statusPayload)
+	}
+}
+
 func TestTerminalReleasedAndCleanedTasksAreQuietAfterCleanup(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

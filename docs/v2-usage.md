@@ -133,6 +133,19 @@ useful buckets when possible:
 - `recentMergedOrCleaned`
 - `availableDispatchSlots`
 
+The same `status` / `observe` reports also include a `jobSummary` block for a
+jobs/status-style view: total task count, per-status counts, and compact task
+rows with id, status, signal, branch, pending worktree id, latest timestamp, and
+next action. This is still local/static ledger and git evidence; it does not
+attach to live Codex App sessions.
+
+Reports include a `projectMap` block as a lightweight onboarding signal. The
+helper checks common files such as `docs/CODEBASE_MAP.md`,
+`docs/project-map.md`, and `docs/architecture.md`. If none exists, the
+recommended action is to ask Codex App to generate or read a concise project map
+before first orchestration: module boundaries, owner docs, test commands,
+shared contracts, and high-risk paths.
+
 Each observation and runtime status item also includes a structured `state`
 object so callers do not need to parse notes. The fields are local/static:
 
@@ -172,6 +185,9 @@ The report includes:
 - integration checkout dirty/error state,
 - per-task observations,
 - `runtimeStatus` with a compact local/static "what is happening now" summary,
+- `jobSummary` with jobs/status-style counts and compact task rows,
+- `projectMap` with local project-map readiness and a recommended first-run
+  action,
 - `overallStatus`,
 - per-status `counts`,
 - `reviewPressure` with active/review/stale/blocked/cleanup queues,

@@ -188,9 +188,13 @@ It emits `overallStatus` values suitable for a Codex App orchestrator:
 - `stale`
 - `blocked`
 
-It also emits per-status `counts` and `reviewPressure` fields so a coordinator
-can stop dispatching when the review queue, stale queue, blocked queue, or
-cleanup queue needs attention.
+It also emits per-status `counts`, `reviewPressure`, `runtimeStatus`,
+`jobSummary`, and `projectMap` fields so a coordinator can stop dispatching when
+the review queue, stale queue, blocked queue, or cleanup queue needs attention.
+`jobSummary` is a compact jobs/status-style table derived from local ledger and
+git truth. `projectMap` is a local/static onboarding hint that checks for common
+project-map files and asks Codex App to generate or read one before first
+orchestration when none exists.
 
 The Python helper remains as a prototype and compatibility reference. If
 neither helper is available, use the same ledger schema manually and let the
