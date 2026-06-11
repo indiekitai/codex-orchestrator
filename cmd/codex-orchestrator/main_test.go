@@ -1601,6 +1601,150 @@ func TestRunPRReviewerRoutineFailsOnForbiddenWriteSet(t *testing.T) {
 	}
 }
 
+func TestPackMergeReadinessWritesStandardLocalReport(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	reportPath := filepath.Join(root, "reports", "merge-readiness.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/pack", worker, "HEAD")
+	if err := os.MkdirAll(filepath.Join(worker, "cmd", "codex-orchestrator"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(worker, "docs", "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "PACK",
+		"--title", "Merge readiness pack",
+		"--thread-id", "thread_pack",
+		"--pending-worktree-id", "pwt_pack",
+		"--worktree", worker,
+		"--branch", "codex/pack",
+		"--base-commit", base,
+		"--allowed", "cmd/codex-orchestrator/**",
+		"--allowed", "docs/**",
+		"--forbidden", ".github/workflows/**",
+		"--gate", "go test ./...",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "cmd", "codex-orchestrator", "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	review := "Self-review: local/static evidence only; not runtime or production proof.\n"
+	if err := os.WriteFile(filepath.Join(worker, "docs", "reviews", "self-review-evidence.md"), []byte(review), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "cmd/codex-orchestrator/main.go", "docs/reviews/self-review-evidence.md")
+	git(t, worker, "commit", "-q", "-m", "pack-ready change")
+	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "review", "--task-id", "PACK", "--status", "completed-unreviewed", "--note", "ready for pack"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cmdPackMergeReadiness([]string{"--ledger", ledger, "--task-id", "PACK", "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report MergeReadinessPack
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "passed" || report.NeedsHuman {
+		t.Fatalf("expected passed pack without missing local signals, got %#v", report)
+	}
+	if report.Task.ID != "PACK" || report.Task.Title != "Merge readiness pack" || report.Task.ThreadID != "thread_pack" || report.Task.PendingWorktreeID != "pwt_pack" {
+		t.Fatalf("expected task metadata in pack, got %#v", report.Task)
+	}
+	if report.Task.ActualBranch != "codex/pack" || report.ObservedStatus != "completed-unreviewed" {
+		t.Fatalf("expected branch and observed status, got task=%#v observed=%q", report.Task, report.ObservedStatus)
+	}
+	if report.CommitCountAfterBase == nil || *report.CommitCountAfterBase != 1 {
+		t.Fatalf("expected one commit after base, got %#v", report.CommitCountAfterBase)
+	}
+	if report.PathCheck.Status != "passed" || report.DiffCheck.Status != "passed" {
+		t.Fatalf("expected path and diff checks to pass, got path=%#v diff=%#v", report.PathCheck, report.DiffCheck)
+	}
+	changed := strings.Join(report.ChangedPaths, "\n")
+	for _, want := range []string{"cmd/codex-orchestrator/main.go", "docs/reviews/self-review-evidence.md"} {
+		if !strings.Contains(changed, want) {
+			t.Fatalf("expected changed path %q in %#v", want, report.ChangedPaths)
+		}
+	}
+	if len(report.Signals.ReviewDocs) == 0 || len(report.Signals.Artifacts) == 0 || len(report.Signals.SelfReview) == 0 || len(report.Signals.EvidenceLabel) == 0 || len(report.Signals.DocsDrift) == 0 {
+		t.Fatalf("expected complete merge-readiness signals, got %#v", report.Signals)
+	}
+	if got := strings.Join(report.SuggestedGates, "\n"); !strings.Contains(got, "go test ./...") || !strings.Contains(got, "docs-drift-checker") || !strings.Contains(got, "evidence-label-auditor") {
+		t.Fatalf("expected recorded and suggested gates, got %#v", report.SuggestedGates)
+	}
+	if !strings.Contains(report.Boundary, "local/static review evidence only") || !strings.Contains(report.Boundary, "does not merge, push, cleanup, dispatch, or edit git state") {
+		t.Fatalf("expected conservative evidence boundary, got %q", report.Boundary)
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
+		t.Fatalf("expected only local evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestPackMergeReadinessFailsForbiddenPathCheck(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/pack-forbidden", worker, "HEAD")
+	if err := os.MkdirAll(filepath.Join(worker, "secrets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "PACK-FORBIDDEN",
+		"--worktree", worker,
+		"--branch", "codex/pack-forbidden",
+		"--base-commit", base,
+		"--allowed", "docs/**",
+		"--forbidden", "secrets/**",
+		"--gate", "go test ./...",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "secrets", "token.txt"), []byte("placeholder\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "secrets/token.txt")
+	git(t, worker, "commit", "-q", "-m", "touch forbidden path")
+
+	report, err := buildMergeReadinessPack(project, ledger, "PACK-FORBIDDEN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "failed" || !report.NeedsHuman {
+		t.Fatalf("expected failed pack needing human review, got %#v", report)
+	}
+	if report.PathCheck.Status != "failed" {
+		t.Fatalf("expected failed path check, got %#v", report.PathCheck)
+	}
+	if got := strings.Join(report.PathCheck.OutsideAllowed, "\n"); !strings.Contains(got, "secrets/token.txt") {
+		t.Fatalf("expected outside-allowed path, got %#v", report.PathCheck)
+	}
+	if got := strings.Join(report.PathCheck.ForbiddenHits, "\n"); !strings.Contains(got, "secrets/token.txt") {
+		t.Fatalf("expected forbidden hit, got %#v", report.PathCheck)
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 {
+		t.Fatalf("expected no direct/proxy evidence, got %#v", report.Evidence)
+	}
+}
+
 func TestRunStaleTaskRescuerRoutineWritesPassedReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

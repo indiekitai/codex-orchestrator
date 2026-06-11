@@ -358,6 +358,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
+./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
@@ -406,6 +407,15 @@ base commit, allowed/forbidden paths, and gates. Use `dispatch reconcile` after
 local `git worktree list` truth contains the worker branch or worktree. Both
 commands label their output as `local/static`: a pending worktree ID is setup
 evidence only, and a resolved worktree is not proof that the task is correct.
+
+`pack merge-readiness` converts a completed-unreviewed ledger task into a
+standard local/static review package. The JSON report includes task metadata,
+git status, commit count after `baseCommit`, `git diff --name-status`,
+allowed/forbidden path checks from the ledger write set, `git diff --check`,
+review doc/artifact/self-review/evidence-label/docs-drift signals, recorded and
+suggested gates, residual risks, and `needsHuman` when evidence is missing. It
+does not merge, push, cleanup, dispatch, edit git state, or claim runtime,
+production, device, or direct worker proof.
 
 Codex App worktree dispatch is App-first. Save the repository as a Codex App
 project before relying on project worktree sessions. If dispatch fails because

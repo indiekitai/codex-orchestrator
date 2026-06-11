@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -346,6 +347,75 @@ type RoutineRunReport struct {
 	NextSuggestedAction string              `json:"nextSuggestedAction"`
 }
 
+type MergeReadinessPack struct {
+	SchemaVersion        int                       `json:"schemaVersion"`
+	Command              string                    `json:"command"`
+	GeneratedAt          string                    `json:"generatedAt"`
+	Status               string                    `json:"status"`
+	EvidenceLabel        string                    `json:"evidenceLabel"`
+	Boundary             string                    `json:"boundary"`
+	LedgerPath           string                    `json:"ledgerPath"`
+	RepoPath             string                    `json:"repoPath"`
+	Task                 MergeReadinessTaskSummary `json:"task"`
+	ObservedStatus       string                    `json:"observedStatus,omitempty"`
+	GitStatus            CommandResult             `json:"gitStatus"`
+	CommitCountAfterBase *int                      `json:"commitCountAfterBase,omitempty"`
+	DiffNameStatus       []NameStatusEntry         `json:"diffNameStatus,omitempty"`
+	ChangedPaths         []string                  `json:"changedPaths,omitempty"`
+	PathCheck            MergeReadinessPathCheck   `json:"pathCheck"`
+	DiffCheck            CommandResult             `json:"diffCheck"`
+	Signals              MergeReadinessSignals     `json:"signals"`
+	RecordedGates        []string                  `json:"recordedGates,omitempty"`
+	SuggestedGates       []string                  `json:"suggestedGates,omitempty"`
+	NeedsHuman           bool                      `json:"needsHuman"`
+	ResidualRisks        []string                  `json:"residualRisks,omitempty"`
+	Evidence             map[string][]string       `json:"evidence"`
+	ActionsTaken         []string                  `json:"actionsTaken"`
+	BlockedReason        string                    `json:"blockedReason,omitempty"`
+	NextSuggestedAction  string                    `json:"nextSuggestedAction"`
+}
+
+type MergeReadinessTaskSummary struct {
+	ID                string `json:"id"`
+	Title             string `json:"title,omitempty"`
+	Status            string `json:"status"`
+	ThreadID          string `json:"threadId,omitempty"`
+	PendingWorktreeID string `json:"pendingWorktreeId,omitempty"`
+	Worktree          string `json:"worktree,omitempty"`
+	Branch            string `json:"branch,omitempty"`
+	ActualBranch      string `json:"actualBranch,omitempty"`
+	BaseCommit        string `json:"baseCommit,omitempty"`
+}
+
+type CommandResult struct {
+	Command string `json:"command"`
+	Status  string `json:"status"`
+	Output  string `json:"output,omitempty"`
+}
+
+type NameStatusEntry struct {
+	Status string   `json:"status"`
+	Paths  []string `json:"paths"`
+}
+
+type MergeReadinessPathCheck struct {
+	Status            string   `json:"status"`
+	AllowedPatterns   []string `json:"allowedPatterns,omitempty"`
+	ForbiddenPatterns []string `json:"forbiddenPatterns,omitempty"`
+	OutsideAllowed    []string `json:"outsideAllowed,omitempty"`
+	ForbiddenHits     []string `json:"forbiddenHits,omitempty"`
+	Summary           string   `json:"summary"`
+}
+
+type MergeReadinessSignals struct {
+	ReviewDocs    []string `json:"reviewDocs,omitempty"`
+	Artifacts     []string `json:"artifacts,omitempty"`
+	SelfReview    []string `json:"selfReview,omitempty"`
+	EvidenceLabel []string `json:"evidenceLabel,omitempty"`
+	DocsDrift     []string `json:"docsDrift,omitempty"`
+	Missing       []string `json:"missing,omitempty"`
+}
+
 type githubReleaseView struct {
 	TagName         string               `json:"tagName"`
 	IsPrerelease    bool                 `json:"isPrerelease"`
@@ -386,6 +456,8 @@ func run(args []string) error {
 		return cmdHeartbeat(args[1:])
 	case "status":
 		return cmdStatus(args[1:])
+	case "pack":
+		return cmdPack(args[1:])
 	case "validate-routines":
 		return cmdValidateRoutines(args[1:])
 	case "run-routine":
@@ -420,6 +492,7 @@ Usage:
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
   codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--stale-after 15m]
+  codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator validate-routines [--dir routines] [--json]
   codex-orchestrator run-routine pr-reviewer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine stale-task-rescuer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
@@ -467,7 +540,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init dispatch record-task append-event observe heartbeat status validate-routines run-routine policy eval rules record-routine-run completion help"
+  commands="init dispatch record-task append-event observe heartbeat status pack validate-routines run-routine policy eval rules record-routine-run completion help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report"
 
   case "$prev" in
@@ -481,6 +554,10 @@ _codex_orchestrator()
       ;;
     dispatch)
       COMPREPLY=( $(compgen -W "record reconcile" -- "$cur") )
+      return 0
+      ;;
+    pack)
+      COMPREPLY=( $(compgen -W "merge-readiness" -- "$cur") )
       return 0
       ;;
     completion)
@@ -513,6 +590,13 @@ _codex_orchestrator()
       ;;
     status)
       COMPREPLY=( $(compgen -W "--repo --ledger --json --html --stale-after --help" -- "$cur") )
+      ;;
+    pack)
+      if [[ ${COMP_WORDS[2]} == "merge-readiness" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --ledger --task-id --write-report --json --help" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "merge-readiness" -- "$cur") )
+      fi
       ;;
     heartbeat)
       COMPREPLY=( $(compgen -W "--repo --ledger --interval --count --write-report --write-summary --help" -- "$cur") )
@@ -567,6 +651,7 @@ commands=(
   'observe:inspect ledger and worktree state'
   'heartbeat:run observe on an interval and write reports'
   'status:print ledger status'
+  'pack:generate local/static handoff artifacts'
   'validate-routines:validate routine specs'
   'run-routine:run a read-only routine'
   'policy:run policy and eval checks'
@@ -643,6 +728,13 @@ case $state in
           _values 'options' --repo --ledger --events --task-id --worktree --branch --status --json --help
         fi
         ;;
+      pack)
+        if (( CURRENT == 3 )); then
+          _values 'subcommand' merge-readiness
+        else
+          _values 'options' --repo --ledger --task-id --write-report --json --help
+        fi
+        ;;
       record-task)
         _values 'options' --ledger --id --title --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help
         ;;
@@ -680,6 +772,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'append-event' -d '
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'observe' -d 'Inspect ledger and worktree state'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'heartbeat' -d 'Run observe on an interval and write reports'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'status' -d 'Print ledger status'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'pack' -d 'Generate local/static handoff artifacts'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'validate-routines' -d 'Validate routine specs'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'run-routine' -d 'Run a read-only routine'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'policy' -d 'Run policy and eval checks'
@@ -689,6 +782,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from dispatch' -a 'record reconcile'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run add-failure'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from rules' -a 'propose'
@@ -1370,6 +1464,55 @@ func cmdStatus(args []string) error {
 		summary.RuntimeStatus.AvailableDispatchSlots,
 	)
 	printRuntimeStatusReport(summary.RuntimeStatus)
+	return nil
+}
+
+func cmdPack(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: codex-orchestrator pack merge-readiness")
+	}
+	switch args[0] {
+	case "merge-readiness":
+		return cmdPackMergeReadiness(args[1:])
+	case "help", "-h", "--help":
+		fmt.Println("usage: codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]")
+		return nil
+	default:
+		return fmt.Errorf("unknown pack subcommand: %s", args[0])
+	}
+}
+
+func cmdPackMergeReadiness(args []string) error {
+	fs := flag.NewFlagSet("pack merge-readiness", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	taskID := fs.String("task-id", "", "task id to inspect")
+	writeReport := fs.String("write-report", "", "write merge-readiness report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *taskID == "" {
+		return errors.New("pack merge-readiness requires --task-id")
+	}
+	resolvedRepo := expandPath(*repo)
+	if resolvedRepo == "" {
+		resolvedRepo = "."
+	}
+	resolvedLedger := resolveDefaultLedgerPath(resolvedRepo, *ledgerPath, flagProvided(fs, "ledger"))
+	report, err := buildMergeReadinessPack(resolvedRepo, resolvedLedger, *taskID)
+	if err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote merge-readiness pack: %s\n", *writeReport)
 	return nil
 }
 
@@ -2323,6 +2466,405 @@ func reviewChecklistNeedsHuman(warnings []string) bool {
 		}
 	}
 	return false
+}
+
+func buildMergeReadinessPack(repoPath string, ledgerPath string, taskID string) (MergeReadinessPack, error) {
+	report := newMergeReadinessPack(repoPath, ledgerPath, taskID)
+	ledger, err := loadLedger(ledgerPath)
+	if err != nil {
+		return report, err
+	}
+	report.RepoPath = ledger.ProjectRoot
+	if strings.TrimSpace(report.RepoPath) == "" {
+		report.RepoPath = repoPath
+	}
+	taskIndex := findTaskIndex(ledger.Tasks, taskID)
+	if taskIndex < 0 {
+		report.Status = "blocked"
+		report.BlockedReason = "task not found in ledger"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Task not found in ledger: "+taskID)
+		report.ResidualRisks = append(report.ResidualRisks, "No merge-readiness package can be built without a ledger task record.")
+		report.NeedsHuman = true
+		return report, nil
+	}
+	task := ledger.Tasks[taskIndex]
+	report.Task = mergeReadinessTaskSummary(task)
+	report.RecordedGates = append([]string(nil), task.Gates...)
+	report.Evidence["local"] = append(report.Evidence["local"], "Loaded ledger task record: "+task.ID)
+
+	observation := inspectTask(task, 15*time.Minute)
+	report.ObservedStatus = observation.Status
+	report.ActionsTaken = append(report.ActionsTaken, "Classified task state using local ledger and git worktree evidence")
+	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Observed task status from local git state: %s.", observation.Status))
+	if task.Status != "completed-unreviewed" && observation.Status != "completed-unreviewed" {
+		report.NeedsHuman = true
+		report.ResidualRisks = append(report.ResidualRisks, fmt.Sprintf("Task is not clearly completed-unreviewed (ledger=%s observed=%s).", emptyToUnknown(task.Status), emptyToUnknown(observation.Status)))
+	}
+
+	if task.Worktree == "" {
+		report.Status = "blocked"
+		report.BlockedReason = "task worktree path is missing"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Ledger task has no worktree path.")
+		report.ResidualRisks = append(report.ResidualRisks, "Worktree evidence is unavailable.")
+		report.NeedsHuman = true
+		return finalizeMergeReadinessPack(report), nil
+	}
+	worktree := expandPath(task.Worktree)
+	if info, err := os.Stat(worktree); err != nil {
+		report.Status = "blocked"
+		report.BlockedReason = "task worktree is missing"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Worktree does not exist: %s", worktree))
+		report.ResidualRisks = append(report.ResidualRisks, "Local git evidence could not be collected from the worker worktree.")
+		report.NeedsHuman = true
+		return finalizeMergeReadinessPack(report), nil
+	} else if !info.IsDir() {
+		report.Status = "blocked"
+		report.BlockedReason = "task worktree path is not a directory"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Worktree path is not a directory: %s", worktree))
+		report.NeedsHuman = true
+		return finalizeMergeReadinessPack(report), nil
+	}
+	report.ActionsTaken = append(report.ActionsTaken, "Inspected worker worktree git status")
+
+	statusOut, err := gitOutput(worktree, "status", "--short", "--branch")
+	report.GitStatus = CommandResult{Command: "git status --short --branch"}
+	if err != nil {
+		report.Status = "blocked"
+		report.BlockedReason = "could not inspect task worktree git status"
+		report.GitStatus.Status = "blocked"
+		report.GitStatus.Output = err.Error()
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "git status --short --branch failed: "+err.Error())
+		report.NeedsHuman = true
+		return finalizeMergeReadinessPack(report), nil
+	}
+	report.GitStatus.Status = "passed"
+	report.GitStatus.Output = emptyDefault(statusOut, "(no output)")
+	report.Evidence["local"] = append(report.Evidence["local"], "git status --short --branch:\n"+report.GitStatus.Output)
+
+	actualBranch := currentBranch(statusOut)
+	report.Task.ActualBranch = actualBranch
+	if task.Branch != "" {
+		if actualBranch == "" {
+			report.Status = "blocked"
+			report.BlockedReason = "could not determine current branch"
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], "Expected branch "+task.Branch+", but current branch could not be determined.")
+			report.NeedsHuman = true
+			return finalizeMergeReadinessPack(report), nil
+		}
+		if actualBranch != task.Branch {
+			report.Status = "blocked"
+			report.BlockedReason = "task worktree branch does not match ledger branch"
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Expected branch %s, found %s.", task.Branch, actualBranch))
+			report.NeedsHuman = true
+			return finalizeMergeReadinessPack(report), nil
+		}
+		report.Evidence["local"] = append(report.Evidence["local"], "Branch matches ledger branch: "+actualBranch)
+	}
+	if hasDirtyChanges(statusOut) {
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], "Worktree has uncommitted changes; pack did not stage, commit, or modify them.")
+		report.ResidualRisks = append(report.ResidualRisks, "Uncommitted worker changes must be classified before merge readiness can be accepted.")
+		report.NeedsHuman = true
+		return finalizeMergeReadinessPack(report), nil
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Worktree is clean.")
+
+	base := strings.TrimSpace(task.BaseCommit)
+	if base == "" || allZeros(base) {
+		report.Status = "blocked"
+		report.BlockedReason = "task baseCommit is missing"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Task has no comparable baseCommit.")
+		report.ResidualRisks = append(report.ResidualRisks, "Commit count and diff cannot be bounded without baseCommit.")
+		report.NeedsHuman = true
+		return finalizeMergeReadinessPack(report), nil
+	}
+
+	countOut, err := gitOutput(worktree, "rev-list", "--count", base+"..HEAD")
+	if err != nil {
+		report.Status = "blocked"
+		report.BlockedReason = "could not compare task branch with baseCommit"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "git rev-list --count "+base+"..HEAD failed: "+err.Error())
+		report.NeedsHuman = true
+		return finalizeMergeReadinessPack(report), nil
+	}
+	commitCount, err := strconv.Atoi(strings.TrimSpace(countOut))
+	if err != nil {
+		report.Status = "blocked"
+		report.BlockedReason = "could not parse commit count after baseCommit"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "git rev-list --count "+base+"..HEAD returned an unparsable value: "+countOut)
+		report.NeedsHuman = true
+		return finalizeMergeReadinessPack(report), nil
+	}
+	report.CommitCountAfterBase = &commitCount
+	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("git rev-list --count %s..HEAD: %d", base, commitCount))
+	if commitCount == 0 {
+		report.Status = "failed"
+		report.ResidualRisks = append(report.ResidualRisks, "No commits are present after baseCommit.")
+		report.NeedsHuman = true
+		return finalizeMergeReadinessPack(report), nil
+	}
+
+	nameStatusOut, err := gitOutput(worktree, "diff", "--name-status", base+"..HEAD")
+	if err != nil {
+		report.Status = "blocked"
+		report.BlockedReason = "could not inspect task branch diff"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "git diff --name-status "+base+"..HEAD failed: "+err.Error())
+		report.NeedsHuman = true
+		return finalizeMergeReadinessPack(report), nil
+	}
+	if strings.TrimSpace(nameStatusOut) == "" {
+		nameStatusOut = "(no changed files)"
+	}
+	report.DiffNameStatus = parseNameStatusEntries(nameStatusOut)
+	report.ChangedPaths = parseNameStatusPaths(nameStatusOut)
+	report.ActionsTaken = append(report.ActionsTaken, "Collected committed diff name-status against baseCommit")
+	report.Evidence["local"] = append(report.Evidence["local"], "git diff --name-status "+base+"..HEAD:\n"+nameStatusOut)
+
+	report.PathCheck = evaluateMergeReadinessPathCheck(task, report.ChangedPaths)
+	report.ActionsTaken = append(report.ActionsTaken, "Checked committed paths against ledger allowed/forbidden writeSet")
+	report.Evidence["local"] = append(report.Evidence["local"], report.PathCheck.Summary)
+	if report.PathCheck.Status == "failed" {
+		report.Status = "failed"
+		report.NeedsHuman = true
+		report.ResidualRisks = append(report.ResidualRisks, "Committed paths violate the ledger writeSet boundary.")
+	}
+	if report.PathCheck.Status == "warning" {
+		report.NeedsHuman = true
+		report.ResidualRisks = append(report.ResidualRisks, "Ledger writeSet is incomplete, so path-boundary proof is advisory only.")
+	}
+
+	diffCheckOut, err := gitOutput(worktree, "diff", "--check", base+"..HEAD")
+	report.DiffCheck = CommandResult{Command: "git diff --check " + base + "..HEAD"}
+	if err != nil {
+		report.DiffCheck.Status = "failed"
+		report.DiffCheck.Output = err.Error()
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], report.DiffCheck.Command+" failed:\n"+err.Error())
+		report.ResidualRisks = append(report.ResidualRisks, "Whitespace or conflict-marker issues must be fixed before merge.")
+		report.NeedsHuman = true
+	} else {
+		report.DiffCheck.Status = "passed"
+		report.DiffCheck.Output = emptyDefault(diffCheckOut, "passed with no output")
+		report.Evidence["local"] = append(report.Evidence["local"], report.DiffCheck.Command+": "+report.DiffCheck.Output)
+	}
+	report.ActionsTaken = append(report.ActionsTaken, "Ran read-only committed diff whitespace/conflict-marker check")
+
+	report.Signals = detectMergeReadinessSignals(task, report.ChangedPaths)
+	report.ActionsTaken = append(report.ActionsTaken, "Collected review doc, artifact, self-review, evidence-label, and docs-drift signals from committed paths")
+	for _, missing := range report.Signals.Missing {
+		report.NeedsHuman = true
+		report.ResidualRisks = append(report.ResidualRisks, missing)
+	}
+	report.SuggestedGates = suggestedMergeReadinessGates(task, report.ChangedPaths, base)
+	if len(task.Gates) == 0 {
+		report.NeedsHuman = true
+		report.ResidualRisks = append(report.ResidualRisks, "No ledger gates are recorded; reviewer must choose credible gates before merge.")
+	}
+	if report.Status == "passed" && report.NeedsHuman {
+		report.NextSuggestedAction = "Use this local/static pack for human review, rerun the suggested gates, and only then make a separate merge decision."
+	}
+	return finalizeMergeReadinessPack(report), nil
+}
+
+func newMergeReadinessPack(repoPath string, ledgerPath string, taskID string) MergeReadinessPack {
+	return MergeReadinessPack{
+		SchemaVersion: 1,
+		Command:       "pack merge-readiness",
+		GeneratedAt:   nowISO(),
+		Status:        "passed",
+		EvidenceLabel: "local/static",
+		Boundary:      "This pack is local/static review evidence only. It is not runtime, production, device, payment, hardware, or direct Codex App worker proof, and it does not merge, push, cleanup, dispatch, or edit git state.",
+		LedgerPath:    ledgerPath,
+		RepoPath:      repoPath,
+		Task: MergeReadinessTaskSummary{
+			ID: taskID,
+		},
+		PathCheck: MergeReadinessPathCheck{Status: "not-run", Summary: "Path check did not run."},
+		DiffCheck: CommandResult{Command: "git diff --check", Status: "not-run"},
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Loaded local merge-readiness pack inputs",
+		},
+		NextSuggestedAction: "Review this local/static pack, rerun appropriate gates, and make any merge/push/cleanup decision separately.",
+	}
+}
+
+func finalizeMergeReadinessPack(report MergeReadinessPack) MergeReadinessPack {
+	report.ResidualRisks = uniqueSortedStrings(report.ResidualRisks)
+	report.RecordedGates = uniqueSortedStrings(report.RecordedGates)
+	report.SuggestedGates = uniqueSortedStrings(report.SuggestedGates)
+	report.ChangedPaths = uniqueSortedStrings(report.ChangedPaths)
+	report.Evidence = normalizedEvidence(report.Evidence)
+	if report.Status == "blocked" && report.BlockedReason == "" {
+		report.BlockedReason = "merge-readiness pack could not collect required local/static evidence"
+	}
+	if report.Status == "failed" {
+		report.NextSuggestedAction = "Return to the same worker for bounded fixups, then regenerate the merge-readiness pack."
+	}
+	if report.Status == "blocked" {
+		report.NextSuggestedAction = "Resolve the blocked local/static evidence precondition, then regenerate the merge-readiness pack."
+	}
+	return report
+}
+
+func mergeReadinessTaskSummary(task Task) MergeReadinessTaskSummary {
+	return MergeReadinessTaskSummary{
+		ID:                task.ID,
+		Title:             task.Title,
+		Status:            task.Status,
+		ThreadID:          task.ThreadID,
+		PendingWorktreeID: task.PendingWorktreeID,
+		Worktree:          task.Worktree,
+		Branch:            task.Branch,
+		BaseCommit:        task.BaseCommit,
+	}
+}
+
+func parseNameStatusEntries(nameStatus string) []NameStatusEntry {
+	entries := []NameStatusEntry{}
+	for _, line := range strings.Split(nameStatus, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "(") {
+			continue
+		}
+		fields := strings.Split(line, "\t")
+		if len(fields) < 2 {
+			continue
+		}
+		entry := NameStatusEntry{Status: fields[0]}
+		for _, path := range fields[1:] {
+			path = normalizeRepoPath(path)
+			if path != "" {
+				entry.Paths = append(entry.Paths, path)
+			}
+		}
+		if len(entry.Paths) > 0 {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
+}
+
+func evaluateMergeReadinessPathCheck(task Task, changedPaths []string) MergeReadinessPathCheck {
+	allowed := cleanPathPatterns(task.WriteSet["allowed"])
+	forbidden := cleanPathPatterns(task.WriteSet["forbidden"])
+	check := MergeReadinessPathCheck{
+		Status:            "passed",
+		AllowedPatterns:   allowed,
+		ForbiddenPatterns: forbidden,
+	}
+	if len(allowed) == 0 && len(forbidden) == 0 {
+		check.Status = "warning"
+		check.Summary = "Path check warning: ledger writeSet has no allowed/forbidden paths; path-boundary check is advisory-only."
+		return check
+	}
+	if len(allowed) > 0 {
+		check.OutsideAllowed = pathsOutsidePatterns(changedPaths, allowed)
+	}
+	if len(forbidden) > 0 {
+		check.ForbiddenHits = pathsMatchingPatterns(changedPaths, forbidden)
+	}
+	if len(check.OutsideAllowed) > 0 || len(check.ForbiddenHits) > 0 {
+		check.Status = "failed"
+		parts := []string{}
+		if len(check.OutsideAllowed) > 0 {
+			parts = append(parts, "outside allowed="+formatStringList(check.OutsideAllowed))
+		}
+		if len(check.ForbiddenHits) > 0 {
+			parts = append(parts, "forbidden hits="+formatStringList(check.ForbiddenHits))
+		}
+		check.Summary = "Path check failed: " + strings.Join(parts, "; ") + "."
+		return check
+	}
+	check.Summary = fmt.Sprintf("Path check passed: changed paths fit allowed=%s forbidden=%s.", formatStringList(allowed), formatStringList(forbidden))
+	return check
+}
+
+func detectMergeReadinessSignals(task Task, changedPaths []string) MergeReadinessSignals {
+	signals := MergeReadinessSignals{}
+	for _, path := range changedPaths {
+		normalized := normalizeRepoPath(path)
+		lower := strings.ToLower(normalized)
+		switch {
+		case normalized == "README.md" || normalized == "README.zh-CN.md" || strings.HasPrefix(normalized, "docs/"):
+			signals.DocsDrift = append(signals.DocsDrift, normalized)
+		}
+		if strings.HasPrefix(normalized, "docs/reviews/") {
+			signals.ReviewDocs = append(signals.ReviewDocs, normalized)
+		}
+		if strings.Contains(lower, "artifact") || strings.Contains(lower, "report") || strings.Contains(lower, "evidence") || strings.HasPrefix(lower, "examples/routine-reports/") || strings.HasPrefix(lower, ".codex-orchestrator/") {
+			signals.Artifacts = append(signals.Artifacts, normalized)
+		}
+		if containsAnyFold(normalized, []string{"self-review", "self_review", "selfreview", "handoff", "review"}) {
+			signals.SelfReview = append(signals.SelfReview, normalized)
+		}
+		if containsAnyFold(normalized, []string{"evidence", "proof", "report", "review", "blocked", "local", "proxy", "direct"}) {
+			signals.EvidenceLabel = append(signals.EvidenceLabel, normalized)
+		}
+	}
+	if len(task.Evidence) > 0 {
+		signals.EvidenceLabel = append(signals.EvidenceLabel, "ledger evidence metadata present")
+	}
+	signals.ReviewDocs = uniqueSortedStrings(signals.ReviewDocs)
+	signals.Artifacts = uniqueSortedStrings(signals.Artifacts)
+	signals.SelfReview = uniqueSortedStrings(signals.SelfReview)
+	signals.EvidenceLabel = uniqueSortedStrings(signals.EvidenceLabel)
+	signals.DocsDrift = uniqueSortedStrings(signals.DocsDrift)
+	if len(signals.ReviewDocs) == 0 {
+		signals.Missing = append(signals.Missing, "No committed review document under docs/reviews/ was detected.")
+	}
+	if len(signals.Artifacts) == 0 {
+		signals.Missing = append(signals.Missing, "No committed artifact/report/evidence path was detected.")
+	}
+	if len(signals.SelfReview) == 0 {
+		signals.Missing = append(signals.Missing, "Worker self-review or handoff evidence is not locally detectable from committed filenames.")
+	}
+	if len(signals.EvidenceLabel) == 0 {
+		signals.Missing = append(signals.Missing, "Evidence-label boundary review is not locally detectable from committed filenames or ledger evidence metadata.")
+	}
+	if len(signals.DocsDrift) == 0 && pathsLikelyNeedDocs(changedPaths) {
+		signals.Missing = append(signals.Missing, "Code or user-facing files changed without a committed README/docs/review docs-drift signal.")
+	}
+	signals.Missing = uniqueSortedStrings(signals.Missing)
+	return signals
+}
+
+func pathsLikelyNeedDocs(paths []string) bool {
+	for _, path := range paths {
+		normalized := normalizeRepoPath(path)
+		if strings.HasPrefix(normalized, "cmd/") || strings.HasPrefix(normalized, "internal/") || strings.HasPrefix(normalized, "routines/") || normalized == "SKILL.md" {
+			return true
+		}
+	}
+	return false
+}
+
+func suggestedMergeReadinessGates(task Task, changedPaths []string, base string) []string {
+	gates := append([]string(nil), task.Gates...)
+	if base != "" && !allZeros(base) {
+		gates = append(gates, "git diff --check "+base+"..HEAD")
+	}
+	if pathsLikelyNeedDocs(changedPaths) || len(filterDocsPaths(changedPaths)) > 0 {
+		gates = append(gates, "codex-orchestrator run-routine docs-drift-checker --repo .")
+		gates = append(gates, "codex-orchestrator run-routine evidence-label-auditor --repo .")
+	}
+	return uniqueSortedStrings(gates)
+}
+
+func filterDocsPaths(paths []string) []string {
+	docs := []string{}
+	for _, path := range paths {
+		normalized := normalizeRepoPath(path)
+		if normalized == "README.md" || normalized == "README.zh-CN.md" || strings.HasPrefix(normalized, "docs/") {
+			docs = append(docs, normalized)
+		}
+	}
+	return uniqueSortedStrings(docs)
 }
 
 func cleanPathPatterns(patterns []string) []string {
