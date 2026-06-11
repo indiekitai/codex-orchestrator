@@ -244,6 +244,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
 ./codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 ./codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
+./codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -328,6 +329,14 @@ routine spec、routine report 和 ledger/event 文件，应用确定性的编排
 判定。它不会 stage、commit、merge、push、tag、release、清理 worktree、派发
 session、修改 ledger，也不会声称 runtime proof；这个 MVP 使用 `local` 或
 `blocked` 证据。
+
+`policy check` 是第一个面向使用者的 V4 policy/eval 命令。它会包装只读的
+orchestration policy auditor，同时运行 `eval/orchestration-policy-auditor/`
+里的本地 eval fixtures。第一批 fixture 来自这个项目真实踩过的编排问题：
+dry-run 后未明确批准就派发、worktree setup 失败后回退到主工作区实现、一个子任务
+完成后停止整个队列、delegated worker prompt 缺少核心边界、把 local/proxy 证据
+升级成 direct。它不会派发 Codex session、修改 git、更新 ledger，也不会声称
+runtime proof；结果只是本地静态 policy 证据。
 
 `run-routine roadmap-next-task-suggester` 是第八个可运行 routine MVP。它是只读的，
 不会修改 ledger。它会从 `docs/roadmap.md` 解析剩余候选任务，对照本地可运行

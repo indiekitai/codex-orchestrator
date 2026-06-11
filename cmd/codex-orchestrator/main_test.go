@@ -1518,6 +1518,95 @@ func TestRunOrchestrationPolicyAuditorRoutineBlockedWhenNoInputs(t *testing.T) {
 	}
 }
 
+func TestPolicyCheckPassesWithEvalFixtures(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	fixtureDir := filepath.Join(project, "eval", "orchestration-policy-auditor")
+	writePolicyEvalFixture(t, fixtureDir, policyEvalFixture{
+		SchemaVersion: 1,
+		ID:            "safe-orchestrator-prompt",
+		Files: map[string]string{
+			"README.md": "Dry run must wait for explicit user confirmation before dispatching workers.",
+		},
+		ExpectedRuleHits: map[string]int{},
+	})
+	writePolicyEvalFixture(t, fixtureDir, policyEvalFixture{
+		SchemaVersion: 1,
+		ID:            "dry-run-dispatch-without-approval",
+		Files: map[string]string{
+			"README.md": "Dry run mode can dispatch workers immediately.",
+		},
+		ExpectedRuleHits: map[string]int{"OPA001": 1},
+	})
+
+	report := runPolicyCheck(project, filepath.Join("eval", "orchestration-policy-auditor"))
+	if report.RoutineID != "policy-check" || report.Status != "passed" {
+		t.Fatalf("expected passed policy-check report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"orchestration-policy-auditor status: passed",
+		"Ran 2 orchestration policy eval fixture(s)",
+		"Policy eval fixtures: passed.",
+	} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, local)
+		}
+	}
+}
+
+func TestPolicyCheckFailsOnEvalFixtureMismatch(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	fixtureDir := filepath.Join(project, "eval", "orchestration-policy-auditor")
+	writePolicyEvalFixture(t, fixtureDir, policyEvalFixture{
+		SchemaVersion: 1,
+		ID:            "mismatched-fixture",
+		Files: map[string]string{
+			"README.md": "Dry run mode can dispatch workers immediately.",
+		},
+		ExpectedRuleHits: map[string]int{},
+	})
+
+	report := runPolicyCheck(project, filepath.Join("eval", "orchestration-policy-auditor"))
+	if report.Status != "failed" {
+		t.Fatalf("expected failed policy-check report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	if !strings.Contains(local, "mismatched-fixture: expected none, got OPA001=1.") {
+		t.Fatalf("expected fixture mismatch evidence, got:\n%s", local)
+	}
+}
+
+func TestCmdPolicyCheckWritesReport(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	fixtureDir := filepath.Join(project, "eval", "orchestration-policy-auditor")
+	writePolicyEvalFixture(t, fixtureDir, policyEvalFixture{
+		SchemaVersion: 1,
+		ID:            "safe-orchestrator-prompt",
+		Files: map[string]string{
+			"README.md": "Worker prompt: use an isolated worktree session, do not use subagents or Paseo, self-review, do not merge, and do not push.",
+		},
+		ExpectedRuleHits: map[string]int{},
+	})
+	reportPath := filepath.Join(root, "reports", "policy-check.json")
+	if err := cmdPolicy([]string{"check", "--repo", project, "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RoutineRunReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.RoutineID != "policy-check" || report.Status != "passed" {
+		t.Fatalf("unexpected policy report: %#v", report)
+	}
+}
+
 func TestRecordRoutineRunFromJSONReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
@@ -1935,6 +2024,21 @@ func createOrchestrationPolicyFixture(t *testing.T, root string) string {
 		t.Fatal(err)
 	}
 	return project
+}
+
+func writePolicyEvalFixture(t *testing.T, dir string, fixture policyEvalFixture) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.MarshalIndent(fixture, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, fixture.ID+".json")
+	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func writeEvidenceAuditRoutineSpec(t *testing.T, project string, id string, directEvidence string) {

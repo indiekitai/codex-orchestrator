@@ -158,6 +158,7 @@ codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift
 codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
 codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
+codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 ```
 
 The PR reviewer runner inspects only local git/static state from the ledger task worktree:
@@ -236,6 +237,16 @@ local/static suspicions until a reviewer confirms them. Its MVP report uses
 only `local` and `blocked` evidence; it does not stage, commit, merge, push,
 tag, release, clean worktrees, dispatch sessions, mutate the ledger, or claim
 runtime proof.
+
+Use `codex-orchestrator policy check` as the preferred V4 policy/eval entry
+when you want the local orchestration policy scan plus the repo's eval
+fixtures. The bundled fixtures live under `eval/orchestration-policy-auditor/`
+and cover real orchestration failure classes: dry-run dispatch without
+approval, setup-failure fallback into the orchestrator checkout, stopping the
+larger queue after one child task, delegated worker prompts missing mandatory
+boundaries, and evidence promotion from local/proxy/weak to direct. This
+command is also read-only: it does not create sessions, mutate git, update the
+ledger, or claim runtime proof.
 
 The roadmap next-task suggester runner is read-only and does not mutate the
 ledger. It parses remaining candidate tasks from `docs/roadmap.md`, compares

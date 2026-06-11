@@ -222,6 +222,8 @@ func run(args []string) error {
 		return cmdValidateRoutines(args[1:])
 	case "run-routine":
 		return cmdRunRoutine(args[1:])
+	case "policy":
+		return cmdPolicy(args[1:])
 	case "record-routine-run":
 		return cmdRecordRoutineRun(args[1:])
 	case "completion":
@@ -253,6 +255,7 @@ Usage:
   codex-orchestrator run-routine evidence-label-auditor [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine orchestration-policy-auditor [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine roadmap-next-task-suggester [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
+  codex-orchestrator policy check [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
   codex-orchestrator record-routine-run --report-json PATH
   codex-orchestrator completion bash|zsh|fish
@@ -286,7 +289,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init record-task append-event observe heartbeat status validate-routines run-routine record-routine-run completion help"
+  commands="init record-task append-event observe heartbeat status validate-routines run-routine policy record-routine-run completion help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester"
 
   case "$prev" in
@@ -326,6 +329,13 @@ _codex_orchestrator()
     run-routine)
       COMPREPLY=( $(compgen -W "--ledger --task-id --repo --tag --expected-asset --write-report --json --help" -- "$cur") )
       ;;
+    policy)
+      if [[ ${COMP_WORDS[2]} == "check" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --eval-dir --write-report --json --help" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "check" -- "$cur") )
+      fi
+      ;;
     record-routine-run)
       COMPREPLY=( $(compgen -W "--ledger --routine --status --task-id --evidence-local --evidence-proxy --evidence-direct --evidence-blocked --action --next --needs-human --blocked-reason --report-json --help" -- "$cur") )
       ;;
@@ -348,6 +358,7 @@ commands=(
   'status:print ledger status'
   'validate-routines:validate routine specs'
   'run-routine:run a read-only routine'
+  'policy:run policy and eval checks'
   'record-routine-run:record a routine report in the ledger'
   'completion:print shell completion'
   'help:show help'
@@ -378,6 +389,13 @@ case $state in
           _describe 'routine' routines
         else
           _values 'options' --ledger --task-id --repo --tag --expected-asset --write-report --json --help
+        fi
+        ;;
+      policy)
+        if (( CURRENT == 3 )); then
+          _values 'subcommand' check
+        else
+          _values 'options' --repo --eval-dir --write-report --json --help
         fi
         ;;
       completion)
@@ -421,9 +439,11 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'heartbeat' -d 'Run
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'status' -d 'Print ledger status'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'validate-routines' -d 'Validate routine specs'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'run-routine' -d 'Run a read-only routine'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'policy' -d 'Run policy and eval checks'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run' -d 'Record a routine report in the ledger'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 complete -c codex-orchestrator -l ledger -d 'Ledger path'
 complete -c codex-orchestrator -l json -d 'Print JSON'
@@ -867,6 +887,93 @@ func cmdRunRoutine(args []string) error {
 	default:
 		return fmt.Errorf("unsupported routine %q", args[0])
 	}
+}
+
+func cmdPolicy(args []string) error {
+	if len(args) == 0 {
+		return errors.New("policy requires a subcommand: check")
+	}
+	switch args[0] {
+	case "check":
+		return cmdPolicyCheck(args[1:])
+	default:
+		return fmt.Errorf("unsupported policy subcommand %q", args[0])
+	}
+}
+
+func cmdPolicyCheck(args []string) error {
+	fs := flag.NewFlagSet("policy check", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path to inspect")
+	evalDir := fs.String("eval-dir", filepath.Join("eval", "orchestration-policy-auditor"), "policy eval fixture directory; relative paths are resolved under --repo")
+	writeReport := fs.String("write-report", "", "write policy check report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	report := runPolicyCheck(*repo, *evalDir)
+	if err := validateRoutineRunReport(report); err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote policy check report: %s\n", *writeReport)
+	return nil
+}
+
+func runPolicyCheck(repo string, evalDir string) RoutineRunReport {
+	report := RoutineRunReport{
+		RoutineID: "policy-check",
+		Status:    "blocked",
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Ran read-only orchestration policy auditor",
+			"Ran local policy eval fixtures when available",
+		},
+		NeedsHuman:          false,
+		BlockedReason:       "",
+		NextSuggestedAction: "Fix the blocked policy check precondition, then rerun policy check.",
+	}
+	repo = expandPath(repo)
+	if repo == "" {
+		repo = "."
+	}
+	auditor := runOrchestrationPolicyAuditorRoutine(repo)
+	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("orchestration-policy-auditor status: %s", auditor.Status))
+	report.Evidence["local"] = append(report.Evidence["local"], auditor.Evidence["local"]...)
+	report.Evidence["blocked"] = append(report.Evidence["blocked"], auditor.Evidence["blocked"]...)
+
+	evalResult := runOrchestrationPolicyEvalFixtures(repo, evalDir)
+	report.Evidence["local"] = append(report.Evidence["local"], evalResult.Evidence...)
+	report.Evidence["blocked"] = append(report.Evidence["blocked"], evalResult.Blocked...)
+
+	if auditor.Status == "blocked" {
+		report.BlockedReason = firstNonEmpty(auditor.BlockedReason, "orchestration policy auditor blocked")
+		return report
+	}
+	if evalResult.BlockedReason != "" {
+		report.BlockedReason = evalResult.BlockedReason
+		return report
+	}
+	if auditor.Status == "failed" || !evalResult.Passed {
+		report.Status = "failed"
+		report.NextSuggestedAction = "Review policy findings or fixture mismatches, fix confirmed rule/docs issues, then rerun policy check."
+		return report
+	}
+	report.Status = "passed"
+	report.BlockedReason = ""
+	report.NextSuggestedAction = "Record this local/static policy check if sufficient; no Codex App session, daemon, or runtime proof was produced."
+	return report
 }
 
 func cmdRunPRReviewerRoutine(args []string) error {
@@ -3190,6 +3297,21 @@ type policyAuditFinding struct {
 	Message string
 }
 
+type policyEvalFixture struct {
+	SchemaVersion    int               `json:"schemaVersion"`
+	ID               string            `json:"id"`
+	Description      string            `json:"description,omitempty"`
+	Files            map[string]string `json:"files"`
+	ExpectedRuleHits map[string]int    `json:"expectedRuleHits"`
+}
+
+type policyEvalResult struct {
+	Passed        bool
+	Evidence      []string
+	Blocked       []string
+	BlockedReason string
+}
+
 const (
 	evidenceRuleSpecDirectWeakLocal  = "ELA001"
 	evidenceRuleSpecLocalOverclaim   = "ELA002"
@@ -3252,6 +3374,14 @@ func renderPolicyAuditFindings(findings []policyAuditFinding) []string {
 	return rendered
 }
 
+func countPolicyAuditFindings(findings []policyAuditFinding) map[string]int {
+	counts := map[string]int{}
+	for _, finding := range findings {
+		counts[finding.RuleID]++
+	}
+	return counts
+}
+
 func summarizeEvidenceAuditFindings(findings []evidenceAuditFinding) string {
 	if len(findings) == 0 {
 		return "Rule hits: none."
@@ -3270,6 +3400,156 @@ func summarizeEvidenceAuditFindings(findings []evidenceAuditFinding) string {
 		parts = append(parts, fmt.Sprintf("%s=%d", ruleID, counts[ruleID]))
 	}
 	return "Rule hits: " + strings.Join(parts, ", ") + "."
+}
+
+func formatRuleCounts(counts map[string]int) string {
+	if len(counts) == 0 {
+		return "none"
+	}
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", key, counts[key]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func runOrchestrationPolicyEvalFixtures(repo string, evalDir string) policyEvalResult {
+	result := policyEvalResult{
+		Passed:   true,
+		Evidence: []string{},
+		Blocked:  []string{},
+	}
+	fixtureDir := resolveRepoRelativePath(repo, evalDir)
+	entries, err := os.ReadDir(fixtureDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			result.Evidence = append(result.Evidence, "Policy eval fixtures not found; skipped: "+fixtureDir)
+			return result
+		}
+		result.Passed = false
+		result.Blocked = append(result.Blocked, "Could not read policy eval fixtures: "+err.Error())
+		result.BlockedReason = "could not read policy eval fixtures"
+		return result
+	}
+	checked := 0
+	failures := []string{}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		checked++
+		path := filepath.Join(fixtureDir, entry.Name())
+		fixture, loadErr := loadPolicyEvalFixture(path)
+		if loadErr != nil {
+			result.Passed = false
+			result.Blocked = append(result.Blocked, "Could not load policy eval fixture "+path+": "+loadErr.Error())
+			result.BlockedReason = "could not load policy eval fixture"
+			return result
+		}
+		findings := []policyAuditFinding{}
+		fileNames := make([]string, 0, len(fixture.Files))
+		for name := range fixture.Files {
+			fileNames = append(fileNames, name)
+		}
+		sort.Strings(fileNames)
+		for _, name := range fileNames {
+			findings = append(findings, auditOrchestrationPolicyText(name, fixture.Files[name])...)
+		}
+		actual := countPolicyAuditFindings(findings)
+		if !sameRuleCounts(actual, fixture.ExpectedRuleHits) {
+			result.Passed = false
+			failures = append(failures, fmt.Sprintf(
+				"%s: expected %s, got %s.",
+				fixture.ID,
+				formatRuleCounts(fixture.ExpectedRuleHits),
+				formatRuleCounts(actual),
+			))
+		}
+	}
+	if checked == 0 {
+		result.Passed = false
+		result.Blocked = append(result.Blocked, "Policy eval fixture directory has no JSON fixtures: "+fixtureDir)
+		result.BlockedReason = "policy eval fixtures are missing"
+		return result
+	}
+	result.Evidence = append(result.Evidence, fmt.Sprintf("Ran %d orchestration policy eval fixture(s) from %s.", checked, fixtureDir))
+	if len(failures) > 0 {
+		sort.Strings(failures)
+		result.Evidence = append(result.Evidence, failures...)
+	} else {
+		result.Evidence = append(result.Evidence, "Policy eval fixtures: passed.")
+	}
+	return result
+}
+
+func loadPolicyEvalFixture(path string) (policyEvalFixture, error) {
+	var fixture policyEvalFixture
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fixture, err
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		return fixture, err
+	}
+	if fixture.SchemaVersion != 1 {
+		return fixture, fmt.Errorf("unsupported schemaVersion %d", fixture.SchemaVersion)
+	}
+	if strings.TrimSpace(fixture.ID) == "" {
+		return fixture, errors.New("fixture id is required")
+	}
+	if len(fixture.Files) == 0 {
+		return fixture, errors.New("fixture files are required")
+	}
+	if fixture.ExpectedRuleHits == nil {
+		fixture.ExpectedRuleHits = map[string]int{}
+	}
+	return fixture, nil
+}
+
+func sameRuleCounts(left map[string]int, right map[string]int) bool {
+	normalizedLeft := positiveRuleCounts(left)
+	normalizedRight := positiveRuleCounts(right)
+	if len(normalizedLeft) != len(normalizedRight) {
+		return false
+	}
+	for key, leftValue := range normalizedLeft {
+		if normalizedRight[key] != leftValue {
+			return false
+		}
+	}
+	return true
+}
+
+func positiveRuleCounts(counts map[string]int) map[string]int {
+	normalized := map[string]int{}
+	for key, value := range counts {
+		if value > 0 {
+			normalized[key] = value
+		}
+	}
+	return normalized
+}
+
+func resolveRepoRelativePath(repo string, path string) string {
+	path = expandPath(path)
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(repo, path)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func summarizePolicyAuditFindings(findings []policyAuditFinding) string {
@@ -3620,6 +3900,16 @@ func shouldSkipPolicyParagraph(text string) bool {
 		"forbiddenActions",
 		"allowedActions",
 		"outputSchema",
+		"eval fixture",
+		"eval fixtures",
+		"fixture eval",
+		"expectedRuleHits",
+		"cover the failures",
+		"covers the failures",
+		"initial fixtures",
+		"第一批 fixture",
+		"覆盖真实编排失败类别",
+		"真实踩过的编排问题",
 	})
 }
 

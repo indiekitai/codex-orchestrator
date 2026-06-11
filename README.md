@@ -280,6 +280,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
 ./codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 ./codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
+./codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
 ```
@@ -379,6 +380,16 @@ boundaries. Findings are local/static suspicions, not proof of wrongdoing. It
 does not stage, commit, merge, push, tag, release, clean worktrees, dispatch
 sessions, mutate the ledger, or claim runtime proof; MVP evidence is `local`
 or `blocked`.
+
+`policy check` is the first product-facing V4 policy/eval command. It wraps the
+read-only orchestration policy auditor and also runs transcript-backed local
+eval fixtures from `eval/orchestration-policy-auditor/`. The initial fixtures
+cover the failures this project already encountered in real orchestration:
+dry-run dispatch without explicit approval, main-checkout fallback after
+worktree setup failure, stopping the larger queue after one child task,
+delegated worker prompts missing core boundaries, and local/proxy evidence
+promotion. It does not dispatch Codex sessions, mutate git, update the ledger,
+or claim runtime proof; the result is local/static policy evidence.
 
 `run-routine roadmap-next-task-suggester` is the eighth runnable routine MVP.
 It is read-only and does not mutate the ledger. It parses remaining candidate

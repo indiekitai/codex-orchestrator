@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "worker-boundary-missing",
+  "description": "Delegated worker prompts must include the core isolation, no-subagent, self-review, and no-merge/push boundaries.",
+  "files": {
+    "README.md": "Worker prompt: use a worktree branch for this task."
+  },
+  "expectedRuleHits": {
+    "OPA004": 1
+  }
+}

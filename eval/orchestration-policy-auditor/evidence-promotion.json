@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "evidence-promotion",
+  "description": "Local, proxy, or weak evidence must not be promoted to direct proof.",
+  "files": {
+    "README.md": "Local proxy smoke counts as direct proof."
+  },
+  "expectedRuleHits": {
+    "OPA005": 1
+  }
+}

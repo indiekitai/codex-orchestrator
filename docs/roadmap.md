@@ -211,6 +211,7 @@ cmd/codex-orchestrator run-routine docs-drift-checker
 cmd/codex-orchestrator run-routine evidence-label-auditor
 cmd/codex-orchestrator run-routine orchestration-policy-auditor
 cmd/codex-orchestrator run-routine roadmap-next-task-suggester
+cmd/codex-orchestrator policy check
 cmd/codex-orchestrator record-routine-run --routine ... --status ...
 cmd/codex-orchestrator record-task --max-runtime-minutes ... --review-budget-minutes ...
 cmd/codex-orchestrator observe / heartbeat budgetSummary
@@ -227,6 +228,12 @@ rule-hit 统计；但它仍然是只读、本地、静态的保守检查器。
 `OPA001`-`OPA005` 覆盖 dry-run 派发屏障、主工作区 fallback guard、heartbeat
 continuation guard、worker 边界和证据升级边界。它同样是只读、本地、静态的保守
 检查器，输出的是可复核疑点，不是语义定罪。
+
+`policy check` 把 `orchestration-policy-auditor` 和
+`eval/orchestration-policy-auditor/` 下的 fixture eval 串起来，成为 V4 的第一个
+产品化入口。第一批 fixture 覆盖真实编排失败类别：dry-run 未批准派发、setup
+失败后回退主工作区、单个 child task 完成后停止总队列、worker prompt 缺少边界、
+local/proxy/weak 证据升级为 direct。
 
 剩余：
 
@@ -301,6 +308,15 @@ codex-orchestrator eval add-failure --from-review docs/reviews/...
 codex-orchestrator eval run
 codex-orchestrator rules propose
 ```
+
+当前已落地的第一步是：
+
+```bash
+codex-orchestrator policy check --repo .
+```
+
+它先运行本地 orchestration policy auditor，再运行仓库内置 fixture eval；还没有
+`eval add-failure`、`eval run` 或 `rules propose`。
 
 边界：
 

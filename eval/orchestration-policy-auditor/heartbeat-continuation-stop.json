@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "heartbeat-continuation-stop",
+  "description": "Completing one child task must not stop the larger queue without ledger, roadmap, and queue checks.",
+  "files": {
+    "README.md": "When a child task is completed, delete heartbeat and stop the loop."
+  },
+  "expectedRuleHits": {
+    "OPA003": 1
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "dry-run-dispatch-without-approval",
+  "description": "Dry-run wording must not permit session dispatch without explicit user confirmation.",
+  "files": {
+    "README.md": "Dry run mode can dispatch workers immediately."
+  },
+  "expectedRuleHits": {
+    "OPA001": 1
+  }
+}

@@ -21,6 +21,7 @@ codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift
 codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
 codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
+codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ```
 
@@ -110,6 +111,16 @@ Findings are heuristics and are reported as local/static suspicions, not
 semantic proof. It does not stage, commit, merge, push, tag, release, clean
 worktrees, dispatch sessions, mutate the ledger, or claim runtime proof; this
 MVP emits `local` or `blocked` evidence.
+
+`policy check` is the product-facing V4 policy/eval wrapper for the
+orchestration policy auditor. It runs the same read-only local/static scan and
+then checks JSON eval fixtures from `eval/orchestration-policy-auditor/`. A
+fixture defines synthetic files and expected `OPAxxx` rule-hit counts, which
+turns repeated orchestration failures into deterministic regression checks.
+The wrapper emits a normal `RoutineRunReport` with `routineId=policy-check`.
+It does not stage, commit, merge, push, tag, release, clean worktrees, dispatch
+sessions, mutate the ledger, or claim runtime proof; this command emits
+`local` or `blocked` evidence.
 
 `run-routine roadmap-next-task-suggester` is a read-only local planning
 assistant. It reads `docs/roadmap.md`, compares the remaining v3 and explicit

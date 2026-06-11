@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "setup-failure-main-fallback",
+  "description": "Worktree setup failure must be reported as a blocker, not handled by implementing in the main checkout.",
+  "files": {
+    "README.md": "If worktree setup failed, fallback to the main checkout and implement the task there."
+  },
+  "expectedRuleHits": {
+    "OPA002": 1
+  }
+}
