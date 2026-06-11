@@ -308,6 +308,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
+./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
@@ -339,6 +340,11 @@ heartbeat summary 中展示。runtime pressure 只根据本地 ledger timestamp 
 review pressure 只有在 ledger 里有 review-ready timestamp 时才计算。缺失或无法
 确定的预算信息会标成 local/static helper evidence。helper 不会 kill 进程、调度
 session 或强制执行预算。
+
+`status --html` 会把本地静态 HTML 状态页写到 stdout，方便人快速看清
+integration 是否干净、活跃和 pending 工作、待审/阻塞/清理队列、可用派发槽、
+budget pressure、下一步建议和 evidence label，而不必直接读 JSON。它不会启动
+server、daemon、scheduler，也不会 merge、push、cleanup 或监控 runtime。
 
 Codex App worktree 派发是 App-first。要用 project worktree session 前，先确认
 这个仓库已经保存为 Codex App project。如果因为 unknown project、没有 saved

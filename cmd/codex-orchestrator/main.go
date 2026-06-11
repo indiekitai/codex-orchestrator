@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -366,7 +367,7 @@ Usage:
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
-  codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--stale-after 15m]
+  codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--stale-after 15m]
   codex-orchestrator validate-routines [--dir routines] [--json]
   codex-orchestrator run-routine pr-reviewer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine stale-task-rescuer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
@@ -446,7 +447,7 @@ _codex_orchestrator()
       COMPREPLY=( $(compgen -W "--repo --ledger --json --write-report --write-summary --stale-after --help" -- "$cur") )
       ;;
     status)
-      COMPREPLY=( $(compgen -W "--repo --ledger --json --stale-after --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--repo --ledger --json --html --stale-after --help" -- "$cur") )
       ;;
     heartbeat)
       COMPREPLY=( $(compgen -W "--repo --ledger --interval --count --write-report --write-summary --help" -- "$cur") )
@@ -577,7 +578,7 @@ case $state in
         _values 'options' --repo --ledger --json --write-report --write-summary --stale-after --help
         ;;
       status)
-        _values 'options' --repo --ledger --json --stale-after --help
+        _values 'options' --repo --ledger --json --html --stale-after --help
         ;;
       heartbeat)
         _values 'options' --repo --ledger --interval --count --write-report --write-summary --help
@@ -617,6 +618,7 @@ complete -c codex-orchestrator -n '__fish_seen_subcommand_from rules' -a 'propos
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 complete -c codex-orchestrator -l ledger -d 'Ledger path'
 complete -c codex-orchestrator -l json -d 'Print JSON'
+complete -c codex-orchestrator -l html -d 'Print local/static HTML status page'
 complete -c codex-orchestrator -l write-report -d 'Write JSON report'
 complete -c codex-orchestrator -l write-summary -d 'Write Markdown summary'
 complete -c codex-orchestrator -l stale-after -d 'Stale threshold'
@@ -1013,9 +1015,13 @@ func cmdStatus(args []string) error {
 	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
 	jsonOut := fs.Bool("json", false, "print JSON")
+	htmlOut := fs.Bool("html", false, "print local/static HTML status page")
 	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale threshold")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *jsonOut && *htmlOut {
+		return errors.New("status supports only one output format: choose --json or --html")
 	}
 	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
 	ledger, err := loadLedger(resolvedLedger)
@@ -1057,6 +1063,10 @@ func cmdStatus(args []string) error {
 	if *jsonOut {
 		return printJSON(result)
 	}
+	if *htmlOut {
+		fmt.Print(renderStatusHTML(summary, ledger, resolvedLedger))
+		return nil
+	}
 	fmt.Printf("Ledger: %s\n", resolvedLedger)
 	fmt.Printf("Project: %s default=%s\n", ledger.ProjectRoot, ledger.DefaultBranch)
 	fmt.Printf("Tasks: %d overall=%s\n", len(ledger.Tasks), summary.OverallStatus)
@@ -1074,6 +1084,216 @@ func cmdStatus(args []string) error {
 	)
 	printRuntimeStatusReport(summary.RuntimeStatus)
 	return nil
+}
+
+func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) string {
+	var b strings.Builder
+	title := "codex-orchestrator 本地静态状态页"
+	nextAction := "No immediate action suggested."
+	if len(summary.RecommendedActions) > 0 {
+		nextAction = summary.RecommendedActions[0]
+	}
+	fmt.Fprintf(&b, "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n")
+	fmt.Fprintf(&b, "<meta charset=\"utf-8\">\n")
+	fmt.Fprintf(&b, "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
+	fmt.Fprintf(&b, "<title>%s</title>\n", escapeHTML(title))
+	fmt.Fprintf(&b, "<style>\n")
+	fmt.Fprintf(&b, ":root{color-scheme:light dark;--bg:#f7f7f4;--panel:#ffffff;--text:#1e2428;--muted:#667075;--line:#d9dedb;--accent:#126a5a;--warn:#a35b00;--bad:#a83232;--ok:#2f6f3e}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}main{max-width:1180px;margin:0 auto;padding:28px 20px 44px}h1{font-size:28px;margin:0 0 6px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0}.muted,small{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}.card,.section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}.metric{font-size:26px;font-weight:700}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin:2px 4px 2px 0;background:rgba(18,106,90,.08)}.bad{color:var(--bad)}.warn{color:var(--warn)}.ok{color:var(--ok)}.sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}ul{padding-left:18px;margin:8px 0 0}.item{border-top:1px solid var(--line);padding:10px 0}.item:first-child{border-top:0;padding-top:0}.item-title{font-weight:650}.meta{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted);word-break:break-word}.action{margin-top:6px}.evidence{display:flex;flex-wrap:wrap;gap:8px}.evidence span{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:rgba(0,0,0,.03)}pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.04);border-radius:6px;padding:8px}@media (prefers-color-scheme:dark){:root{--bg:#111412;--panel:#171c19;--text:#e8ece9;--muted:#a2aaa5;--line:#303832;--accent:#61c6ad}}@media(max-width:720px){main{padding:20px 12px}.sections{grid-template-columns:1fr}}\n")
+	fmt.Fprintf(&b, "</style>\n</head>\n<body>\n<main>\n")
+	fmt.Fprintf(&b, "<header><h1>%s</h1><div class=\"muted\">local/static evidence only · observed %s</div></header>\n", escapeHTML(title), escapeHTML(summary.ObservedAt))
+	fmt.Fprintf(&b, "<section class=\"grid\" aria-label=\"status overview\">\n")
+	renderMetricHTML(&b, "总体状态", summary.OverallStatus, statusClass(summary.OverallStatus))
+	renderMetricHTML(&b, "任务总数", fmt.Sprint(len(ledger.Tasks)), "")
+	renderMetricHTML(&b, "可用派发槽", fmt.Sprintf("%d / %d", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency), "")
+	renderMetricHTML(&b, "待审/阻塞", fmt.Sprintf("%d / %d", summary.ReviewPressure.ReviewNeeded, summary.ReviewPressure.Blocked), pressureClass(summary.ReviewPressure.Blocked, summary.ReviewPressure.ReviewNeeded))
+	fmt.Fprintf(&b, "</section>\n")
+
+	fmt.Fprintf(&b, "<section class=\"section\"><h2>集成区 / Integration</h2>")
+	fmt.Fprintf(&b, "<p><span class=\"pill\">repo: %s</span><span class=\"pill\">ledger: %s</span><span class=\"pill\">default: %s</span></p>", escapeHTML(ledger.ProjectRoot), escapeHTML(ledgerPath), escapeHTML(ledger.DefaultBranch))
+	if summary.Integration.Error != "" {
+		fmt.Fprintf(&b, "<p class=\"bad\">无法检查集成区: %s</p>", escapeHTML(summary.Integration.Error))
+	} else if summary.Integration.Dirty {
+		fmt.Fprintf(&b, "<p class=\"warn\">集成区有未提交变化，派发前需要人工确认。</p>")
+		if summary.Integration.GitStatus != "" {
+			fmt.Fprintf(&b, "<pre>%s</pre>", escapeHTML(summary.Integration.GitStatus))
+		}
+	} else {
+		fmt.Fprintf(&b, "<p class=\"ok\">集成区干净，可作为本地派发/审查依据。</p>")
+	}
+	fmt.Fprintf(&b, "</section>\n")
+
+	fmt.Fprintf(&b, "<section class=\"grid\" aria-label=\"pressure overview\">\n")
+	renderMetricHTML(&b, "活跃", fmt.Sprint(summary.ReviewPressure.Active), "")
+	renderMetricHTML(&b, "待 setup", fmt.Sprint(summary.ReviewPressure.PendingSetup), pressureClass(summary.ReviewPressure.PendingSetup, 0))
+	renderMetricHTML(&b, "脏进度", fmt.Sprint(len(summary.RuntimeStatus.DirtyUncommitted)), pressureClass(len(summary.RuntimeStatus.DirtyUncommitted), 0))
+	renderMetricHTML(&b, "待清理", fmt.Sprint(summary.ReviewPressure.CleanupNeeded), pressureClass(summary.ReviewPressure.CleanupNeeded, 0))
+	renderMetricHTML(&b, "预算缺失", fmt.Sprint(summary.BudgetPressure.TasksMissingBudget), pressureClass(summary.BudgetPressure.TasksMissingBudget, 0))
+	renderMetricHTML(&b, "预算接近/超限", fmt.Sprintf("%d / %d", summary.BudgetPressure.TasksNearLimit, summary.BudgetPressure.TasksExceeded), pressureClass(summary.BudgetPressure.TasksExceeded, summary.BudgetPressure.TasksNearLimit))
+	fmt.Fprintf(&b, "</section>\n")
+
+	fmt.Fprintf(&b, "<section class=\"section\"><h2>下一步建议 / Next</h2><p>%s</p>", escapeHTML(nextAction))
+	if len(summary.RecommendedActions) > 1 {
+		fmt.Fprintf(&b, "<ul>")
+		for _, action := range summary.RecommendedActions[1:] {
+			fmt.Fprintf(&b, "<li>%s</li>", escapeHTML(action))
+		}
+		fmt.Fprintf(&b, "</ul>")
+	}
+	fmt.Fprintf(&b, "</section>\n")
+
+	fmt.Fprintf(&b, "<section class=\"section\"><h2>证据标签 / Evidence Labels</h2><div class=\"evidence\">")
+	for _, item := range []struct {
+		label string
+		value string
+	}{
+		{"runtime", summary.RuntimeStatus.EvidenceLabel},
+		{"jobs", summary.JobSummary.EvidenceLabel},
+		{"budget", summary.BudgetPressure.EvidenceLabel},
+		{"projectMap", summary.ProjectMap.EvidenceLabel},
+	} {
+		if item.value != "" {
+			fmt.Fprintf(&b, "<span>%s: <strong>%s</strong></span>", escapeHTML(item.label), escapeHTML(item.value))
+		}
+	}
+	fmt.Fprintf(&b, "</div><p class=\"muted\">This page is local/static status evidence only. It is not Codex App runtime, daemon, production, device, payment, or hardware proof.</p></section>\n")
+
+	fmt.Fprintf(&b, "<section class=\"sections\">\n")
+	renderStatusHTMLCategory(&b, "活跃任务 / Active", summary.RuntimeStatus.ActiveWorkers)
+	renderStatusHTMLCategory(&b, "待 setup / Pending", summary.RuntimeStatus.PendingSetup)
+	renderStatusHTMLCategory(&b, "脏的未提交进度 / Dirty", summary.RuntimeStatus.DirtyUncommitted)
+	renderStatusHTMLCategory(&b, "完成待审 / Review", summary.RuntimeStatus.CompletedUnreviewed)
+	renderStatusHTMLCategory(&b, "阻塞 / Blocked", summary.RuntimeStatus.Blockers)
+	renderStatusHTMLCategory(&b, "需要清理 / Cleanup", summary.RuntimeStatus.CleanupNeeded)
+	renderStatusHTMLCategory(&b, fmt.Sprintf("最近合并/清理 / Recent %dh", summary.RuntimeStatus.RecentWindowHours), summary.RuntimeStatus.RecentMergedOrCleaned)
+	renderStatusHTMLCategory(&b, "停滞待查 / Stale", summary.RuntimeStatus.StaleNeedsInspection)
+	fmt.Fprintf(&b, "</section>\n")
+
+	if len(summary.BudgetPressure.Warnings) > 0 {
+		fmt.Fprintf(&b, "<section class=\"section\"><h2>预算/审查压力 / Budget Pressure</h2><ul>")
+		for _, warning := range summary.BudgetPressure.Warnings {
+			fmt.Fprintf(&b, "<li>%s</li>", escapeHTML(warning))
+		}
+		fmt.Fprintf(&b, "</ul></section>\n")
+	}
+	fmt.Fprintf(&b, "<section class=\"section\"><h2>任务列表 / Jobs</h2><p class=\"muted\">%s</p>", escapeHTML(formatIntMap(summary.JobSummary.Counts)))
+	if len(summary.JobSummary.Rows) == 0 {
+		fmt.Fprintf(&b, "<p>No tasks recorded.</p>")
+	} else {
+		for _, row := range summary.JobSummary.Rows {
+			fmt.Fprintf(&b, "<div class=\"item\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(humanTaskName(row.Title, row.ID)), escapeHTML(row.Status))
+			fmt.Fprintf(&b, "<div class=\"meta\">id=%s", escapeHTML(row.ID))
+			if row.Branch != "" {
+				fmt.Fprintf(&b, " · branch=%s", escapeHTML(row.Branch))
+			}
+			if row.PendingWorktreeID != "" {
+				fmt.Fprintf(&b, " · pendingWorktreeId=%s", escapeHTML(row.PendingWorktreeID))
+			}
+			fmt.Fprintf(&b, "</div>")
+			if row.Action != "" {
+				fmt.Fprintf(&b, "<div class=\"action\">%s</div>", escapeHTML(row.Action))
+			}
+			fmt.Fprintf(&b, "</div>")
+		}
+	}
+	fmt.Fprintf(&b, "</section>\n")
+
+	if len(summary.RecentRoutineRuns) > 0 {
+		fmt.Fprintf(&b, "<section class=\"section\"><h2>最近例行检查 / Routine Runs</h2>")
+		for _, run := range summary.RecentRoutineRuns {
+			fmt.Fprintf(&b, "<div class=\"item\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(run.RoutineID), escapeHTML(run.Status))
+			if run.TaskID != "" {
+				fmt.Fprintf(&b, "<div class=\"meta\">task=%s</div>", escapeHTML(run.TaskID))
+			}
+			if run.NextSuggestedAction != "" {
+				fmt.Fprintf(&b, "<div class=\"action\">%s</div>", escapeHTML(run.NextSuggestedAction))
+			}
+			if run.BlockedReason != "" {
+				fmt.Fprintf(&b, "<div class=\"bad\">%s</div>", escapeHTML(run.BlockedReason))
+			}
+			fmt.Fprintf(&b, "</div>")
+		}
+		fmt.Fprintf(&b, "</section>\n")
+	}
+	fmt.Fprintf(&b, "</main>\n</body>\n</html>\n")
+	return b.String()
+}
+
+func renderMetricHTML(b *strings.Builder, label string, value string, className string) {
+	if className != "" {
+		className = " " + className
+	}
+	fmt.Fprintf(b, "<div class=\"card\"><div class=\"label\">%s</div><div class=\"metric%s\">%s</div></div>\n", escapeHTML(label), escapeHTML(className), escapeHTML(value))
+}
+
+func renderStatusHTMLCategory(b *strings.Builder, title string, items []RuntimeStatusItem) {
+	fmt.Fprintf(b, "<section class=\"section\"><h2>%s</h2>", escapeHTML(title))
+	if len(items) == 0 {
+		fmt.Fprintf(b, "<p class=\"muted\">None</p></section>\n")
+		return
+	}
+	for _, item := range items {
+		fmt.Fprintf(b, "<div class=\"item\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(humanTaskName(item.Title, item.ID)), escapeHTML(item.ObservedStatus))
+		fmt.Fprintf(b, "<div class=\"meta\">id=%s", escapeHTML(item.ID))
+		if item.Branch != "" {
+			fmt.Fprintf(b, " · branch=%s", escapeHTML(item.Branch))
+		}
+		if item.PendingWorktreeID != "" {
+			fmt.Fprintf(b, " · pendingWorktreeId=%s", escapeHTML(item.PendingWorktreeID))
+		}
+		if item.LastUpdatedAt != "" {
+			fmt.Fprintf(b, " · updated=%s", escapeHTML(item.LastUpdatedAt))
+		}
+		fmt.Fprintf(b, "</div>")
+		if item.Note != "" {
+			fmt.Fprintf(b, "<div>%s</div>", escapeHTML(item.Note))
+		}
+		if item.Action != "" {
+			fmt.Fprintf(b, "<div class=\"action\">%s</div>", escapeHTML(item.Action))
+		}
+		if state := formatLocalTaskState(item.State); state != "" {
+			fmt.Fprintf(b, "<div class=\"meta\">state=%s</div>", escapeHTML(state))
+		}
+		if item.Worktree != "" {
+			fmt.Fprintf(b, "<div class=\"meta\">worktree=%s</div>", escapeHTML(item.Worktree))
+		}
+		fmt.Fprintf(b, "</div>")
+	}
+	fmt.Fprintf(b, "</section>\n")
+}
+
+func humanTaskName(title string, id string) string {
+	title = strings.TrimSpace(title)
+	if title != "" {
+		return title
+	}
+	return id
+}
+
+func statusClass(status string) string {
+	switch status {
+	case "blocked":
+		return "bad"
+	case "stale", "review-needed", "cleanup-needed":
+		return "warn"
+	case "dispatch-possible", "active":
+		return "ok"
+	default:
+		return ""
+	}
+}
+
+func pressureClass(primary int, secondary int) string {
+	if primary > 0 {
+		return "bad"
+	}
+	if secondary > 0 {
+		return "warn"
+	}
+	return "ok"
+}
+
+func escapeHTML(value string) string {
+	return html.EscapeString(value)
 }
 
 func cmdValidateRoutines(args []string) error {

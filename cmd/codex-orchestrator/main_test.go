@@ -792,7 +792,7 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "ACTIVE", "--worktree", activeWorker, "--branch", "codex/active"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "PENDING", "--pending-worktree-id", "pwt_runtime"}); err != nil {
+	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "PENDING", "--title", "Pending <setup>", "--pending-worktree-id", "pwt_runtime"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := cmdRecordTask([]string{"--ledger", ledger, "--id", "DIRTY", "--worktree", dirtyWorker, "--branch", "codex/dirty"}); err != nil {
@@ -890,6 +890,39 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 	}
 	if len(statusPayload.RuntimeStatus.CleanupNeeded) != 1 || len(statusPayload.RuntimeStatus.RecentMergedOrCleaned) != 1 {
 		t.Fatalf("expected status JSON runtime categories, got %#v", statusPayload.RuntimeStatus)
+	}
+
+	statusHTML := captureStdout(t, func() error {
+		return cmdStatus([]string{"--ledger", ledger, "--html"})
+	})
+	for _, want := range []string{
+		"<!doctype html>",
+		"codex-orchestrator 本地静态状态页",
+		"local/static evidence only",
+		"集成区 / Integration",
+		"活跃任务 / Active",
+		"待 setup / Pending",
+		"脏的未提交进度 / Dirty",
+		"完成待审 / Review",
+		"阻塞 / Blocked",
+		"需要清理 / Cleanup",
+		"最近合并/清理 / Recent",
+		"可用派发槽",
+		"证据标签 / Evidence Labels",
+		"预算/审查压力 / Budget Pressure",
+		"Pending &lt;setup&gt;",
+		"id=PENDING",
+		"pendingWorktreeId=pwt_runtime",
+	} {
+		if !strings.Contains(statusHTML, want) {
+			t.Fatalf("expected status HTML to include %q:\n%s", want, statusHTML)
+		}
+	}
+	if strings.Contains(statusHTML, "Pending <setup>") {
+		t.Fatalf("expected status HTML to escape task title:\n%s", statusHTML)
+	}
+	if err := cmdStatus([]string{"--ledger", ledger, "--json", "--html"}); err == nil {
+		t.Fatal("expected mutually exclusive JSON/HTML status flags to fail")
 	}
 }
 

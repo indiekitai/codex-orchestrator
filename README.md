@@ -355,6 +355,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
+./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
@@ -389,6 +390,12 @@ pressure is computed from local ledger timestamps; review pressure is computed
 only when a review-ready timestamp is recorded. Missing or indeterminate budget
 data is labeled as local/static helper evidence. The helper does not kill
 processes, schedule sessions, or enforce budgets.
+
+`status --html` writes a local/static HTML status page to stdout. It is meant
+for a quick human scan of integration cleanliness, active and pending work,
+review/blocked/cleanup queues, dispatch slots, budget pressure, next suggested
+action, and evidence labels without reading raw JSON. It does not start a
+server, daemon, scheduler, merge, push, cleanup, or runtime monitor.
 
 Codex App worktree dispatch is App-first. Save the repository as a Codex App
 project before relying on project worktree sessions. If dispatch fails because
