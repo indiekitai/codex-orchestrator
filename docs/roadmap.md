@@ -445,7 +445,7 @@ roadmap。优先级如下：
    - 允许结论：docs updated、docs-not-needed、central-docs-pending、docs-drift-blocked。
    - 边界：worker 默认不直接改中央 progress/roadmap；统领负责合并后的统一同步或显式说明。
 
-6. Case study and bootstrap docs。
+6. Case study and bootstrap docs：已补。
    - 目标：把 TastyFuture 写成脱敏真实案例，展示 worktree 隔离、review/merge/cleanup、
      evidence label 和 blocked boundary。
    - README 继续保持 Codex App-first 入口清晰：用户可以把 GitHub 链接交给 Codex App
