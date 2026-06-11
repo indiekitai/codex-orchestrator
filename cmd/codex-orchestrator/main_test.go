@@ -581,7 +581,18 @@ func TestObserveRepoFlagResolvesDefaultLedger(t *testing.T) {
 	if err := os.MkdirAll(otherCWD, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Chdir(otherCWD)
+	previousCWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(otherCWD); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previousCWD); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
 	if err := cmdObserve([]string{"--repo", project, "--json"}); err != nil {
 		t.Fatal(err)
 	}

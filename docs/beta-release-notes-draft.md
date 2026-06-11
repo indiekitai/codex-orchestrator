@@ -19,6 +19,8 @@ GitHub first screen and to show a concrete, evidence-labeled real-project case.
   `docs/articles/tastyfuture-loop-engineering-case.md`.
 - Updated roadmap status to mark the App-first README explanation and
   TastyFuture case/bootstrap docs as completed.
+- Fixed a Go 1.22 test compatibility issue in the release workflow by replacing
+  `testing.T.Chdir` with explicit `os.Chdir` cleanup.
 
 ## Case Article
 
@@ -73,8 +75,9 @@ Docs/review checks used for this release:
 - `codex-orchestrator run-routine pr-reviewer`
 - `codex-orchestrator run-routine docs-drift-checker`
 - `codex-orchestrator run-routine evidence-label-auditor`
+- `go test ./...`
 
-No source/runtime changes were made in this release.
+No helper runtime behavior changed in this release.
 
 ## Boundaries
 
