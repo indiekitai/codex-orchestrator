@@ -239,9 +239,9 @@ examples/routine-reports/
   budget-policy-report.review-only.json
 ```
 
-其中 `evidence-label-auditor` 现在已经有第一层本地 policy/eval：命名规则
-`ELA001`-`ELA009`、deterministic false-positive guard，以及按规则汇总的
-rule-hit 统计；但它仍然是只读、本地、静态的保守检查器。
+其中 `evidence-label-auditor` 现在已经有本地 evidence-label policy/eval：
+命名规则 `ELA001`-`ELA010`、deterministic false-positive guard、review/handoff
+文档扫描，以及按规则汇总的 rule-hit 统计；但它仍然是只读、本地、静态的保守检查器。
 
 `orchestration-policy-auditor` 启动了 V4 policy/eval 层的第一块：命名规则
 `OPA001`-`OPA008` 覆盖 dry-run 派发屏障、主工作区 fallback guard、heartbeat
@@ -453,10 +453,15 @@ roadmap。优先级如下：
    - 边界：它可以 block/warn，但不自动 merge，不 push，不 cleanup，不 dispatch，也不把
      local/static checklist 当作 direct runtime proof。
 
-4. Evidence-label linter。
+4. Evidence-label linter：已补 local/static helper slice。
    - 目标：把 TastyFuture 里最危险的证据升级问题变成机器可检查规则。
    - 特别检查 review docs、progress/roadmap docs、handoff summaries 中是否把
      `local`/`proxy`/`weak` 写成 `direct`/`pre`/`prod`/`device`/payment proof。
+   - 当前落地：`run-routine evidence-label-auditor` 会扫描 `docs/reviews/*.md`，
+     并用 `ELA010` 标出没有 explicit direct evidence wording 的
+     local/static/proxy 到 direct/pre/prod/device/runtime/payment proof 升级嫌疑。
+   - 边界：仍然只输出 local/static suspicion，不检查真实 pre/prod/device/payment
+     runtime，不产生 direct proof，不修改 ledger/git/worktree。
 
 5. Post-merge docs drift guard。
    - 目标：accepted merge 后明确提示 central docs 是否需要 orchestrator-owned update。

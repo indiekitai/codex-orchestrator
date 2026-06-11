@@ -348,15 +348,16 @@ stage、commit、merge、push、tag、release、清理 worktree、派发 session
 ledger，也不会声称 runtime proof；这个 MVP 使用 `local` 或 `blocked` 证据。
 
 `run-routine evidence-label-auditor` 是第六个可运行 routine MVP。它只读扫描
-明确的 repo-local 文档、routine spec、routine report JSON 和 ledger-like JSON，
-查找明显的证据标签问题：弱证据措辞靠近强证明措辞、RoutineRunReport JSON 缺少
-`direct` / `proxy` / `local` / `blocked` bucket，以及在 spec 明确保留
-direct evidence 的 routine 中记录了 direct evidence。它会应用确定性的命名
-policy/eval 规则（`ELA001`-`ELA009`），把 glossary / prohibition /
-blocked-definition 类措辞当作允许的负例，并在出现发现时输出本地 rule-hit 汇总。
-这些发现只是启发式疑点，不是最终判定。它不会 stage、commit、merge、
-push、tag、release、清理 worktree、派发 session、修改 ledger，也不会声称
-runtime proof；这个 MVP 使用 `local` 或 `blocked` 证据。
+明确的 repo-local 文档、review/handoff notes、routine spec、routine report JSON
+和 ledger-like JSON，查找明显的证据标签问题：弱证据措辞靠近强证明措辞、没有
+explicit direct evidence wording 却把弱证据升级成 direct/pre/prod/device/runtime/
+payment proof、RoutineRunReport JSON 缺少 `direct` / `proxy` / `local` /
+`blocked` bucket，以及在 spec 明确保留 direct evidence 的 routine 中记录了
+direct evidence。它会应用确定性的命名 policy/eval 规则（`ELA001`-`ELA010`），
+把 glossary / prohibition / blocked-definition / rule-description 类措辞当作允许的
+负例，并在出现发现时输出本地 rule-hit 汇总。这些发现只是启发式疑点，不是最终判定。
+它不会 stage、commit、merge、push、tag、release、清理 worktree、派发 session、
+修改 ledger，也不会声称 runtime proof；这个 MVP 使用 `local` 或 `blocked` 证据。
 
 `run-routine orchestration-policy-auditor` 是第一个 V4 policy/eval routine
 MVP。它是只读的，不读取或修改 ledger。它扫描 repo-local 编排文档、prompt、

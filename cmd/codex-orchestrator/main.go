@@ -2658,7 +2658,7 @@ func runEvidenceLabelAuditorRoutine(repo string) RoutineRunReport {
 			findings = append(findings, auditEvidenceText(path, string(data))...)
 		}
 	}
-	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static evidence-label policy/eval rules ELA001-ELA009")
+	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static evidence-label policy/eval rules ELA001-ELA010")
 	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Scanned %d repo-local evidence-label input file(s).", len(paths)))
 	report.Evidence["local"] = append(report.Evidence["local"], summarizeEvidenceAuditFindings(findings))
 
@@ -5201,6 +5201,7 @@ const (
 	evidenceRuleReportBadObject      = "ELA007"
 	evidenceRuleReportMissingBucket  = "ELA008"
 	evidenceRuleReportReservedDirect = "ELA009"
+	evidenceRuleTextPromotionTarget  = "ELA010"
 
 	policyRuleDryRunBarrier     = "OPA001"
 	policyRuleMainFallbackGuard = "OPA002"
@@ -5744,6 +5745,7 @@ func evidenceAuditPaths(repo string) ([]string, error) {
 	}
 	for _, dir := range []string{
 		filepath.Join("docs", "routines"),
+		filepath.Join("docs", "reviews"),
 		"routines",
 		filepath.Join("examples", "routine-reports"),
 		filepath.Join(".codex-orchestrator"),
@@ -5843,21 +5845,39 @@ func auditEvidenceText(path string, text string) []evidenceAuditFinding {
 		if shouldSkipEvidenceTextLine(line) {
 			continue
 		}
-		if !containsAnyFold(line, weakEvidenceTerms()) || !containsAnyFold(line, strongEvidenceClaimTerms()) {
-			continue
+		if containsAnyFold(line, weakEvidenceTerms()) && containsAnyFold(line, strongEvidenceClaimTerms()) && containsAnyFold(line, evidenceAssertionTerms()) {
+			findings = append(findings, newEvidenceAuditFinding(
+				evidenceRuleTextOverclaim,
+				"%s:%d: local/static suspicion: weak evidence wording appears near strong proof wording: %s",
+				path,
+				index+1,
+				strings.TrimSpace(line),
+			))
 		}
-		if !containsAnyFold(line, evidenceAssertionTerms()) {
-			continue
+		if weakEvidencePromotedToStrongTarget(line) {
+			findings = append(findings, newEvidenceAuditFinding(
+				evidenceRuleTextPromotionTarget,
+				"%s:%d: local/static suspicion: weak evidence appears to be promoted to direct/pre/prod/device/runtime/payment proof: %s",
+				path,
+				index+1,
+				strings.TrimSpace(line),
+			))
 		}
-		findings = append(findings, newEvidenceAuditFinding(
-			evidenceRuleTextOverclaim,
-			"%s:%d: local/static suspicion: weak evidence wording appears near strong proof wording: %s",
-			path,
-			index+1,
-			strings.TrimSpace(line),
-		))
 	}
 	return findings
+}
+
+func weakEvidencePromotedToStrongTarget(line string) bool {
+	if !containsAnyFold(line, weakEvidenceTerms()) {
+		return false
+	}
+	if !containsAnyFold(line, strongEvidenceTargetTerms()) {
+		return false
+	}
+	if containsAnyFold(line, explicitDirectEvidenceTerms()) {
+		return false
+	}
+	return containsAnyFold(line, evidencePromotionPhrases())
 }
 
 func auditOrchestrationPolicyText(path string, text string) []policyAuditFinding {
@@ -6240,6 +6260,9 @@ func shouldSkipEvidenceTextLine(line string) bool {
 	if isBlockedEvidenceExplanationLine(trimmed) {
 		return true
 	}
+	if isEvidenceFixtureDescriptionLine(trimmed) {
+		return true
+	}
 	return false
 }
 
@@ -6251,6 +6274,7 @@ func isEvidenceGlossaryLine(line string) bool {
 		"evidence buckets",
 		"labels include",
 		"buckets include",
+		"label evidence as",
 		"证据标签",
 		"证据桶",
 	})
@@ -6270,6 +6294,50 @@ func isBlockedEvidenceExplanationLine(line string) bool {
 		"阻断定义",
 		"阻断表示",
 		"无法安全证明",
+	})
+}
+
+func isEvidenceFixtureDescriptionLine(line string) bool {
+	return containsAnyFold(line, []string{
+		"candidate fixture",
+		"candidate fixtures",
+		"fixture should",
+		"should fail",
+		"should be flagged",
+		"should trigger",
+		"must fail",
+		"must be flagged",
+		"expected rule hit",
+		"expectedRuleHits",
+		"failure fixture",
+		"bad example",
+		"known bad",
+		"claims such as",
+		"such as",
+		"for example",
+		"example:",
+		"local timestamp proves live runtime",
+		"checks whether",
+		"check whether",
+		"check if",
+		"catch claims",
+		"catches claims",
+		"prevent",
+		"prevents",
+		"linter",
+		"lint rule",
+		"this MVP emits",
+		"MVP evidence",
+		"or claim direct/proxy runtime proof",
+		"or claim runtime proof",
+		"or claim production/runtime proof",
+		"特别检查",
+		"检查",
+		"防止",
+		"证据升级",
+		"local/static timestamp",
+		"反例",
+		"失败样例",
 	})
 }
 
@@ -6404,17 +6472,149 @@ func strongEvidenceClaimTerms() []string {
 		"production proof",
 		"prod proof",
 		"pre proof",
+		"pre verification",
+		"pre verified",
 		"device proof",
 		"real-device proof",
+		"payment proof",
+		"hardware proof",
 		"production runtime",
 		"live runtime",
 		"runtime verified",
 		"prod verified",
+		"device verified",
+		"payment verified",
+		"hardware verified",
 		"直接证明",
 		"直接证据",
 		"运行时证明",
 		"生产证明",
 		"真实设备证明",
+		"支付证明",
+		"硬件证明",
+	}
+}
+
+func strongEvidenceTargetTerms() []string {
+	return []string{
+		"direct",
+		"direct proof",
+		"direct evidence",
+		"runtime",
+		"runtime proof",
+		"runtime verified",
+		"pre proof",
+		"pre verified",
+		"production",
+		"production proof",
+		"production runtime",
+		"prod proof",
+		"prod verified",
+		"device",
+		"device proof",
+		"device verified",
+		"real-device",
+		"hardware",
+		"hardware proof",
+		"hardware verified",
+		"payment",
+		"payment proof",
+		"payment verified",
+		"PAX",
+		"terminal",
+		"直接",
+		"直接证明",
+		"运行时",
+		"预发",
+		"生产",
+		"设备",
+		"真机",
+		"硬件",
+		"支付",
+	}
+}
+
+func explicitDirectEvidenceTerms() []string {
+	return []string{
+		"explicit direct evidence",
+		"direct evidence attached",
+		"direct evidence recorded",
+		"direct proof attached",
+		"direct proof recorded",
+		"runtime log attached",
+		"runtime logs attached",
+		"device screenshot attached",
+		"payment receipt attached",
+		"human-reviewed direct",
+		"有直接证据",
+		"直接证据已记录",
+		"已附直接证据",
+	}
+}
+
+func evidencePromotionPhrases() []string {
+	return []string{
+		"as direct",
+		"as pre",
+		"as prod",
+		"as production",
+		"as device",
+		"as runtime",
+		"as payment",
+		"count as direct",
+		"count as pre",
+		"count as prod",
+		"count as production",
+		"count as device",
+		"count as runtime",
+		"count as payment",
+		"counts as direct",
+		"counts as pre",
+		"counts as prod",
+		"counts as production",
+		"counts as device",
+		"counts as runtime",
+		"counts as payment",
+		"treat as direct",
+		"treat as pre",
+		"treat as prod",
+		"treat as production",
+		"treat as device",
+		"treat as runtime",
+		"treat as payment",
+		"promote to direct",
+		"promote to pre",
+		"promote to prod",
+		"promote to production",
+		"promote to device",
+		"promote to runtime",
+		"promote to payment",
+		"upgrade to direct",
+		"upgrade to pre",
+		"upgrade to prod",
+		"upgrade to production",
+		"upgrade to device",
+		"upgrade to runtime",
+		"upgrade to payment",
+		"写成 direct",
+		"写成 pre",
+		"写成 prod",
+		"写成生产",
+		"写成设备",
+		"写成运行时",
+		"写成支付",
+		"算作 direct",
+		"算作 pre",
+		"算作 prod",
+		"算作生产",
+		"算作设备",
+		"算作运行时",
+		"算作支付",
+		"升级为 direct",
+		"升级为生产",
+		"升级为设备",
+		"升级为运行时",
+		"升级为支付",
 	}
 }
 

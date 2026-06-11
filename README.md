@@ -399,17 +399,19 @@ ledger, or claim runtime proof; MVP evidence is `local` or `blocked`.
 
 `run-routine evidence-label-auditor` is the sixth runnable routine MVP. It is
 read-only and does not load or update the ledger. It scans explicit repo-local
-docs, routine specs, routine report JSON files, and ledger-shaped JSON for
-obvious evidence-label issues: weak evidence wording near strong proof wording,
+docs, review/handoff notes, routine specs, routine report JSON files, and
+ledger-shaped JSON for obvious evidence-label issues: weak evidence wording
+near strong proof wording, weak evidence promoted to direct/pre/prod/device/
+runtime/payment proof without explicit direct evidence wording,
 RoutineRunReport JSON missing the `direct` / `proxy` / `local` / `blocked`
 buckets, and direct evidence recorded for routines whose specs explicitly
 reserve direct evidence. It applies deterministic named policy/eval rules
-(`ELA001`-`ELA009`), treats glossary/prohibition/blocked-definition wording as
-allowed negatives, and reports local rule-hit summaries when findings are
-present. Findings are heuristic suspicions, not proof of wrongdoing. It does
-not stage, commit, merge, push, tag, release, clean worktrees, dispatch
-sessions, mutate the ledger, or claim runtime proof; MVP evidence is `local`
-or `blocked`.
+(`ELA001`-`ELA010`), treats glossary/prohibition/blocked-definition/rule-
+description wording as allowed negatives, and reports local rule-hit summaries
+when findings are present. Findings are heuristic suspicions, not proof of
+wrongdoing. It does not stage, commit, merge, push, tag, release, clean
+worktrees, dispatch sessions, mutate the ledger, or claim runtime proof; MVP
+evidence is `local` or `blocked`.
 
 `run-routine orchestration-policy-auditor` is the first V4 policy/eval routine
 MVP. It is read-only and does not load or update the ledger. It scans

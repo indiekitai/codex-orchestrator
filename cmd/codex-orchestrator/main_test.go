@@ -2099,6 +2099,36 @@ func TestRunEvidenceLabelAuditorRoutineFailsOnPhraseMisuse(t *testing.T) {
 	}
 }
 
+func TestRunEvidenceLabelAuditorRoutineScansReviewDocsForEvidencePromotion(t *testing.T) {
+	root := t.TempDir()
+	project := createEvidenceAuditFixture(t, root)
+	reviewDir := filepath.Join(project, "docs", "reviews")
+	if err := os.MkdirAll(reviewDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	review := strings.Join([]string{
+		"# Worker Handoff",
+		"",
+		"Evidence summary: local static screenshots and mocked payment tests count as pre/prod/device/payment proof.",
+		"Safe line: local static checks are blocked for payment proof unless explicit direct evidence is attached.",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(reviewDir, "handoff.md"), []byte(review+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runEvidenceLabelAuditorRoutine(project)
+	if report.Status != "failed" {
+		t.Fatalf("expected failed report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	if !strings.Contains(local, "[ELA010] docs/reviews/handoff.md:3: local/static suspicion") {
+		t.Fatalf("expected review-doc ELA010 finding, got:\n%s", local)
+	}
+	if strings.Contains(local, "docs/reviews/handoff.md:4") {
+		t.Fatalf("did not expect explicit-direct-evidence safe line finding, got:\n%s", local)
+	}
+}
+
 func TestRunEvidenceLabelAuditorRoutineFailsOnReportBucketsAndStaticDirect(t *testing.T) {
 	root := t.TempDir()
 	project := createEvidenceAuditFixture(t, root)
