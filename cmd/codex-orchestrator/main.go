@@ -2607,6 +2607,10 @@ func runRoadmapNextTaskSuggesterRoutine(repo string, ledgerPath string) RoutineR
 	suggestions := []string{}
 	skipped := []string{}
 	for _, candidate := range candidates {
+		if roadmapCandidateMarkedCompleted(candidate.Name) {
+			skipped = append(skipped, fmt.Sprintf("%s: skipped because the roadmap candidate text already marks it completed/done/covered.", candidate.Name))
+			continue
+		}
 		if implemented[normalizeRoadmapKey(candidate.Name)] {
 			skipped = append(skipped, fmt.Sprintf("%s: already runnable or already has a routine spec.", candidate.Name))
 			continue
@@ -3831,6 +3835,81 @@ func cleanRoadmapCandidateText(value string) string {
 	value = strings.TrimSuffix(value, "。")
 	value = strings.TrimSuffix(value, ":")
 	return strings.TrimSpace(value)
+}
+
+func roadmapCandidateMarkedCompleted(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	statusParts := roadmapCandidateStatusParts(value)
+	for _, part := range statusParts {
+		if roadmapTextSaysCompleted(part) {
+			return true
+		}
+	}
+	return roadmapTextSaysCompleted(value)
+}
+
+func roadmapCandidateStatusParts(value string) []string {
+	parts := []string{}
+	for _, sep := range []string{"：", ":", " - ", " -- ", " — ", " – "} {
+		if index := strings.Index(value, sep); index >= 0 {
+			status := strings.TrimSpace(value[index+len(sep):])
+			if status != "" {
+				parts = append(parts, status)
+			}
+		}
+	}
+	for _, pair := range [][2]string{{"（", "）"}, {"(", ")"}} {
+		start := strings.Index(value, pair[0])
+		end := strings.LastIndex(value, pair[1])
+		if start >= 0 && end > start {
+			status := strings.TrimSpace(value[start+len(pair[0]) : end])
+			if status != "" {
+				parts = append(parts, status)
+			}
+		}
+	}
+	return parts
+}
+
+func roadmapTextSaysCompleted(value string) bool {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return false
+	}
+	if containsAnyFold(value, []string{
+		"已完成",
+		"已经完成",
+		"已补",
+		"已覆盖",
+		"已经覆盖",
+		"已具备",
+		"已经具备",
+		"already completed",
+		"already done",
+		"already covered",
+		"already implemented",
+		"has been completed",
+		"have been completed",
+		"was completed",
+		"were completed",
+		"is completed",
+		"is complete",
+		"now complete",
+		"completed already",
+		"done already",
+		"covered already",
+	}) {
+		return true
+	}
+	for _, suffix := range []string{" completed", " done", " covered", " implemented", " shipped"} {
+		if strings.HasSuffix(value, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func hasNumberedListPrefix(value string) bool {

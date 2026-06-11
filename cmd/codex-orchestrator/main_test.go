@@ -1555,6 +1555,52 @@ func TestRunRoadmapNextTaskSuggesterRoutineQueueDrainedWhenOnlyUnsafeItemsRemain
 	}
 }
 
+func TestRunRoadmapNextTaskSuggesterRoutineSkipsCompletedCandidateWording(t *testing.T) {
+	root := t.TempDir()
+	project, _ := createRoadmapNextTaskFixture(t, root, false)
+	roadmap := `# roadmap
+
+## v2.5：Verification routine foundation
+
+剩余：
+
+- budget policy report runner：如果继续推进，下一步只能实现只读 run-routine budget-policy-report。
+
+## v3：Routine library
+
+候选 routine：
+
+- orchestration policy auditor follow-on eval fixtures：已补 transcript-style local review-note fixtures 和 human-review transcript fixtures；
+- policy auditor done coverage: already completed.
+`
+	if err := os.WriteFile(filepath.Join(project, "docs", "roadmap.md"), []byte(roadmap), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runRoadmapNextTaskSuggesterRoutine(project, "")
+	if report.Status != "passed" {
+		t.Fatalf("expected passed report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	if !strings.Contains(local, "local suggestion: budget policy report runner") {
+		t.Fatalf("expected budget policy report runner to remain suggestable, got:\n%s", local)
+	}
+	for _, blockedSuggestion := range []string{
+		"local suggestion: orchestration policy auditor follow-on eval fixtures",
+		"local suggestion: policy auditor done coverage",
+	} {
+		if strings.Contains(local, blockedSuggestion) {
+			t.Fatalf("expected completed roadmap candidate not to be suggested (%q), got:\n%s", blockedSuggestion, local)
+		}
+	}
+	if !strings.Contains(local, "skipped because the roadmap candidate text already marks it completed/done/covered") {
+		t.Fatalf("expected completed candidate skip evidence, got:\n%s", local)
+	}
+	if !strings.Contains(report.NextSuggestedAction, "budget policy report runner") {
+		t.Fatalf("expected primary next action to preserve budget policy report runner, got %q", report.NextSuggestedAction)
+	}
+}
+
 func TestRunRoadmapNextTaskSuggesterRoutineBlockedWhenRoadmapMissing(t *testing.T) {
 	root := t.TempDir()
 	report := runRoadmapNextTaskSuggesterRoutine(root, "")
