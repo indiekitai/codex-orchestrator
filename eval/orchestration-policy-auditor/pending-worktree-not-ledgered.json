@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "pending-worktree-not-ledgered",
+  "description": "A pendingWorktreeId returned by Codex App must be recorded in durable ledger truth, not only kept in heartbeat prompt or chat state.",
+  "files": {
+    "README.md": "After create_thread returns pendingWorktreeId, keep it only in the heartbeat prompt and do not record it in the ledger."
+  },
+  "expectedRuleHits": {
+    "OPA007": 1
+  }
+}
