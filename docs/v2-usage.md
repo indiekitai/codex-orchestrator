@@ -93,6 +93,9 @@ codex-orchestrator record-task \
 
 The helper stores `pendingWorktreeId` as an opaque string only. It does not
 query Codex App, create sessions, create worktrees, merge, push, or clean up.
+Pending setup is not active work. Until the real worktree path and branch are
+known, `observe`, `status`, and heartbeat reports keep the task in
+`pendingSetup` with local/static evidence.
 
 After the actual worktree and branch are known, reconcile the same task with an
 event:
@@ -129,6 +132,28 @@ useful buckets when possible:
 - `cleanupNeeded`
 - `recentMergedOrCleaned`
 - `availableDispatchSlots`
+
+Each observation and runtime status item also includes a structured `state`
+object so callers do not need to parse notes. The fields are local/static:
+
+- `lifecycle`: the helper status, such as `pending-setup`, `active`,
+  `completed-unreviewed`, `blocked`, `cleanup-needed`, `merged`, or `cleaned`.
+- `setup`: whether setup is still an opaque `pending-worktree-id`, a missing
+  recorded worktree, or a present worktree.
+- `worktree`: whether the worktree path is not recorded, missing, recorded, or
+  present.
+- `branch`: whether the expected branch is matched, mismatched, detached, not
+  recorded, or not inspected.
+- `diff`: whether git truth shows dirty uncommitted work, a clean task commit,
+  a clean branch with no task commit, or an unknown base comparison.
+- `review`: whether orchestrator review is required, not ready, accepted,
+  blocked, or terminal.
+- `cleanup`: whether cleanup is needed, complete, not needed, or not inspected.
+
+Git/worktree truth wins over advisory thread state. A worker thread that still
+looks active but has a clean commit after `baseCommit` is reported as
+`completed-unreviewed`; a worktree on detached `HEAD` while a branch is recorded
+is `blocked`; dirty uncommitted work stays separate from clean committed work.
 
 ## Observe State
 
