@@ -16,6 +16,10 @@ but poor for product progress and daily reporting.
   package whenever possible.
 - Added `OPA009` to the orchestration policy auditor for unrelated safe-backlog
   dispatch that breaks feature-package continuity.
+- Tightened heartbeat guidance so a verified generic monitor remains stable:
+  worker/task/review state belongs in the ledger or status reports, not repeated
+  automation prompt updates.
+- Added an `OPA006` fixture for generic heartbeat prompt churn.
 - Added a fixture for the failure pattern.
 - Updated README, Chinese README, routine docs, and roadmap references from
   `OPA001`-`OPA008` to `OPA001`-`OPA009`.
@@ -24,7 +28,7 @@ but poor for product progress and daily reporting.
 
 - `local`: `go test ./...` passed.
 - `local`: `go run ./cmd/codex-orchestrator eval run --repo . --json` passed
-  with 27 orchestration policy fixtures.
+  with 28 orchestration policy fixtures.
 - `local`: `go run ./cmd/codex-orchestrator policy check --repo . --json`
   passed with no repo-local policy findings.
 - `local`: `git diff --check` passed.

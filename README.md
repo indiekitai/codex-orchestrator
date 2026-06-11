@@ -539,7 +539,9 @@ ledger/event files for deterministic orchestration policy rules (`OPA001`-
 continuation guard, delegated worker boundaries, evidence promotion boundaries,
 heartbeat target binding guard, pending worktree ledger guard, budget-policy
 evidence/control boundary drift, and unrelated safe-backlog dispatch that breaks
-feature-package continuity. Findings are
+feature-package continuity. The heartbeat lifecycle checks also flag repeated
+generic heartbeat prompt updates that should have been ledger/status changes.
+Findings are
 local/static suspicions, not proof of wrongdoing. It
 does not stage, commit, merge, push, tag, release, clean worktrees, dispatch
 sessions, mutate the ledger, or claim runtime proof; MVP evidence is `local`
@@ -649,6 +651,13 @@ later. It should not use shell `sleep`, foreground polling, or the helper's
 a monitor, inspect existing automations and update the existing heartbeat when
 one already covers the same thread/repo/queue. After creation, verify persisted
 automation truth instead of trusting only the create response.
+
+Once a generic monitor is verified, keep it stable. Do not rewrite the
+automation prompt every wakeup with the current task IDs, worker status, or
+review queue. Put changing state in `.codex-orchestrator/ledger.json`, review
+reports, heartbeat summaries, or the normal turn status. Update the automation
+only when schedule, target, repository, or the generic monitor contract
+materially changes.
 
 ## 🧱 Architecture
 

@@ -8938,7 +8938,8 @@ func violatesHeartbeatBindingGuard(text string) bool {
 func violatesHeartbeatLifecycleGuard(text string) bool {
 	return violatesForegroundSleepWait(text) ||
 		violatesDuplicateHeartbeatCreate(text) ||
-		violatesUnverifiedHeartbeatCreate(text)
+		violatesUnverifiedHeartbeatCreate(text) ||
+		violatesHeartbeatPromptChurn(text)
 }
 
 func violatesForegroundSleepWait(text string) bool {
@@ -8972,6 +8973,81 @@ func violatesUnverifiedHeartbeatCreate(text string) bool {
 		return false
 	}
 	return containsAnyFold(text, []string{"only relied", "relied only", "skipped verification", "skipped persisted", "no persisted truth", "no automation truth", "只依赖", "只相信", "跳过验证", "未验证持久化", "没有验证持久化"})
+}
+
+func violatesHeartbeatPromptChurn(text string) bool {
+	if containsAnyFold(text, []string{"do not", "must not", "never", "should not", "不得", "不要", "不能", "不应", "不再", "禁止"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{
+		"heartbeat",
+		"automation",
+		"timer",
+		"定时器",
+		"心跳",
+		"automation",
+	}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{
+		"update",
+		"updated",
+		"rewrite",
+		"rewrote",
+		"refresh",
+		"regenerate",
+		"更新",
+		"改写",
+		"重写",
+		"刷新",
+	}) {
+		return false
+	}
+	repeated := containsAnyFold(text, []string{
+		"every wakeup",
+		"each wakeup",
+		"every heartbeat",
+		"each heartbeat",
+		"every cycle",
+		"each cycle",
+		"after each worker",
+		"after every worker",
+		"每次唤醒",
+		"每次 heartbeat",
+		"每轮",
+		"每个 worker",
+		"每次都",
+	})
+	stateInPrompt := containsAnyFold(text, []string{
+		"current worker",
+		"current task",
+		"worker status",
+		"task status",
+		"review queue",
+		"task id",
+		"task ids",
+		"worker id",
+		"worker ids",
+		"pendingWorktreeId",
+		"当前 worker",
+		"当前任务",
+		"任务状态",
+		"review 队列",
+		"任务 id",
+		"worker id",
+	})
+	genericMonitor := containsAnyFold(text, []string{
+		"generic heartbeat",
+		"generic monitor",
+		"continuous monitor",
+		"queue monitor",
+		"通用 heartbeat",
+		"通用唤醒器",
+		"通用 monitor",
+		"连续监控",
+		"队列 monitor",
+	})
+	return (repeated && stateInPrompt) || (genericMonitor && repeated) || (genericMonitor && stateInPrompt && containsAnyFold(text, []string{"prompt", "提示词", "内容"}))
 }
 
 func violatesPendingLedgerGuard(text string) bool {

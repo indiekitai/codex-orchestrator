@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "heartbeat-prompt-churn",
+  "description": "A verified generic heartbeat should stay stable; current worker/task state belongs in the ledger or status report, not repeated automation prompt updates.",
+  "files": {
+    "docs/reviews/local-heartbeat-prompt-churn.md": "Transcript reconstruction: the generic heartbeat monitor is already verified, but after every heartbeat wakeup the orchestrator updated the automation prompt with current worker status, task IDs, and review queue state instead of writing those facts only to the ledger/status report."
+  },
+  "expectedRuleHits": {
+    "OPA006": 1
+  }
+}

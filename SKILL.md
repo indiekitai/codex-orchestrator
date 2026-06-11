@@ -666,9 +666,21 @@ or foreground polling in the orchestrator thread.
 If no active/pending/unreviewed tasks remain and the default branch is clean, choose the next batch from the current roadmap. Default max concurrency is 2; allow 3 only after shared contracts are merged, no hardware/production/payment task is active, and all write sets are plainly disjoint. Serialize shared contracts and hardware. Require self-review in every new prompt.
 ```
 
-Keep task IDs in the conversation/session records, not in the persistent automation prompt. If a temporary watchlist is useful, treat it as disposable and update it immediately after completion.
+Keep task IDs in the conversation/session records, ledger, and status reports,
+not in the persistent automation prompt. If a temporary watchlist is useful,
+treat it as disposable and remove it as soon as the monitor is promoted to a
+generic queue heartbeat.
 
-If the task set changes materially, update the automation prompt. If the heartbeat is obsolete, delete it instead of letting it keep waking the thread with stale instructions. Prefer the Codex App automation tool over hand-written recurring prompt text when creating, updating, viewing, or deleting automations. If an appropriate heartbeat already exists, update and verify it rather than creating another one.
+A verified generic heartbeat should be stable. Do not update the automation
+prompt on every wakeup just because worker status, task IDs, or current review
+queue changed; write those facts to the ledger, review report, heartbeat
+summary, or normal final status instead. Update the automation only when its
+schedule, target thread, target repository, user-approved boundary, or generic
+monitor contract is wrong or materially changed. If the heartbeat is obsolete,
+delete it instead of letting it keep waking the thread with stale instructions.
+Prefer the Codex App automation tool over hand-written recurring prompt text
+when creating, updating, viewing, or deleting automations. If an appropriate
+heartbeat already exists, update and verify it rather than creating another one.
 
 When the user cancels an automation or starts work manually again, report how to
 restart the same orchestration mode naturally: open a fresh orchestrator session,

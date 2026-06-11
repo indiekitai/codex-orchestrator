@@ -124,8 +124,9 @@ ledger/event files for deterministic orchestration policy rules (`OPA001`-
 continuation guard, push-confirmation stop guard, delegated worker boundary,
 evidence promotion boundary, heartbeat target binding guard, pending worktree
 ledger guard, heartbeat lifecycle misuse such as foreground sleep or duplicate
-creation, budget-policy evidence/control boundary drift, and unrelated
-safe-backlog dispatch that breaks feature-package continuity.
+creation, repeated generic heartbeat prompt updates, budget-policy
+evidence/control boundary drift, and unrelated safe-backlog dispatch that
+breaks feature-package continuity.
 Findings are heuristics and are reported as local/static suspicions, not
 semantic proof. It does not stage, commit, merge, push, tag, release, clean
 worktrees, dispatch sessions, mutate the ledger, or claim runtime proof; this
