@@ -1447,7 +1447,8 @@ func TestRunDocsDriftCheckerRoutineWritesPassedReport(t *testing.T) {
 	for _, want := range []string{
 		"Runnable routines from cmd/codex-orchestrator/main.go: docs-drift-checker, pr-reviewer",
 		"Routine specs in routines/: docs-drift-checker, pr-reviewer",
-		"README.md mentions all runnable routines",
+		"docs/routines/README.md mentions all runnable routines",
+		"docs/v2-usage.md mentions all runnable routines",
 		"docs/roadmap.md mentions all runnable routines",
 	} {
 		if !strings.Contains(local, want) {
@@ -1468,7 +1469,7 @@ func TestRunDocsDriftCheckerRoutineFailsOnMissingDocReference(t *testing.T) {
 		t.Fatalf("expected failed report, got %#v", report)
 	}
 	local := strings.Join(report.Evidence["local"], "\n")
-	if !strings.Contains(local, "README.md is missing runnable routine reference(s): docs-drift-checker") {
+	if !strings.Contains(local, "docs/routines/README.md is missing runnable routine reference(s): docs-drift-checker") {
 		t.Fatalf("expected missing docs-drift-checker evidence, got:\n%s", local)
 	}
 	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
@@ -1604,6 +1605,94 @@ func TestRunRoadmapNextTaskSuggesterRoutineSkipsCompletedCandidateWording(t *tes
 func TestRunRoadmapNextTaskSuggesterRoutineBlockedWhenRoadmapMissing(t *testing.T) {
 	root := t.TempDir()
 	report := runRoadmapNextTaskSuggesterRoutine(root, "")
+	if report.Status != "blocked" || report.BlockedReason == "" {
+		t.Fatalf("expected blocked report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "Could not read docs/roadmap.md") {
+		t.Fatalf("expected roadmap blocked evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRunBudgetPolicyReportRoutineWritesPassedReport(t *testing.T) {
+	root := t.TempDir()
+	project, ledger, heartbeat := createBudgetPolicyFixture(t, root)
+	reportPath := filepath.Join(root, "reports", "budget-policy-report.json")
+
+	if err := cmdRunRoutine([]string{"budget-policy-report", "--repo", project, "--ledger", ledger, "--heartbeat-report", heartbeat, "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RoutineRunReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.RoutineID != "budget-policy-report" || report.Status != "passed" || !report.NeedsHuman {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"docs/roadmap.md preserves budget-policy-report review-only boundary wording.",
+		"docs/routines/README.md preserves budget-policy-report review-only boundary wording.",
+		"Routine budget metadata coverage: total=2 withMaxRuntime=1 withReviewBudget=1 withBoth=1 withAnyBudget=1 withoutAnyBudget=1.",
+		"Ledger budget metadata summary",
+		"Heartbeat budgetPressure evidenceLabel: local/static",
+		"Heartbeat budgetPressure warnings copied as local/static evidence: Task TASK-1 runtime budget near limit: 8m elapsed of 10m.",
+		"No scheduler, priority engine, automatic killing, dispatch enforcement, merge, push, delete, cleanup, or worker-control action was performed.",
+	} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, local)
+		}
+	}
+	blocked := strings.Join(report.Evidence["blocked"], "\n")
+	for _, want := range []string{
+		"Task TASK-1 is review-ready but has no recorded review-ready timestamp; human review elapsed time is unknown.",
+		"Live Codex App session runtime, worker wall-clock state, and human review elapsed time were not available from direct runtime APIs; unknown live timing remains blocked/unknown.",
+	} {
+		if !strings.Contains(blocked, want) {
+			t.Fatalf("expected blocked evidence %q in:\n%s", want, blocked)
+		}
+	}
+	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 {
+		t.Fatalf("expected no direct/proxy evidence, got %#v", report.Evidence)
+	}
+	for _, action := range report.ActionsTaken {
+		lower := strings.ToLower(action)
+		for _, forbidden := range []string{"dispatched", "prioritized", "paused", "killed", "merged", "pushed", "deleted", "cleaned"} {
+			if strings.Contains(lower, forbidden) {
+				t.Fatalf("expected no forbidden control action %q in actionsTaken: %#v", forbidden, report.ActionsTaken)
+			}
+		}
+	}
+}
+
+func TestRunBudgetPolicyReportRoutineRunsWithoutOptionalInputs(t *testing.T) {
+	root := t.TempDir()
+	project, _, _ := createBudgetPolicyFixture(t, root)
+	if err := os.RemoveAll(filepath.Join(project, defaultStateDir)); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runBudgetPolicyReportRoutine(project, "", "")
+	if report.Status != "passed" {
+		t.Fatalf("expected passed report without optional inputs, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"Repo-local ledger is absent; task budget metadata inspection skipped.",
+		"Repo-local heartbeat report is absent; heartbeat budgetPressure copy skipped.",
+	} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected optional-input evidence %q in:\n%s", want, local)
+		}
+	}
+}
+
+func TestRunBudgetPolicyReportRoutineBlockedWhenDocsMissing(t *testing.T) {
+	root := t.TempDir()
+	report := runBudgetPolicyReportRoutine(root, "", "")
 	if report.Status != "blocked" || report.BlockedReason == "" {
 		t.Fatalf("expected blocked report, got %#v", report)
 	}
@@ -2467,7 +2556,8 @@ func cmdRunRoutine(args []string) error {
 		"README.md":       strings.Join(readmeRoutineMentions, " "),
 		"README.zh-CN.md": allMentions,
 		"SKILL.md":        allMentions,
-		filepath.Join("docs", "routines", "README.md"): allMentions,
+		filepath.Join("docs", "routines", "README.md"): strings.Join(readmeRoutineMentions, " "),
+		filepath.Join("docs", "v2-usage.md"):           allMentions,
 		filepath.Join("docs", "roadmap.md"):            allMentions,
 	}
 	for path, text := range docs {
@@ -2575,6 +2665,86 @@ func cmdRunRoutine(args []string) error {
 		t.Fatal(err)
 	}
 	return project, ledger
+}
+
+func createBudgetPolicyFixture(t *testing.T, root string) (string, string, string) {
+	t.Helper()
+	project := filepath.Join(root, "repo")
+	for _, dir := range []string{
+		filepath.Join(project, "docs", "routines"),
+		filepath.Join(project, "routines"),
+		filepath.Join(project, defaultStateDir),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	docs := map[string]string{
+		filepath.Join("docs", "roadmap.md"):            "budget-policy-report remains review-only and must not dispatch enforcement, kill workers, merge, push, or cleanup worktrees.\n",
+		filepath.Join("docs", "routines", "README.md"): "run-routine budget-policy-report is review-only. It reports local/static budget metadata and must not kill workers or make dispatch eligibility decisions.\n",
+		filepath.Join("docs", "v2-usage.md"):           "budget-policy-report\n",
+	}
+	for path, text := range docs {
+		if err := os.WriteFile(filepath.Join(project, path), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	specs := []RoutineSpec{
+		{
+			ID:                  "budgeted",
+			MaxRuntimeMinutes:   10,
+			ReviewBudgetMinutes: 5,
+		},
+		{
+			ID: "missing-budget",
+		},
+	}
+	for _, spec := range specs {
+		data, err := json.Marshal(spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(project, "routines", spec.ID+".json"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ledger := Ledger{
+		Version:     1,
+		ProjectRoot: project,
+		Tasks: []Task{{
+			ID:     "TASK-1",
+			Status: "completed-unreviewed",
+			Budget: &BudgetMetadata{
+				MaxRuntimeMinutes:   10,
+				ReviewBudgetMinutes: 5,
+			},
+			History: []map[string]string{{
+				"type": "record-task",
+			}},
+		}},
+	}
+	ledgerPath := filepath.Join(project, defaultLedger)
+	if err := writeJSON(ledgerPath, ledger); err != nil {
+		t.Fatal(err)
+	}
+	heartbeat := ObserveSummary{
+		BudgetSummary: BudgetSummary{
+			TasksWithBudget:           1,
+			TasksMissingBudget:        0,
+			RoutineSpecsWithBudget:    1,
+			RoutineSpecsMissingBudget: 1,
+		},
+		BudgetPressure: BudgetPressureSummary{
+			EvidenceLabel:              "local/static",
+			Warnings:                   []string{"Task TASK-1 runtime budget near limit: 8m elapsed of 10m."},
+			TasksWithUnknownReviewTime: 1,
+		},
+	}
+	heartbeatPath := filepath.Join(project, defaultStateDir, "heartbeat-report.json")
+	if err := writeJSON(heartbeatPath, heartbeat); err != nil {
+		t.Fatal(err)
+	}
+	return project, ledgerPath, heartbeatPath
 }
 
 func createEvidenceAuditFixture(t *testing.T, root string) string {

@@ -129,6 +129,17 @@ type BudgetPressureSummary struct {
 	RoutineSpecsMissingBudget  int      `json:"routineSpecsMissingBudget,omitempty"`
 }
 
+type routineBudgetCoverage struct {
+	Total               int
+	WithMaxRuntime      int
+	WithReviewBudget    int
+	WithBoth            int
+	MissingMaxRuntime   []string
+	MissingReviewBudget []string
+	WithAnyBudget       int
+	WithoutAnyBudget    []string
+}
+
 type ObserveSummary struct {
 	Ledger             string                `json:"ledger"`
 	Version            int                   `json:"version"`
@@ -286,6 +297,7 @@ Usage:
   codex-orchestrator run-routine evidence-label-auditor [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine orchestration-policy-auditor [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine roadmap-next-task-suggester [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
+  codex-orchestrator run-routine budget-policy-report [--repo PATH] [--ledger PATH] [--heartbeat-report PATH] [--write-report PATH] [--json]
   codex-orchestrator policy check [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval run [--suite orchestration-policy-auditor] [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval add-failure --id ID --text TEXT --expect OPA001=1 [--file README.md] [--suite orchestration-policy-auditor] [--repo PATH]
@@ -324,7 +336,7 @@ _codex_orchestrator()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   commands="init record-task append-event observe heartbeat status validate-routines run-routine policy eval rules record-routine-run completion help"
-  routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester"
+  routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report"
 
   case "$prev" in
     codex-orchestrator)
@@ -361,7 +373,7 @@ _codex_orchestrator()
       COMPREPLY=( $(compgen -W "--dir --json --help" -- "$cur") )
       ;;
     run-routine)
-      COMPREPLY=( $(compgen -W "--ledger --task-id --repo --tag --expected-asset --write-report --json --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--ledger --task-id --repo --tag --expected-asset --heartbeat-report --write-report --json --help" -- "$cur") )
       ;;
     policy)
       if [[ ${COMP_WORDS[2]} == "check" ]]; then
@@ -424,6 +436,7 @@ routines=(
   'evidence-label-auditor'
   'orchestration-policy-auditor'
   'roadmap-next-task-suggester'
+  'budget-policy-report'
 )
 
 _arguments -C \
@@ -440,7 +453,7 @@ case $state in
         if (( CURRENT == 3 )); then
           _describe 'routine' routines
         else
-          _values 'options' --ledger --task-id --repo --tag --expected-asset --write-report --json --help
+          _values 'options' --ledger --task-id --repo --tag --expected-asset --heartbeat-report --write-report --json --help
         fi
         ;;
       policy)
@@ -512,7 +525,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'eval' -d 'Run loca
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'rules' -d 'Propose review-only rule updates'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run' -d 'Record a routine report in the ledger'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
-complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run add-failure'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from rules' -a 'propose'
@@ -528,6 +541,7 @@ complete -c codex-orchestrator -l branch -d 'Task branch'
 complete -c codex-orchestrator -l repo -d 'Repository path'
 complete -c codex-orchestrator -l tag -d 'Release tag'
 complete -c codex-orchestrator -l expected-asset -d 'Expected release asset'
+complete -c codex-orchestrator -l heartbeat-report -d 'Optional heartbeat report path'
 `
 }
 
@@ -1027,6 +1041,8 @@ func cmdRunRoutine(args []string) error {
 		return cmdRunOrchestrationPolicyAuditorRoutine(args[1:])
 	case "roadmap-next-task-suggester":
 		return cmdRunRoadmapNextTaskSuggesterRoutine(args[1:])
+	case "budget-policy-report":
+		return cmdRunBudgetPolicyReportRoutine(args[1:])
 	default:
 		return fmt.Errorf("unsupported routine %q", args[0])
 	}
@@ -2238,13 +2254,7 @@ func runDocsDriftCheckerRoutine(repo string) RoutineRunReport {
 		}
 	}
 
-	requiredDocs := []string{
-		"README.md",
-		"README.zh-CN.md",
-		"SKILL.md",
-		filepath.Join("docs", "routines", "README.md"),
-	}
-	for _, doc := range requiredDocs {
+	for _, doc := range routineReferenceDocs() {
 		text, readErr := os.ReadFile(filepath.Join(repo, doc))
 		if readErr != nil {
 			failures = append(failures, fmt.Sprintf("Required docs file %s could not be read: %v.", doc, readErr))
@@ -2292,6 +2302,13 @@ func runDocsDriftCheckerRoutine(repo string) RoutineRunReport {
 	report.BlockedReason = ""
 	report.NextSuggestedAction = "Record this local/static report if the docs drift check is sufficient; no direct runtime proof was produced."
 	return report
+}
+
+func routineReferenceDocs() []string {
+	return []string{
+		filepath.Join("docs", "routines", "README.md"),
+		filepath.Join("docs", "v2-usage.md"),
+	}
 }
 
 func cmdRunEvidenceLabelAuditorRoutine(args []string) error {
@@ -2643,6 +2660,151 @@ func runRoadmapNextTaskSuggesterRoutine(repo string, ledgerPath string) RoutineR
 	report.BlockedReason = ""
 	report.Evidence["local"] = append(report.Evidence["local"], suggestions...)
 	report.NextSuggestedAction = primaryRoadmapNextAction(suggestions[0])
+	return report
+}
+
+func cmdRunBudgetPolicyReportRoutine(args []string) error {
+	fs := flag.NewFlagSet("run-routine budget-policy-report", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path to inspect")
+	ledgerPath := fs.String("ledger", "", "optional ledger path; defaults to REPO/.codex-orchestrator/ledger.json when present")
+	heartbeatReport := fs.String("heartbeat-report", "", "optional heartbeat report path; defaults to REPO/.codex-orchestrator/heartbeat-report.json when present")
+	writeReport := fs.String("write-report", "", "write routine report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	report := runBudgetPolicyReportRoutine(*repo, *ledgerPath, *heartbeatReport)
+	if err := validateRoutineRunReport(report); err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote routine report: %s\n", *writeReport)
+	return nil
+}
+
+func runBudgetPolicyReportRoutine(repo string, ledgerPath string, heartbeatReportPath string) RoutineRunReport {
+	report := RoutineRunReport{
+		RoutineID: "budget-policy-report",
+		Status:    "blocked",
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Inspected roadmap, routine docs, routine specs, optional ledger, and optional heartbeat report read-only",
+			"Separated local/static budget metadata and heartbeat warnings from unknown live timing states",
+			"Performed no scheduler, priority, worker-control, merge, push, delete, cleanup, or ledger mutation action",
+		},
+		NeedsHuman:          true,
+		BlockedReason:       "",
+		NextSuggestedAction: "Fix the blocked budget-policy-report precondition, then rerun the routine.",
+	}
+	repo = expandPath(repo)
+	if repo == "" {
+		repo = "."
+	}
+	if info, err := os.Stat(repo); err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path does not exist: %s", repo))
+		report.BlockedReason = "repository path is missing"
+		return report
+	} else if !info.IsDir() {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path is not a directory: %s", repo))
+		report.BlockedReason = "repository path is not a directory"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Repository exists: "+repo)
+
+	for _, doc := range []string{filepath.Join("docs", "roadmap.md"), filepath.Join("docs", "routines", "README.md")} {
+		data, err := os.ReadFile(filepath.Join(repo, doc))
+		if err != nil {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Could not read %s: %v", doc, err))
+			report.BlockedReason = "could not inspect budget-policy docs"
+			return report
+		}
+		issues := budgetPolicyBoundaryIssues(doc, string(data))
+		if len(issues) > 0 {
+			report.Status = "failed"
+			report.Evidence["local"] = append(report.Evidence["local"], issues...)
+			report.NextSuggestedAction = "Restore review-only budget-policy boundary wording in roadmap/routine docs, then rerun budget-policy-report."
+			return report
+		}
+		report.Evidence["local"] = append(report.Evidence["local"], doc+" preserves budget-policy-report review-only boundary wording.")
+	}
+
+	coverage, err := inspectRoutineBudgetCoverage(filepath.Join(repo, "routines"))
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not inspect routines directory: "+err.Error())
+		report.BlockedReason = "could not inspect routine specs"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], coverage.summary())
+	if len(coverage.MissingMaxRuntime) > 0 || len(coverage.MissingReviewBudget) > 0 {
+		report.Evidence["local"] = append(report.Evidence["local"], "Budget metadata gaps are local/static advisory warnings only; this routine did not enforce dispatch eligibility or worker limits.")
+	}
+
+	if resolvedLedger, ok := resolveOptionalLedgerPath(repo, ledgerPath); ok {
+		ledger, err := loadLedger(resolvedLedger)
+		if err != nil {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not inspect repo-local ledger "+resolvedLedger+": "+err.Error())
+			report.BlockedReason = "could not inspect optional ledger"
+			return report
+		}
+		summary := summarizeTaskBudgets(ledger.Tasks)
+		report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf(
+			"Ledger budget metadata summary from %s: tasksWithBudget=%d tasksMissingBudget=%d totalMaxRuntimeMinutes=%d totalReviewBudgetMinutes=%d.",
+			resolvedLedger,
+			summary.TasksWithBudget,
+			summary.TasksMissingBudget,
+			summary.TotalMaxRuntimeMinutes,
+			summary.TotalReviewBudgetMinutes,
+		))
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], ledgerUnknownTimingEvidence(ledger.Tasks)...)
+	} else {
+		report.Evidence["local"] = append(report.Evidence["local"], "Repo-local ledger is absent; task budget metadata inspection skipped.")
+	}
+
+	if resolvedHeartbeat, ok := resolveOptionalHeartbeatReportPath(repo, heartbeatReportPath); ok {
+		heartbeat, err := loadObserveSummary(resolvedHeartbeat)
+		if err != nil {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not inspect heartbeat report "+resolvedHeartbeat+": "+err.Error())
+			report.BlockedReason = "could not inspect optional heartbeat report"
+			return report
+		}
+		report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf(
+			"Heartbeat budgetSummary from %s: tasksWithBudget=%d tasksMissingBudget=%d routineSpecsWithBudget=%d routineSpecsMissingBudget=%d.",
+			resolvedHeartbeat,
+			heartbeat.BudgetSummary.TasksWithBudget,
+			heartbeat.BudgetSummary.TasksMissingBudget,
+			heartbeat.BudgetSummary.RoutineSpecsWithBudget,
+			heartbeat.BudgetSummary.RoutineSpecsMissingBudget,
+		))
+		report.Evidence["local"] = append(report.Evidence["local"], "Heartbeat budgetPressure evidenceLabel: "+emptyDefault(heartbeat.BudgetPressure.EvidenceLabel, "unknown/local-static-missing"))
+		if len(heartbeat.BudgetPressure.Warnings) > 0 {
+			report.Evidence["local"] = append(report.Evidence["local"], "Heartbeat budgetPressure warnings copied as local/static evidence: "+strings.Join(heartbeat.BudgetPressure.Warnings, " | "))
+		} else {
+			report.Evidence["local"] = append(report.Evidence["local"], "Heartbeat budgetPressure warnings: none recorded.")
+		}
+		if heartbeat.BudgetPressure.TasksWithUnknownReviewTime > 0 {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Heartbeat reports %d task(s) with unknown review elapsed time.", heartbeat.BudgetPressure.TasksWithUnknownReviewTime))
+		}
+	} else {
+		report.Evidence["local"] = append(report.Evidence["local"], "Repo-local heartbeat report is absent; heartbeat budgetPressure copy skipped.")
+	}
+
+	report.Evidence["blocked"] = append(report.Evidence["blocked"], "Live Codex App session runtime, worker wall-clock state, and human review elapsed time were not available from direct runtime APIs; unknown live timing remains blocked/unknown.")
+	report.Evidence["local"] = append(report.Evidence["local"], "No scheduler, priority engine, automatic killing, dispatch enforcement, merge, push, delete, cleanup, or worker-control action was performed.")
+	report.Status = "passed"
+	report.BlockedReason = ""
+	report.NextSuggestedAction = "Review this local/static budget-policy report in Codex App or human review before changing concurrency, dispatch, pause, kill, merge, push, cleanup, or budget-enforcement behavior."
 	return report
 }
 
@@ -3966,6 +4128,165 @@ func resolveOptionalLedgerPath(repo string, explicit string) (string, bool) {
 		return defaultPath, true
 	}
 	return "", false
+}
+
+func resolveOptionalHeartbeatReportPath(repo string, explicit string) (string, bool) {
+	if strings.TrimSpace(explicit) != "" {
+		return explicit, true
+	}
+	defaultPath := filepath.Join(repo, defaultStateDir, "heartbeat-report.json")
+	if _, err := os.Stat(defaultPath); err == nil {
+		return defaultPath, true
+	}
+	return "", false
+}
+
+func loadObserveSummary(path string) (ObserveSummary, error) {
+	var summary ObserveSummary
+	data, err := os.ReadFile(expandPath(path))
+	if err != nil {
+		return summary, err
+	}
+	if err := json.Unmarshal(data, &summary); err != nil {
+		return summary, err
+	}
+	return summary, nil
+}
+
+func inspectRoutineBudgetCoverage(dir string) (routineBudgetCoverage, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return routineBudgetCoverage{}, err
+	}
+	coverage := routineBudgetCoverage{}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return coverage, err
+		}
+		var spec RoutineSpec
+		if err := json.Unmarshal(data, &spec); err != nil {
+			return coverage, fmt.Errorf("%s: %w", entry.Name(), err)
+		}
+		id := strings.TrimSpace(spec.ID)
+		if id == "" {
+			id = strings.TrimSuffix(entry.Name(), ".json")
+		}
+		coverage.Total++
+		if spec.MaxRuntimeMinutes > 0 {
+			coverage.WithMaxRuntime++
+		} else {
+			coverage.MissingMaxRuntime = append(coverage.MissingMaxRuntime, id)
+		}
+		if spec.ReviewBudgetMinutes > 0 {
+			coverage.WithReviewBudget++
+		} else {
+			coverage.MissingReviewBudget = append(coverage.MissingReviewBudget, id)
+		}
+		if spec.MaxRuntimeMinutes > 0 && spec.ReviewBudgetMinutes > 0 {
+			coverage.WithBoth++
+		}
+		if spec.MaxRuntimeMinutes > 0 || spec.ReviewBudgetMinutes > 0 {
+			coverage.WithAnyBudget++
+		} else {
+			coverage.WithoutAnyBudget = append(coverage.WithoutAnyBudget, id)
+		}
+	}
+	sort.Strings(coverage.MissingMaxRuntime)
+	sort.Strings(coverage.MissingReviewBudget)
+	sort.Strings(coverage.WithoutAnyBudget)
+	if coverage.Total == 0 {
+		return coverage, errors.New("no routine spec JSON files found")
+	}
+	return coverage, nil
+}
+
+func (coverage routineBudgetCoverage) summary() string {
+	parts := []string{
+		fmt.Sprintf("Routine budget metadata coverage: total=%d withMaxRuntime=%d withReviewBudget=%d withBoth=%d withAnyBudget=%d withoutAnyBudget=%d.",
+			coverage.Total,
+			coverage.WithMaxRuntime,
+			coverage.WithReviewBudget,
+			coverage.WithBoth,
+			coverage.WithAnyBudget,
+			len(coverage.WithoutAnyBudget),
+		),
+	}
+	if len(coverage.MissingMaxRuntime) > 0 {
+		parts = append(parts, "missing maxRuntimeMinutes: "+formatStringList(coverage.MissingMaxRuntime)+".")
+	}
+	if len(coverage.MissingReviewBudget) > 0 {
+		parts = append(parts, "missing reviewBudgetMinutes: "+formatStringList(coverage.MissingReviewBudget)+".")
+	}
+	return strings.Join(parts, " ")
+}
+
+func budgetPolicyBoundaryIssues(path string, text string) []string {
+	lower := strings.ToLower(text)
+	issues := []string{}
+	if !strings.Contains(lower, "budget-policy-report") {
+		issues = append(issues, path+" is missing budget-policy-report boundary wording.")
+	}
+	if !strings.Contains(lower, "review-only") && !strings.Contains(text, "只读") {
+		issues = append(issues, path+" is missing review-only/read-only budget-policy wording.")
+	}
+	for _, phrase := range []string{"kill workers", "automatic killing", "dispatch enforcement", "make dispatch eligibility decisions"} {
+		if strings.Contains(lower, phrase) && !containsNearbyNegation(lower, phrase) {
+			issues = append(issues, fmt.Sprintf("%s contains budget control wording without nearby negation: %q.", path, phrase))
+		}
+	}
+	sort.Strings(issues)
+	return issues
+}
+
+func containsNearbyNegation(text string, phrase string) bool {
+	index := strings.Index(text, phrase)
+	if index < 0 {
+		return false
+	}
+	start := index - 80
+	if start < 0 {
+		start = 0
+	}
+	window := text[start : index+len(phrase)]
+	for _, negation := range []string{"not ", "no ", "does not ", "must not ", "without ", "不会", "不能", "不得", "不要", "不做", "不引入"} {
+		if strings.Contains(window, negation) {
+			return true
+		}
+	}
+	return false
+}
+
+func ledgerUnknownTimingEvidence(tasks []Task) []string {
+	evidence := []string{}
+	for _, task := range tasks {
+		if task.Budget == nil {
+			continue
+		}
+		if task.Budget.MaxRuntimeMinutes > 0 {
+			if _, ok := taskRecordedAt(task); !ok {
+				evidence = append(evidence, fmt.Sprintf("Task %s has a runtime budget but no usable ledger start timestamp; runtime elapsed time is unknown.", task.ID))
+			}
+		}
+		if task.Budget.ReviewBudgetMinutes > 0 && task.Status == "completed-unreviewed" {
+			if _, ok := taskReviewReadyAt(task); !ok {
+				evidence = append(evidence, fmt.Sprintf("Task %s is review-ready but has no recorded review-ready timestamp; human review elapsed time is unknown.", task.ID))
+			}
+		}
+	}
+	sort.Strings(evidence)
+	return evidence
+}
+
+func emptyDefault(value string, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func resolveDefaultLedgerPath(repo string, ledgerPath string, ledgerExplicit bool) string {

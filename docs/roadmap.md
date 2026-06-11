@@ -210,6 +210,7 @@ routines/
   evidence-label-auditor.json
   orchestration-policy-auditor.json
   roadmap-next-task-suggester.json
+  budget-policy-report.json
   database-proof.json
   device-proof.json
   log-proof.json
@@ -222,6 +223,7 @@ cmd/codex-orchestrator run-routine docs-drift-checker
 cmd/codex-orchestrator run-routine evidence-label-auditor
 cmd/codex-orchestrator run-routine orchestration-policy-auditor
 cmd/codex-orchestrator run-routine roadmap-next-task-suggester
+cmd/codex-orchestrator run-routine budget-policy-report
 cmd/codex-orchestrator policy check
 cmd/codex-orchestrator eval run
 cmd/codex-orchestrator eval add-failure
@@ -232,6 +234,7 @@ cmd/codex-orchestrator observe / heartbeat budgetSummary / budgetPressure
 examples/routine-reports/
   pr-reviewer.passed.json
   api-proof.blocked.json
+  budget-policy-report.review-only.json
 ```
 
 其中 `evidence-label-auditor` 现在已经有第一层本地 policy/eval：命名规则
@@ -277,16 +280,19 @@ review timestamp unknown warnings。这些都是 local/static helper evidence，
 `routines/budget-policy-report.json` 和
 `examples/routine-reports/budget-policy-report.review-only.json` 定义了下一层
 review-only 报告契约：预算 metadata coverage、local/static pressure warnings、
-unknown timing state 和 human/App-layer recommendation 必须分开表达。它不是
-`run-routine` 命令，也不引入 scheduler、priority engine、worker kill、dispatch
+unknown timing state 和 human/App-layer recommendation 必须分开表达。后续 runner
+实现沿用这个契约，不引入 scheduler、priority engine、worker kill、dispatch
 enforcement、merge/push/delete 自动化或预算强制执行。
+
+已完成只读 `run-routine budget-policy-report` runner：
+读取 roadmap、routine docs、routine specs、可选 repo-local ledger 和可选
+heartbeat report，输出上述契约形状的 local/static 报告。budget metadata 和
+heartbeat `budgetPressure` 仍只作为 local/static visibility；live runtime / review
+timing 不存在直接证据时写入 blocked/unknown。runner 不调度、不排序、不 pause/kill
+worker、不做 dispatch enforcement、不 merge/push/delete/cleanup，也不修改 ledger。
 
 剩余：
 
-- budget policy report runner：如果继续推进，下一步只能实现只读
-  `run-routine budget-policy-report`，读取 roadmap、routine specs、可选 ledger 和
-  可选 heartbeat report，输出上述契约形状的 local/static 报告；仍然不做调度、
-  排序、worker kill、dispatch enforcement 或预算强制执行。
 - budget policy static eval：只检查预算证据误用或边界漂移，例如把
   local/static timestamp 写成 live session proof，或把 budget warning 写成 helper
   已经 pause/kill worker。finding 只能作为 review prompt，不能成为自动调度决策。
