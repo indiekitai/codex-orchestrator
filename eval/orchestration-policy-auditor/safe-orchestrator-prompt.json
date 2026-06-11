@@ -3,7 +3,7 @@
   "id": "safe-orchestrator-prompt",
   "description": "A safe App-first orchestration prompt with dry-run approval, isolated worker boundaries, continuation checks, and honest evidence labels.",
   "files": {
-    "README.md": "Dry run must output a plan and wait for explicit user confirmation before dispatching workers.\n\nIf setup failed, report a blocker; do not implement in the orchestrator checkout.\n\nWhen a child task is completed, inspect ledger, roadmap, repo truth, and queue before deleting heartbeat or stopping.\n\nWorker prompt: use an isolated worktree session, do not use subagents or Paseo, self-review, do not merge, and do not push.\n\nDo not promote local or proxy evidence to direct proof."
+    "README.md": "Dry run must output a plan and wait for explicit user confirmation before dispatching workers.\n\nIf setup failed, report a blocker; do not implement in the orchestrator checkout.\n\nWhen a child task is completed, inspect ledger, roadmap, repo truth, and queue before deleting heartbeat or stopping.\n\nWorker prompt: use an isolated worktree session, list allowed paths and forbidden paths, do not use subagents or Paseo, self-review, do not merge, and do not push.\n\nDo not promote local or proxy evidence to direct proof."
   },
   "expectedRuleHits": {}
 }

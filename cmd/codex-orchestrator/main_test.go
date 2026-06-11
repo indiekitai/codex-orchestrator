@@ -1946,7 +1946,7 @@ func TestCmdPolicyCheckWritesReport(t *testing.T) {
 		SchemaVersion: 1,
 		ID:            "safe-orchestrator-prompt",
 		Files: map[string]string{
-			"README.md": "Worker prompt: use an isolated worktree session, do not use subagents or Paseo, self-review, do not merge, and do not push.",
+			"README.md": "Worker prompt: use an isolated worktree session, list allowed paths and forbidden paths, do not use subagents or Paseo, self-review, do not merge, and do not push.",
 		},
 		ExpectedRuleHits: map[string]int{},
 	})
@@ -2599,7 +2599,7 @@ func createOrchestrationPolicyFixture(t *testing.T, root string) string {
 			"Dry run must output a plan and wait for explicit user confirmation before dispatching workers.",
 			"If setup failed, report a blocker; do not implement in the orchestrator checkout.",
 			"When a child task is completed, inspect ledger, roadmap, repo truth, and queue before deleting heartbeat or stopping.",
-			"Worker prompt: use an isolated worktree session, do not use subagents or Paseo, self-review, do not merge, and do not push.",
+			"Worker prompt: use an isolated worktree session, list allowed paths and forbidden paths, do not use subagents or Paseo, self-review, do not merge, and do not push.",
 			"Do not promote local or proxy evidence to direct proof.",
 		}, "\n\n"),
 		"README.zh-CN.md": "dry run 后等待确认；worker 使用独立 worktree；不要把 local/proxy 写成 direct。",

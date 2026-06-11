@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "child-complete-without-queue-proof",
+  "description": "Transcript-style completion wording must not let one child task completion stop the broader orchestration without durable continuation checks.",
+  "files": {
+    "docs/reviews/local-child-completion-review.md": "Transcript reconstruction: after the child task completed, the orchestrator immediately chose to stop the loop and delete heartbeat, then declared the broader orchestration finished from that single worker note."
+  },
+  "expectedRuleHits": {
+    "OPA003": 1
+  }
+}
