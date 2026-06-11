@@ -575,7 +575,7 @@ next-task selection:
 
 ```bash
 codex-orchestrator roadmap score --repo .
-codex-orchestrator roadmap score --repo . --config roadmap-score.json --json
+codex-orchestrator roadmap score --repo . --config roadmap-score.json --ledger .codex-orchestrator/ledger.json --json
 ```
 
 By default it reads `docs/roadmap.md`, `PROGRESS.md`,
@@ -588,9 +588,12 @@ exist. A config file may provide a simple JSON `sources` list:
 
 It scores candidate lines as `vertical-completion`, `runtime-proof`,
 `blocked-removal`, `owner-gated`, or `shallow-risk`, with local write-set and
-external-dependency hints. It does not dispatch sessions, mutate git or the
-ledger, call the network, or claim direct runtime/product proof; human review
-still decides whether a scored candidate is worth dispatching.
+external-dependency hints. When a repo-local `.codex-orchestrator/ledger.json`
+exists, or `--ledger PATH` is supplied, it reads that ledger read-only and
+demotes review-doc candidates that match completed/merged/cleaned ledger tasks.
+It does not dispatch sessions, mutate git or the ledger, call the network, or
+claim direct runtime/product proof; human review still decides whether a scored
+candidate is worth dispatching.
 
 When a delegated task is merged, pushed, released, and cleaned, the
 task-specific heartbeat is not automatically the end of the loop. Before

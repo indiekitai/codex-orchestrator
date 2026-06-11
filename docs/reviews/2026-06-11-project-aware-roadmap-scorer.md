@@ -6,13 +6,21 @@
 - The command reads local roadmap/progress/review docs only.
 - Default sources are existing `docs/roadmap.md`, `PROGRESS.md`, `docs/TastyFuture-整体开发计划与进度.md`, and `docs/reviews/*.md`.
 - Optional config is a small JSON file with a `sources` array.
+- Rework added optional read-only ledger awareness via `--ledger PATH`, defaulting to repo-local `.codex-orchestrator/ledger.json` when present.
 
 ## Local Evidence
 
 - The scorer extracts local candidate lines from configured docs.
 - It classifies candidates as `vertical-completion`, `runtime-proof`, `blocked-removal`, `owner-gated`, or `shallow-risk`.
 - It reports static write-set hints and external-dependency hints when local wording makes them inferable.
+- It demotes candidates that match completed/merged/cleaned ledger task id/title/branch/history values, so stale review-doc follow-ups do not outrank current roadmap pending work.
 - It records that human project judgement, runtime/product proof, provider credentials, deployment state, and device evidence remain blocked/out of scope.
+
+## Reviewer Finding Rework
+
+Reviewer finding: the first implementation could rank stale/completed review-doc follow-ups, such as `Budget-policy static eval remains a follow-up for detecting future wording`, above the current pending `docs/roadmap.md` item `Consultation Request Pack：待做`.
+
+Fix: `roadmap score` now loads the optional/default ledger read-only and demotes candidates matching terminal ledger tasks (`completed-unreviewed`, `merged`, `released`, `cleaned`, `rejected`, or `abandoned`). Same-score ties also prefer current roadmap/progress sources over old review docs. The focused regression test covers a cleaned `Budget-policy static eval` ledger task and verifies the current roadmap pending item ranks first.
 
 ## Commands Run
 

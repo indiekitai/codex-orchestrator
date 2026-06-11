@@ -359,6 +359,7 @@ type RoadmapScoreReport struct {
 	EvidenceLabel       string                  `json:"evidenceLabel"`
 	RepoPath            string                  `json:"repoPath"`
 	ConfigPath          string                  `json:"configPath,omitempty"`
+	LedgerPath          string                  `json:"ledgerPath,omitempty"`
 	Sources             []RoadmapScoreSource    `json:"sources"`
 	Candidates          []RoadmapScoreCandidate `json:"candidates"`
 	Summary             RoadmapScoreSummary     `json:"summary"`
@@ -387,6 +388,7 @@ type RoadmapScoreCandidate struct {
 	WriteSetHints           []string `json:"writeSetHints,omitempty"`
 	ExternalDependencyHints []string `json:"externalDependencyHints,omitempty"`
 	RiskHints               []string `json:"riskHints,omitempty"`
+	LedgerMatch             string   `json:"ledgerMatch,omitempty"`
 }
 
 type RoadmapScoreSummary struct {
@@ -553,7 +555,7 @@ Usage:
   codex-orchestrator run-routine orchestration-policy-auditor [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine roadmap-next-task-suggester [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine budget-policy-report [--repo PATH] [--ledger PATH] [--heartbeat-report PATH] [--write-report PATH] [--json]
-  codex-orchestrator roadmap score [--repo PATH] [--config PATH] [--write-report PATH] [--json]
+  codex-orchestrator roadmap score [--repo PATH] [--config PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator policy check [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval run [--suite orchestration-policy-auditor] [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval add-failure --id ID --text TEXT --expect OPA001=1 [--file README.md] [--suite orchestration-policy-auditor] [--repo PATH]
@@ -664,7 +666,7 @@ _codex_orchestrator()
       ;;
     roadmap)
       if [[ ${COMP_WORDS[2]} == "score" ]]; then
-        COMPREPLY=( $(compgen -W "--repo --config --write-report --json --help" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--repo --config --ledger --write-report --json --help" -- "$cur") )
       else
         COMPREPLY=( $(compgen -W "score" -- "$cur") )
       fi
@@ -764,7 +766,7 @@ case $state in
         if (( CURRENT == 3 )); then
           _values 'subcommand' score
         else
-          _values 'options' --repo --config --write-report --json --help
+          _values 'options' --repo --config --ledger --write-report --json --help
         fi
         ;;
       eval)
@@ -4026,12 +4028,13 @@ func cmdRoadmapScore(args []string) error {
 	fs := flag.NewFlagSet("roadmap score", flag.ExitOnError)
 	repo := fs.String("repo", ".", "repository path to inspect")
 	configPath := fs.String("config", "", "optional JSON config with a sources array")
+	ledgerPath := fs.String("ledger", "", "optional ledger path; defaults to REPO/.codex-orchestrator/ledger.json when present")
 	writeReport := fs.String("write-report", "", "write roadmap score report JSON")
 	jsonOut := fs.Bool("json", false, "print JSON report")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	report := runRoadmapScore(*repo, *configPath)
+	report := runRoadmapScore(*repo, *configPath, *ledgerPath)
 	if *writeReport != "" {
 		if err := writeJSON(*writeReport, report); err != nil {
 			return err
@@ -4048,7 +4051,7 @@ func cmdRoadmapScore(args []string) error {
 	return nil
 }
 
-func runRoadmapScore(repo string, configPath string) RoadmapScoreReport {
+func runRoadmapScore(repo string, configPath string, ledgerPath string) RoadmapScoreReport {
 	repo = expandPath(repo)
 	if repo == "" {
 		repo = "."
@@ -4097,6 +4100,22 @@ func runRoadmapScore(repo string, configPath string) RoadmapScoreReport {
 	}
 	report.Evidence["local"] = append(report.Evidence["local"], "Roadmap score source list: "+strings.Join(sources, ", "))
 
+	var ledgerTasks []Task
+	if resolvedLedger, ok := resolveOptionalLedgerPath(repo, ledgerPath); ok {
+		ledger, loadErr := loadLedger(resolvedLedger)
+		if loadErr != nil {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not inspect optional roadmap score ledger "+resolvedLedger+": "+loadErr.Error())
+			report.BlockedReason = "could not inspect optional ledger"
+			return report
+		}
+		report.LedgerPath = resolvedLedger
+		ledgerTasks = ledger.Tasks
+		report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Ledger loaded from %s with %d task(s); completed/merged/cleaned matches are demoted read-only.", resolvedLedger, len(ledger.Tasks)))
+		report.ActionsTaken = append(report.ActionsTaken, "Applied optional ledger completed-state demotion to roadmap candidates")
+	} else {
+		report.Evidence["local"] = append(report.Evidence["local"], "Repo-local ledger is absent; completed-task demotion skipped.")
+	}
+
 	seen := map[string]bool{}
 	for _, source := range sources {
 		path := source
@@ -4120,6 +4139,7 @@ func runRoadmapScore(repo string, configPath string) RoadmapScoreReport {
 				continue
 			}
 			seen[key] = true
+			candidate = applyRoadmapScoreLedgerDemotion(candidate, ledgerTasks)
 			report.Candidates = append(report.Candidates, candidate)
 			report.Summary.ByClass[candidate.Classification]++
 			added++
@@ -4137,6 +4157,11 @@ func runRoadmapScore(repo string, configPath string) RoadmapScoreReport {
 	sort.SliceStable(report.Candidates, func(i, j int) bool {
 		if report.Candidates[i].Score != report.Candidates[j].Score {
 			return report.Candidates[i].Score > report.Candidates[j].Score
+		}
+		leftSourceRank := roadmapScoreSourceRank(report.Candidates[i].Source)
+		rightSourceRank := roadmapScoreSourceRank(report.Candidates[j].Source)
+		if leftSourceRank != rightSourceRank {
+			return leftSourceRank < rightSourceRank
 		}
 		if report.Candidates[i].Source != report.Candidates[j].Source {
 			return report.Candidates[i].Source < report.Candidates[j].Source
@@ -4178,6 +4203,20 @@ func roadmapScoreSources(repo string, configPath string) ([]string, error) {
 		}
 	}
 	return cleanRoadmapScoreSources(sources), nil
+}
+
+func roadmapScoreSourceRank(source string) int {
+	source = filepath.ToSlash(strings.ToLower(strings.TrimSpace(source)))
+	switch {
+	case source == "docs/roadmap.md":
+		return 0
+	case source == "progress.md" || strings.Contains(source, "整体开发计划"):
+		return 1
+	case strings.HasPrefix(source, "docs/reviews/"):
+		return 3
+	default:
+		return 2
+	}
 }
 
 func cleanRoadmapScoreSources(values []string) []string {
@@ -4327,6 +4366,71 @@ func classifyRoadmapScoreCandidate(title string, source string, line int, snippe
 		ExternalDependencyHints: externalHints,
 		RiskHints:               risks,
 	}
+}
+
+func applyRoadmapScoreLedgerDemotion(candidate RoadmapScoreCandidate, tasks []Task) RoadmapScoreCandidate {
+	if len(tasks) == 0 {
+		return candidate
+	}
+	candidateKey := normalizeRoadmapKey(candidate.Title)
+	if candidateKey == "" {
+		return candidate
+	}
+	for _, task := range tasks {
+		if !roadmapScoreTaskTerminal(task) || !roadmapScoreTaskMatchesCandidate(task, candidateKey) {
+			continue
+		}
+		match := fmt.Sprintf("%s status=%s", task.ID, emptyToUnknown(task.Status))
+		candidate.LedgerMatch = match
+		candidate.RiskHints = append(candidate.RiskHints, "matched completed/merged/cleaned ledger task; demoted as stale local planning candidate")
+		candidate.SuggestedAction = "skip; already represented by completed ledger task"
+		if candidate.Score > 10 {
+			candidate.Score = 10
+		}
+		return candidate
+	}
+	return candidate
+}
+
+func roadmapScoreTaskTerminal(task Task) bool {
+	switch strings.TrimSpace(task.Status) {
+	case "completed-unreviewed", "merged", "released", "cleaned", "rejected", "abandoned":
+		return true
+	}
+	for _, event := range task.History {
+		status := event["status"]
+		if status == "" {
+			status = event["result"]
+		}
+		switch status {
+		case "completed-unreviewed", "merged", "released", "cleaned", "rejected", "abandoned":
+			return true
+		}
+	}
+	return false
+}
+
+func roadmapScoreTaskMatchesCandidate(task Task, candidateKey string) bool {
+	for _, value := range roadmapScoreTaskMatchValues(task) {
+		key := normalizeRoadmapKey(value)
+		if key == "" {
+			continue
+		}
+		if key == candidateKey || strings.Contains(key, candidateKey) || strings.Contains(candidateKey, key) {
+			return true
+		}
+	}
+	return false
+}
+
+func roadmapScoreTaskMatchValues(task Task) []string {
+	values := []string{task.ID, task.Title, task.Branch}
+	for _, event := range task.History {
+		for _, key := range []string{"title", "summary", "note", "action", "result", "status"} {
+			values = append(values, event[key])
+		}
+	}
+	return values
 }
 
 func containsAny(value string, needles []string) bool {

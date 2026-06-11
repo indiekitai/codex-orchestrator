@@ -2435,7 +2435,7 @@ func TestRoadmapScoreUsesProjectAwareDefaultSources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	report := runRoadmapScore(project, "")
+	report := runRoadmapScore(project, "", "")
 	if report.Status != "passed" {
 		t.Fatalf("expected passed report, got %#v", report)
 	}
@@ -2483,7 +2483,7 @@ func TestRoadmapScoreReadsConfigSources(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	report := runRoadmapScore(project, "roadmap-score.json")
+	report := runRoadmapScore(project, "roadmap-score.json", "")
 	if report.Status != "passed" {
 		t.Fatalf("expected passed report, got %#v", report)
 	}
@@ -2511,12 +2511,77 @@ Everything is completed.
 		t.Fatal(err)
 	}
 
-	report := runRoadmapScore(project, "")
+	report := runRoadmapScore(project, "", "")
 	if report.Status != "blocked" || report.BlockedReason == "" {
 		t.Fatalf("expected blocked report, got %#v", report)
 	}
 	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "No actionable local/static candidate lines") {
 		t.Fatalf("expected no-candidates evidence, got %q", got)
+	}
+}
+
+func TestRoadmapScoreDemotesCompletedLedgerReviewFollowup(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	if err := os.MkdirAll(filepath.Join(project, "docs", "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "docs", "roadmap.md"), []byte(`# Roadmap
+
+## 下一阶段优先级
+
+3. Consultation Request Pack：待做。
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "docs", "reviews", "old-budget.md"), []byte(`# Budget Review
+
+## Residual Risks
+
+- Budget-policy static eval remains a follow-up for detecting future wording.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ledgerPath := filepath.Join(project, defaultLedger)
+	ledger := Ledger{
+		Version:     1,
+		ProjectRoot: project,
+		Tasks: []Task{{
+			ID:     "BUDGET-POLICY-STATIC-EVAL",
+			Title:  "Budget-policy static eval",
+			Status: "cleaned",
+			History: []map[string]string{{
+				"status": "cleaned",
+				"note":   "Budget-policy static eval remains a follow-up for detecting future wording",
+			}},
+		}},
+	}
+	if err := writeJSON(ledgerPath, ledger); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runRoadmapScore(project, "", ledgerPath)
+	if report.Status != "passed" {
+		t.Fatalf("expected passed report, got %#v", report)
+	}
+	if !strings.Contains(report.NextSuggestedAction, "Consultation Request Pack") {
+		t.Fatalf("expected current roadmap pending task to rank first, got %q with candidates %#v", report.NextSuggestedAction, report.Candidates)
+	}
+	var demoted RoadmapScoreCandidate
+	for _, candidate := range report.Candidates {
+		if strings.Contains(candidate.Title, "Budget-policy static eval") {
+			demoted = candidate
+			break
+		}
+	}
+	if demoted.Title == "" {
+		t.Fatalf("expected old review follow-up candidate to remain visible as demoted evidence, got %#v", report.Candidates)
+	}
+	if demoted.Score >= report.Candidates[0].Score || demoted.LedgerMatch == "" {
+		t.Fatalf("expected completed ledger follow-up to be demoted with ledger match, got top=%#v demoted=%#v", report.Candidates[0], demoted)
+	}
+	if !strings.Contains(strings.Join(report.Evidence["local"], "\n"), "completed/merged/cleaned matches are demoted") {
+		t.Fatalf("expected ledger demotion evidence, got %#v", report.Evidence)
 	}
 }
 
