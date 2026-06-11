@@ -1765,6 +1765,141 @@ func TestPackMergeReadinessFailsForbiddenPathCheck(t *testing.T) {
 	}
 }
 
+func TestPackReviewWritesPortablePackageReviewPack(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	outputDir := filepath.Join(root, "review-pack")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/package-review", worker, "HEAD")
+	if err := os.MkdirAll(filepath.Join(worker, "docs", "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "TASK-PACKAGE",
+		"--title", "Package review task",
+		"--worktree", worker,
+		"--branch", "codex/package-review",
+		"--base-commit", base,
+		"--allowed", "feature.txt",
+		"--allowed", "docs/**",
+		"--forbidden", "secrets/**",
+		"--gate", "go test ./...",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "feature.txt"), []byte("feature\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "docs", "reviews", "package-review.md"), []byte("Self-review: local/static evidence only; docs drift checked.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "feature.txt", "docs/reviews/package-review.md")
+	git(t, worker, "commit", "-q", "-m", "package review fixture")
+	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "review", "--task-id", "TASK-PACKAGE", "--status", "completed-unreviewed", "--note", "ready"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cmdPackReview([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-REVIEW", "--task-id", "TASK-PACKAGE", "--output", outputDir}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"review-pack.json", "reviewer-prompt.md", "changed-files.txt", "gates.md", "evidence.md", "residual-risks.md", "diff.patch", "TASK-PACKAGE.patch"} {
+		if _, err := os.Stat(filepath.Join(outputDir, path)); err != nil {
+			t.Fatalf("expected review pack file %s: %v", path, err)
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(outputDir, "review-pack.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report ReviewPack
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.PackageID != "PKG-REVIEW" || report.Status != "passed" {
+		t.Fatalf("unexpected review pack: %#v", report)
+	}
+	if len(report.Tasks) != 1 || report.Tasks[0].ID != "TASK-PACKAGE" {
+		t.Fatalf("expected task summary in review pack, got %#v", report.Tasks)
+	}
+	if !containsAuthorizationStatus(report.AuthorizationMatrix, "merge", "not-authorized-by-pack") {
+		t.Fatalf("expected merge authorization boundary, got %#v", report.AuthorizationMatrix)
+	}
+	prompt, err := os.ReadFile(filepath.Join(outputDir, "reviewer-prompt.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(prompt), "independent read-only reviewer") || !strings.Contains(string(prompt), "evidence labels") {
+		t.Fatalf("unexpected reviewer prompt:\n%s", string(prompt))
+	}
+}
+
+func TestReviewRunDryRunAndImportRecordExternalReviewer(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	packDir := filepath.Join(root, "review-pack")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(packDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pack := ReviewPack{
+		SchemaVersion: 1,
+		PackageID:     "PKG-EXT",
+		Tasks:         []MergeReadinessTaskSummary{{ID: "TASK-EXT"}},
+		Evidence:      normalizedEvidence(nil),
+	}
+	if err := writeJSON(filepath.Join(packDir, "review-pack.json"), pack); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeText(filepath.Join(packDir, "reviewer-prompt.md"), "Review this package.\n"); err != nil {
+		t.Fatal(err)
+	}
+	reportPath := filepath.Join(root, "external-review.json")
+	if err := cmdReviewRun([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-EXT", "--reviewer", "pi", "--pack", packDir, "--dry-run", "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dryRun ExternalReviewReport
+	if err := json.Unmarshal(data, &dryRun); err != nil {
+		t.Fatal(err)
+	}
+	if dryRun.Status != "passed" || !strings.Contains(strings.Join(dryRun.RunnerCommand, " "), "pi") {
+		t.Fatalf("expected dry-run pi command, got %#v", dryRun)
+	}
+	reviewFile := filepath.Join(root, "pi-review.md")
+	if err := os.WriteFile(reviewFile, []byte("Verdict: concerns\nFinding: check evidence labels.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdReviewImport([]string{"--ledger", ledger, "--package-id", "PKG-EXT", "--reviewer", "pi", "--file", reviewFile, "--task-id", "TASK-EXT", "--status", "failed"}); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.RoutineRuns) != 1 {
+		t.Fatalf("expected one external review routine run, got %#v", updated.RoutineRuns)
+	}
+	run := updated.RoutineRuns[0]
+	if run.RoutineID != "external-reviewer" || run.PackageID != "PKG-EXT" || run.Reviewer != "pi" || run.Status != "failed" {
+		t.Fatalf("unexpected external review run: %#v", run)
+	}
+	if got := strings.Join(run.Evidence["proxy"], "\n"); !strings.Contains(got, "Imported external reviewer output") {
+		t.Fatalf("expected proxy advisory evidence, got %#v", run.Evidence)
+	}
+}
+
 func TestPackConsultationSummarizesBlockedLedgerTask(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

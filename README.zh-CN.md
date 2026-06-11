@@ -328,6 +328,9 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
 ./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
+./codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
+./codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --write-report /tmp/pi-review-run.json
+./codex-orchestrator review import --package-id PKG --reviewer deepseek --file /tmp/deepseek-review.md --status passed
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
@@ -393,6 +396,16 @@ product、device 或 direct proof。它还会输出 `ownerDecisionBrief`、
 `authorizationMatrix` 和 `liveProofGate`，吸收 maintainer-orchestrator 里“不要只丢
 URL 或模糊 blocker，要给 owner 一个可决策简报”的纪律；真正的决策或人的动作仍然是
 pack 外部的 `blocked` 项。
+
+`pack review` 是功能包级别的异模型审查交接包。它适合在 3-5 个相关小切片组成一个
+feature package 之后使用，不适合每个小 worker 都跑一遍。它会把 task contract、
+diff、changed files、gates、evidence labels、residual risks、授权边界和 reviewer
+prompt 打成一个可携带的 local/static 目录。`review run` 可以用只读方式调用本机
+`pi` 或 `claude -p`；默认不使用 `claude ultrareview`。如果你用 DeepSeek、Claude、
+Pi 或人工审查得到了结果，可以用 `review import` 写回 ledger。所有异模型审查输出都
+只是 `proxy/advisory` evidence：它可以帮助拦截问题或影响验收判断，但不能单独授权
+实现、merge、push、cleanup、release、deploy，也不能变成 direct runtime/device/
+provider proof。
 
 Codex App worktree 派发是 App-first。要用 project worktree session 前，先确认
 这个仓库已经保存为 Codex App project。如果因为 unknown project、没有 saved

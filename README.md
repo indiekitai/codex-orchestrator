@@ -378,6 +378,9 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
 ./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
+./codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
+./codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --write-report /tmp/pi-review-run.json
+./codex-orchestrator review import --package-id PKG --reviewer deepseek --file /tmp/deepseek-review.md --status passed
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
@@ -451,6 +454,18 @@ human request should be decision-ready rather than a bare URL or vague blocker.
 It does not dispatch, merge, push, cleanup, mutate the ledger, edit git state,
 call the network, or claim runtime, product, device, or direct proof; the actual
 decision or human action remains `blocked` outside the pack.
+
+`pack review` is the package-level external-review handoff. Use it after several
+related slices form a feature package, not for every small worker. It combines
+task contracts, diffs, changed files, gates, evidence labels, residual risks,
+authorization boundaries, and a reviewer prompt into a portable local/static
+directory. `review run` can invoke a local `pi` or `claude -p` reviewer in
+read-only mode; `claude ultrareview` is intentionally not part of this default
+workflow. `review import` records manually gathered DeepSeek, Claude, Pi, or
+human findings back into the ledger. All external-review output is
+`proxy/advisory` evidence: it can block or inform acceptance, but it never
+authorizes implementation, merge, push, cleanup, release, deploy, or direct
+runtime/device/provider proof by itself.
 
 Codex App worktree dispatch is App-first. Save the repository as a Codex App
 project before relying on project worktree sessions. If dispatch fails because

@@ -232,6 +232,9 @@ codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 codex-orchestrator eval run --write-report /tmp/eval-run-report.json
 codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
 codex-orchestrator rules propose --from-review docs/reviews/example.md --write-report /tmp/rules-proposal-report.json
+codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
+codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --write-report /tmp/pi-review-run.json
+codex-orchestrator review import --package-id PKG --reviewer deepseek --file /tmp/deepseek-review.md --status passed
 ```
 
 The PR reviewer runner inspects only local git/static state from the ledger task worktree:
@@ -671,6 +674,9 @@ Use helper reports when available:
 ```bash
 codex-orchestrator pack merge-readiness --task-id TASK --json
 codex-orchestrator pack consultation --task-id TASK --json
+codex-orchestrator pack review --package-id PKG --task-id TASK --json
+codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --dry-run
+codex-orchestrator review import --package-id PKG --reviewer deepseek --file /tmp/deepseek-review.md --status passed
 ```
 
 `pack merge-readiness` is local/static review evidence. Its
@@ -681,6 +687,18 @@ not automatic authorization.
 `ownerDecisionBrief`, `authorizationMatrix`, and `liveProofGate` help format the
 ask, but the actual decision, physical action, live proof, or waiver remains
 `blocked` until the owner provides it.
+
+Use `pack review` at feature-package boundaries, not for every small worker.
+Good triggers include three to five related accepted/completed slices, shared
+contract/API/DB risk, payment/security/hardware/pre/prod boundaries, or a package
+that will be described as one user-facing outcome. The pack is local/static
+handoff material for another model or human reviewer. `review run` may invoke
+local `pi` or `claude -p` in read-only mode; do not use `claude ultrareview` as
+the default path. If a review was performed elsewhere, use `review import` so the
+ledger records which package was reviewed, by whom, and with what status. Treat
+all external review output as `proxy/advisory`: it can block acceptance or inform
+the orchestrator, but it cannot authorize implementation, merge, push, cleanup,
+release, deploy, or direct runtime/device/provider proof.
 
 ## Dynamic Heartbeat Prompt Pattern
 

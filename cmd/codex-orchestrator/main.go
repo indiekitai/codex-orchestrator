@@ -328,6 +328,9 @@ type RoutineRun struct {
 	At                  string              `json:"at"`
 	RoutineID           string              `json:"routineId"`
 	TaskID              string              `json:"taskId,omitempty"`
+	PackageID           string              `json:"packageId,omitempty"`
+	Reviewer            string              `json:"reviewer,omitempty"`
+	ReportPath          string              `json:"reportPath,omitempty"`
 	Status              string              `json:"status"`
 	Evidence            map[string][]string `json:"evidence"`
 	ActionsTaken        []string            `json:"actionsTaken"`
@@ -339,6 +342,9 @@ type RoutineRun struct {
 type RoutineRunReport struct {
 	RoutineID           string              `json:"routineId"`
 	TaskID              string              `json:"taskId,omitempty"`
+	PackageID           string              `json:"packageId,omitempty"`
+	Reviewer            string              `json:"reviewer,omitempty"`
+	ReportPath          string              `json:"reportPath,omitempty"`
 	Status              string              `json:"status"`
 	Evidence            map[string][]string `json:"evidence"`
 	ActionsTaken        []string            `json:"actionsTaken"`
@@ -537,6 +543,60 @@ type AcceptanceReport struct {
 	NextAction          string               `json:"nextAction"`
 }
 
+type ReviewPack struct {
+	SchemaVersion       int                         `json:"schemaVersion"`
+	Command             string                      `json:"command"`
+	GeneratedAt         string                      `json:"generatedAt"`
+	Status              string                      `json:"status"`
+	EvidenceLabel       string                      `json:"evidenceLabel"`
+	Boundary            string                      `json:"boundary"`
+	PackageID           string                      `json:"packageId"`
+	LedgerPath          string                      `json:"ledgerPath"`
+	RepoPath            string                      `json:"repoPath"`
+	OutputDir           string                      `json:"outputDir,omitempty"`
+	Tasks               []MergeReadinessTaskSummary `json:"tasks"`
+	ChangedPaths        []string                    `json:"changedPaths,omitempty"`
+	RecordedGates       []string                    `json:"recordedGates,omitempty"`
+	SuggestedGates      []string                    `json:"suggestedGates,omitempty"`
+	TaskPacks           []MergeReadinessPack        `json:"taskPacks,omitempty"`
+	ReviewerPromptPath  string                      `json:"reviewerPromptPath,omitempty"`
+	ReviewMaterialPaths []string                    `json:"reviewMaterialPaths,omitempty"`
+	NeedsHuman          bool                        `json:"needsHuman"`
+	ResidualRisks       []string                    `json:"residualRisks,omitempty"`
+	Evidence            map[string][]string         `json:"evidence"`
+	ActionsTaken        []string                    `json:"actionsTaken"`
+	BlockedReason       string                      `json:"blockedReason,omitempty"`
+	NextSuggestedAction string                      `json:"nextSuggestedAction"`
+	AuthorizationMatrix []AuthorizationCheck        `json:"authorizationMatrix"`
+	LiveProofGate       LiveProofGate               `json:"liveProofGate"`
+}
+
+type ExternalReviewReport struct {
+	SchemaVersion       int                  `json:"schemaVersion"`
+	Command             string               `json:"command"`
+	GeneratedAt         string               `json:"generatedAt"`
+	Status              string               `json:"status"`
+	EvidenceLabel       string               `json:"evidenceLabel"`
+	Boundary            string               `json:"boundary"`
+	PackageID           string               `json:"packageId"`
+	TaskIDs             []string             `json:"taskIds,omitempty"`
+	Reviewer            string               `json:"reviewer"`
+	ReviewPackPath      string               `json:"reviewPackPath,omitempty"`
+	ReviewerPromptPath  string               `json:"reviewerPromptPath,omitempty"`
+	ReportPath          string               `json:"reportPath,omitempty"`
+	OutputPath          string               `json:"outputPath,omitempty"`
+	RunnerCommand       []string             `json:"runnerCommand,omitempty"`
+	RunnerOutput        string               `json:"runnerOutput,omitempty"`
+	TimeoutMinutes      int                  `json:"timeoutMinutes,omitempty"`
+	NeedsHuman          bool                 `json:"needsHuman"`
+	ResidualRisks       []string             `json:"residualRisks,omitempty"`
+	Evidence            map[string][]string  `json:"evidence"`
+	ActionsTaken        []string             `json:"actionsTaken"`
+	BlockedReason       string               `json:"blockedReason,omitempty"`
+	NextSuggestedAction string               `json:"nextSuggestedAction"`
+	AuthorizationMatrix []AuthorizationCheck `json:"authorizationMatrix"`
+}
+
 type ConsultationTaskSummary struct {
 	ID                string `json:"id"`
 	Title             string `json:"title,omitempty"`
@@ -624,6 +684,8 @@ func run(args []string) error {
 		return cmdRunRoutine(args[1:])
 	case "roadmap":
 		return cmdRoadmap(args[1:])
+	case "review":
+		return cmdReview(args[1:])
 	case "policy":
 		return cmdPolicy(args[1:])
 	case "eval":
@@ -656,6 +718,9 @@ Usage:
   codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--stale-after 15m]
   codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack consultation --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
+  codex-orchestrator pack review --package-id PKG --task-id TASK [--task-id TASK...] [--repo PATH] [--ledger PATH] [--output DIR] [--write-report PATH] [--json]
+  codex-orchestrator review run --package-id PKG --reviewer pi|claude --pack DIR [--repo PATH] [--ledger PATH] [--write-report PATH] [--json] [--dry-run]
+  codex-orchestrator review import --package-id PKG --reviewer NAME --file PATH [--ledger PATH] [--task-id TASK] [--status passed|failed|blocked] [--json]
   codex-orchestrator validate-routines [--dir routines] [--json]
   codex-orchestrator run-routine pr-reviewer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine stale-task-rescuer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
@@ -671,7 +736,7 @@ Usage:
   codex-orchestrator eval run [--suite orchestration-policy-auditor] [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval add-failure --id ID --text TEXT --expect OPA001=1 [--file README.md] [--suite orchestration-policy-auditor] [--repo PATH]
   codex-orchestrator rules propose (--from-review PATH | --text TEXT | --text-file PATH) [--write-report PATH] [--json]
-  codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
+  codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK] [--package-id PKG] [--reviewer NAME] [--report-path PATH]
   codex-orchestrator record-routine-run --report-json PATH
   codex-orchestrator completion bash|zsh|fish
 
@@ -704,7 +769,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init dispatch record-task append-event observe heartbeat status pack validate-routines run-routine roadmap policy eval rules record-routine-run completion help"
+  commands="init dispatch record-task append-event observe heartbeat status pack review validate-routines run-routine roadmap policy eval rules record-routine-run completion help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report"
 
   case "$prev" in
@@ -721,7 +786,11 @@ _codex_orchestrator()
       return 0
       ;;
     pack)
-      COMPREPLY=( $(compgen -W "merge-readiness" -- "$cur") )
+      COMPREPLY=( $(compgen -W "merge-readiness consultation review" -- "$cur") )
+      return 0
+      ;;
+    review)
+      COMPREPLY=( $(compgen -W "run import" -- "$cur") )
       return 0
       ;;
     roadmap)
@@ -764,8 +833,19 @@ _codex_orchestrator()
         COMPREPLY=( $(compgen -W "--repo --ledger --task-id --write-report --json --help" -- "$cur") )
       elif [[ ${COMP_WORDS[2]} == "consultation" ]]; then
         COMPREPLY=( $(compgen -W "--repo --ledger --task-id --write-report --json --help" -- "$cur") )
+      elif [[ ${COMP_WORDS[2]} == "review" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --ledger --package-id --task-id --output --write-report --json --help" -- "$cur") )
       else
-        COMPREPLY=( $(compgen -W "merge-readiness consultation" -- "$cur") )
+        COMPREPLY=( $(compgen -W "merge-readiness consultation review" -- "$cur") )
+      fi
+      ;;
+    review)
+      if [[ ${COMP_WORDS[2]} == "run" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --ledger --package-id --reviewer --pack --write-report --json --dry-run --timeout-minutes --help" -- "$cur") )
+      elif [[ ${COMP_WORDS[2]} == "import" ]]; then
+        COMPREPLY=( $(compgen -W "--ledger --package-id --reviewer --file --task-id --status --json --help" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "run import" -- "$cur") )
       fi
       ;;
     heartbeat)
@@ -808,7 +888,7 @@ _codex_orchestrator()
       fi
       ;;
     record-routine-run)
-      COMPREPLY=( $(compgen -W "--ledger --routine --status --task-id --evidence-local --evidence-proxy --evidence-direct --evidence-blocked --action --next --needs-human --blocked-reason --report-json --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--ledger --routine --status --task-id --package-id --reviewer --report-path --evidence-local --evidence-proxy --evidence-direct --evidence-blocked --action --next --needs-human --blocked-reason --report-json --help" -- "$cur") )
       ;;
   esac
 }
@@ -829,6 +909,7 @@ commands=(
   'heartbeat:run observe on an interval and write reports'
   'status:print ledger status'
   'pack:generate local/static handoff artifacts'
+  'review:run or import external model reviewer reports'
   'validate-routines:validate routine specs'
   'run-routine:run a read-only routine'
   'roadmap:score local/static roadmap candidates'
@@ -915,9 +996,20 @@ case $state in
         ;;
       pack)
         if (( CURRENT == 3 )); then
-          _values 'subcommand' merge-readiness consultation
+          _values 'subcommand' merge-readiness consultation review
+        elif [[ $words[3] == "review" ]]; then
+          _values 'options' --repo --ledger --package-id --task-id --output --write-report --json --help
         else
           _values 'options' --repo --ledger --task-id --write-report --json --help
+        fi
+        ;;
+      review)
+        if (( CURRENT == 3 )); then
+          _values 'subcommand' run import
+        elif [[ $words[3] == "run" ]]; then
+          _values 'options' --repo --ledger --package-id --reviewer --pack --write-report --json --dry-run --timeout-minutes --help
+        else
+          _values 'options' --ledger --package-id --reviewer --file --task-id --status --json --help
         fi
         ;;
       record-task)
@@ -939,7 +1031,7 @@ case $state in
         _values 'options' --dir --json --help
         ;;
       record-routine-run)
-        _values 'options' --ledger --routine --status --task-id --evidence-local --evidence-proxy --evidence-direct --evidence-blocked --action --next --needs-human --blocked-reason --report-json --help
+        _values 'options' --ledger --routine --status --task-id --package-id --reviewer --report-path --evidence-local --evidence-proxy --evidence-direct --evidence-blocked --action --next --needs-human --blocked-reason --report-json --help
         ;;
     esac
     ;;
@@ -958,6 +1050,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'observe' -d 'Inspe
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'heartbeat' -d 'Run observe on an interval and write reports'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'status' -d 'Print ledger status'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'pack' -d 'Generate local/static handoff artifacts'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'review' -d 'Run or import external model reviewer reports'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'validate-routines' -d 'Validate routine specs'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'run-routine' -d 'Run a read-only routine'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'policy' -d 'Run policy and eval checks'
@@ -967,7 +1060,8 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from dispatch' -a 'record reconcile'
-complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness consultation'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness consultation review'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from review' -a 'run import'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run add-failure'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from rules' -a 'propose'
@@ -986,6 +1080,11 @@ complete -c codex-orchestrator -l repo -d 'Repository path'
 complete -c codex-orchestrator -l tag -d 'Release tag'
 complete -c codex-orchestrator -l expected-asset -d 'Expected release asset'
 complete -c codex-orchestrator -l heartbeat-report -d 'Optional heartbeat report path'
+complete -c codex-orchestrator -l package-id -d 'Feature package id'
+complete -c codex-orchestrator -l reviewer -d 'External reviewer name'
+complete -c codex-orchestrator -l pack -d 'Review pack directory'
+complete -c codex-orchestrator -l output -d 'Output directory'
+complete -c codex-orchestrator -l dry-run -d 'Print runner command without invoking reviewer'
 `
 }
 
@@ -1654,15 +1753,17 @@ func cmdStatus(args []string) error {
 
 func cmdPack(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: codex-orchestrator pack merge-readiness|consultation")
+		return errors.New("usage: codex-orchestrator pack merge-readiness|consultation|review")
 	}
 	switch args[0] {
 	case "merge-readiness":
 		return cmdPackMergeReadiness(args[1:])
 	case "consultation":
 		return cmdPackConsultation(args[1:])
+	case "review":
+		return cmdPackReview(args[1:])
 	case "help", "-h", "--help":
-		fmt.Println("usage: codex-orchestrator pack merge-readiness|consultation --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]")
+		fmt.Println("usage: codex-orchestrator pack merge-readiness|consultation|review --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]")
 		return nil
 	default:
 		return fmt.Errorf("unknown pack subcommand: %s", args[0])
@@ -1734,6 +1835,187 @@ func cmdPackConsultation(args []string) error {
 		return printJSON(report)
 	}
 	fmt.Printf("Wrote consultation request pack: %s\n", *writeReport)
+	return nil
+}
+
+func cmdPackReview(args []string) error {
+	fs := flag.NewFlagSet("pack review", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	packageID := fs.String("package-id", "", "feature package id")
+	outputDir := fs.String("output", "", "write portable review pack directory")
+	writeReport := fs.String("write-report", "", "write review pack JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	var taskIDs stringList
+	fs.Var(&taskIDs, "task-id", "task id to include; repeatable")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *packageID == "" {
+		return errors.New("pack review requires --package-id")
+	}
+	if len(taskIDs) == 0 {
+		return errors.New("pack review requires at least one --task-id")
+	}
+	resolvedRepo := expandPath(*repo)
+	if resolvedRepo == "" {
+		resolvedRepo = "."
+	}
+	resolvedLedger := resolveDefaultLedgerPath(resolvedRepo, *ledgerPath, flagProvided(fs, "ledger"))
+	report, err := buildReviewPack(resolvedRepo, resolvedLedger, *packageID, taskIDs, *outputDir)
+	if err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || (*writeReport == "" && *outputDir == "") {
+		return printJSON(report)
+	}
+	if *outputDir != "" {
+		fmt.Printf("Wrote review pack: %s\n", report.OutputDir)
+	}
+	if *writeReport != "" {
+		fmt.Printf("Wrote review pack report: %s\n", *writeReport)
+	}
+	return nil
+}
+
+func cmdReview(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: codex-orchestrator review run|import")
+	}
+	switch args[0] {
+	case "run":
+		return cmdReviewRun(args[1:])
+	case "import":
+		return cmdReviewImport(args[1:])
+	case "help", "-h", "--help":
+		fmt.Println("usage: codex-orchestrator review run|import")
+		return nil
+	default:
+		return fmt.Errorf("unknown review subcommand: %s", args[0])
+	}
+}
+
+func cmdReviewRun(args []string) error {
+	fs := flag.NewFlagSet("review run", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	packageID := fs.String("package-id", "", "feature package id")
+	reviewer := fs.String("reviewer", "", "reviewer runner: pi or claude")
+	packDir := fs.String("pack", "", "review pack directory")
+	writeReport := fs.String("write-report", "", "write external review report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	dryRun := fs.Bool("dry-run", false, "print planned runner command without invoking reviewer")
+	timeoutMinutes := fs.Int("timeout-minutes", 20, "reviewer runner timeout in minutes")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *packageID == "" {
+		return errors.New("review run requires --package-id")
+	}
+	if *reviewer == "" {
+		return errors.New("review run requires --reviewer")
+	}
+	if *packDir == "" {
+		return errors.New("review run requires --pack")
+	}
+	resolvedRepo := expandPath(*repo)
+	if resolvedRepo == "" {
+		resolvedRepo = "."
+	}
+	resolvedLedger := resolveDefaultLedgerPath(resolvedRepo, *ledgerPath, flagProvided(fs, "ledger"))
+	report, err := runExternalReview(resolvedRepo, resolvedLedger, *packageID, *reviewer, *packDir, *timeoutMinutes, *dryRun)
+	if err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		report.ReportPath = *writeReport
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if report.OutputPath != "" && !*dryRun {
+		if err := writeText(report.OutputPath, report.RunnerOutput); err != nil {
+			return err
+		}
+	}
+	if !*dryRun && report.Status != "blocked" {
+		if err := recordExternalReviewRun(resolvedLedger, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote external review report: %s\n", *writeReport)
+	return nil
+}
+
+func cmdReviewImport(args []string) error {
+	fs := flag.NewFlagSet("review import", flag.ExitOnError)
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	packageID := fs.String("package-id", "", "feature package id")
+	reviewer := fs.String("reviewer", "", "reviewer name")
+	filePath := fs.String("file", "", "review markdown/text file")
+	status := fs.String("status", "passed", "review status: passed, failed, or blocked")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	var taskIDs stringList
+	fs.Var(&taskIDs, "task-id", "task id covered by the review; repeatable")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *packageID == "" {
+		return errors.New("review import requires --package-id")
+	}
+	if *reviewer == "" {
+		return errors.New("review import requires --reviewer")
+	}
+	if *filePath == "" {
+		return errors.New("review import requires --file")
+	}
+	if !containsString([]string{"passed", "failed", "blocked"}, *status) {
+		return errors.New("review import --status must be passed, failed, or blocked")
+	}
+	data, err := os.ReadFile(expandPath(*filePath))
+	if err != nil {
+		return err
+	}
+	report := ExternalReviewReport{
+		SchemaVersion: 1,
+		Command:       "review import",
+		GeneratedAt:   nowISO(),
+		Status:        *status,
+		EvidenceLabel: "proxy/advisory",
+		Boundary:      externalReviewBoundary(),
+		PackageID:     *packageID,
+		TaskIDs:       append([]string(nil), taskIDs...),
+		Reviewer:      *reviewer,
+		OutputPath:    expandPath(*filePath),
+		RunnerOutput:  strings.TrimSpace(string(data)),
+		Evidence: normalizedEvidence(map[string][]string{
+			"proxy": {"Imported external reviewer output from " + *filePath},
+			"local": {"Review import updated only the local ledger/routine-run record."},
+		}),
+		ActionsTaken:        []string{"Imported external review text as proxy/advisory evidence"},
+		NextSuggestedAction: "Have the Codex App orchestrator compare reviewer findings with the package acceptance report before deciding fix/accept/block.",
+		AuthorizationMatrix: externalReviewAuthorizationMatrix(),
+	}
+	if *status == "blocked" {
+		report.NeedsHuman = true
+		report.BlockedReason = "external reviewer reported blocked"
+		report.ResidualRisks = []string{"External reviewer did not produce a clean pass; orchestrator must inspect findings before merge."}
+	}
+	if err := recordExternalReviewRun(*ledgerPath, report); err != nil {
+		return err
+	}
+	if *jsonOut {
+		return printJSON(report)
+	}
+	fmt.Printf("Imported external review: package=%s reviewer=%s status=%s\n", *packageID, *reviewer, *status)
 	return nil
 }
 
@@ -3088,6 +3370,495 @@ func finalizeConsultationRequestPack(report ConsultationRequestPack) Consultatio
 	report.AuthorizationMatrix = consultationAuthorizationMatrix(report)
 	report.OwnerDecisionBrief = consultationOwnerDecisionBrief(report)
 	return report
+}
+
+func buildReviewPack(repoPath string, ledgerPath string, packageID string, taskIDs []string, outputDir string) (ReviewPack, error) {
+	report := newReviewPack(repoPath, ledgerPath, packageID)
+	ledger, err := loadLedger(ledgerPath)
+	if err != nil {
+		return report, err
+	}
+	report.RepoPath = ledger.ProjectRoot
+	if strings.TrimSpace(report.RepoPath) == "" {
+		report.RepoPath = repoPath
+	}
+	for _, taskID := range uniqueSortedStrings(taskIDs) {
+		taskPack, err := buildMergeReadinessPack(repoPath, ledgerPath, taskID)
+		if err != nil {
+			return report, err
+		}
+		report.TaskPacks = append(report.TaskPacks, taskPack)
+		report.Tasks = append(report.Tasks, taskPack.Task)
+		report.ChangedPaths = append(report.ChangedPaths, taskPack.ChangedPaths...)
+		report.RecordedGates = append(report.RecordedGates, taskPack.RecordedGates...)
+		report.SuggestedGates = append(report.SuggestedGates, taskPack.SuggestedGates...)
+		report.ActionsTaken = append(report.ActionsTaken, "Built merge-readiness input for task "+taskID)
+		mergeEvidence(report.Evidence, taskPack.Evidence)
+		if taskPack.Status == "blocked" {
+			report.Status = "blocked"
+			report.BlockedReason = firstNonEmpty(report.BlockedReason, "one or more task review inputs are blocked")
+			report.NeedsHuman = true
+			report.ResidualRisks = append(report.ResidualRisks, "Task "+taskID+" is blocked: "+firstNonEmpty(taskPack.BlockedReason, taskPack.NextSuggestedAction))
+		}
+		if taskPack.Status == "failed" && report.Status != "blocked" {
+			report.Status = "failed"
+			report.NeedsHuman = true
+			report.ResidualRisks = append(report.ResidualRisks, "Task "+taskID+" has failed local/static merge-readiness preconditions.")
+		}
+		if taskPack.NeedsHuman {
+			report.NeedsHuman = true
+			report.ResidualRisks = append(report.ResidualRisks, "Task "+taskID+" requires orchestrator/human review before acceptance.")
+		}
+	}
+	if len(report.TaskPacks) == 0 {
+		report.Status = "blocked"
+		report.BlockedReason = "no task packs were generated"
+		report.NeedsHuman = true
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "No tasks were available for package review.")
+	}
+	report.ChangedPaths = uniqueSortedStrings(report.ChangedPaths)
+	report.RecordedGates = uniqueSortedStrings(report.RecordedGates)
+	report.SuggestedGates = uniqueSortedStrings(report.SuggestedGates)
+	report.ResidualRisks = uniqueSortedStrings(report.ResidualRisks)
+	report.Evidence = normalizedEvidence(report.Evidence)
+	report.LiveProofGate = reviewPackLiveProofGate(report)
+	report.AuthorizationMatrix = reviewPackAuthorizationMatrix()
+	if outputDir != "" {
+		resolvedOutput := expandPath(outputDir)
+		if !filepath.IsAbs(resolvedOutput) {
+			resolvedOutput = filepath.Join(report.RepoPath, resolvedOutput)
+		}
+		if err := writeReviewPackFiles(resolvedOutput, &report); err != nil {
+			return report, err
+		}
+		report.OutputDir = resolvedOutput
+		report.ReviewerPromptPath = filepath.Join(resolvedOutput, "reviewer-prompt.md")
+		report.ReviewMaterialPaths = []string{
+			filepath.Join(resolvedOutput, "review-pack.json"),
+			filepath.Join(resolvedOutput, "changed-files.txt"),
+			filepath.Join(resolvedOutput, "gates.md"),
+			filepath.Join(resolvedOutput, "evidence.md"),
+			filepath.Join(resolvedOutput, "residual-risks.md"),
+		}
+		report.ActionsTaken = append(report.ActionsTaken, "Wrote portable local/static review pack directory")
+	}
+	report.ActionsTaken = uniqueSortedStrings(report.ActionsTaken)
+	if report.NextSuggestedAction == "" {
+		report.NextSuggestedAction = "Run an external reviewer at the feature-package boundary, import the report, then generate a package acceptance decision separately."
+	}
+	return report, nil
+}
+
+func newReviewPack(repoPath string, ledgerPath string, packageID string) ReviewPack {
+	return ReviewPack{
+		SchemaVersion: 1,
+		Command:       "pack review",
+		GeneratedAt:   nowISO(),
+		Status:        "passed",
+		EvidenceLabel: "local/static",
+		Boundary:      "This review pack is local/static handoff material for external reviewers. It does not run reviewers by itself, does not merge, push, cleanup, dispatch, edit git state, or prove runtime correctness.",
+		PackageID:     packageID,
+		LedgerPath:    ledgerPath,
+		RepoPath:      repoPath,
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {"Review pack generation reads only local ledger and git/worktree state."},
+			"blocked": {},
+		},
+		ActionsTaken:        []string{"Started package-level review pack generation"},
+		NextSuggestedAction: "Send this pack to a read-only external reviewer, then import the result before the package acceptance decision.",
+	}
+}
+
+func writeReviewPackFiles(outputDir string, report *ReviewPack) error {
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return err
+	}
+	if err := writeJSON(filepath.Join(outputDir, "review-pack.json"), report); err != nil {
+		return err
+	}
+	if err := writeText(filepath.Join(outputDir, "reviewer-prompt.md"), renderReviewPackPrompt(*report)); err != nil {
+		return err
+	}
+	if err := writeText(filepath.Join(outputDir, "changed-files.txt"), strings.Join(report.ChangedPaths, "\n")); err != nil {
+		return err
+	}
+	if err := writeText(filepath.Join(outputDir, "gates.md"), renderReviewPackList("Recorded Gates", report.RecordedGates)+"\n\n"+renderReviewPackList("Suggested Gates", report.SuggestedGates)); err != nil {
+		return err
+	}
+	if err := writeText(filepath.Join(outputDir, "evidence.md"), renderReviewPackEvidence(report.Evidence)); err != nil {
+		return err
+	}
+	if err := writeText(filepath.Join(outputDir, "residual-risks.md"), renderReviewPackList("Residual Risks", report.ResidualRisks)); err != nil {
+		return err
+	}
+	combinedDiff := strings.Builder{}
+	for _, taskPack := range report.TaskPacks {
+		if taskPack.Task.Worktree == "" || taskPack.Task.BaseCommit == "" {
+			continue
+		}
+		diff, err := gitOutput(taskPack.Task.Worktree, "diff", taskPack.Task.BaseCommit+"..HEAD")
+		if err != nil {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not collect diff for "+taskPack.Task.ID+": "+err.Error())
+			continue
+		}
+		name := safeFileName(taskPack.Task.ID) + ".patch"
+		if err := writeText(filepath.Join(outputDir, name), diff); err != nil {
+			return err
+		}
+		combinedDiff.WriteString("# Task " + taskPack.Task.ID + "\n\n")
+		combinedDiff.WriteString(diff)
+		combinedDiff.WriteString("\n\n")
+		report.ReviewMaterialPaths = append(report.ReviewMaterialPaths, filepath.Join(outputDir, name))
+	}
+	if combinedDiff.Len() > 0 {
+		if err := writeText(filepath.Join(outputDir, "diff.patch"), combinedDiff.String()); err != nil {
+			return err
+		}
+		report.ReviewMaterialPaths = append(report.ReviewMaterialPaths, filepath.Join(outputDir, "diff.patch"))
+	}
+	return nil
+}
+
+func renderReviewPackPrompt(report ReviewPack) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# External Review Request: %s\n\n", report.PackageID)
+	fmt.Fprintf(&b, "You are an independent read-only reviewer. Review this feature-package handoff pack. Do not edit files, do not run destructive commands, do not merge, push, cleanup, dispatch, deploy, or claim direct runtime proof.\n\n")
+	fmt.Fprintf(&b, "## Boundary\n\n%s\n\n", report.Boundary)
+	fmt.Fprintf(&b, "## Review Questions\n\n")
+	for _, question := range []string{
+		"Do the included task diffs match the package outcome and task contracts?",
+		"Are any changed paths outside allowed scope or inside forbidden scope?",
+		"Are recorded gates credible for the touched surfaces, and what is missing?",
+		"Are local/proxy/direct/blocked evidence labels honest?",
+		"Does the package look vertically coherent, or is it a bundle of unrelated small slices?",
+		"Should the orchestrator accept, request fixes, or block this package before merge/release?",
+	} {
+		fmt.Fprintf(&b, "- %s\n", question)
+	}
+	fmt.Fprintf(&b, "\n## Required Output\n\n")
+	fmt.Fprintf(&b, "- Verdict: pass / concerns / reject / blocked\n")
+	fmt.Fprintf(&b, "- Findings ordered by severity, with file/path references when possible\n")
+	fmt.Fprintf(&b, "- Missing tests or proof\n")
+	fmt.Fprintf(&b, "- Evidence-label concerns\n")
+	fmt.Fprintf(&b, "- Final recommendation for the Codex App orchestrator\n\n")
+	fmt.Fprintf(&b, "## Included Tasks\n\n")
+	for _, task := range report.Tasks {
+		fmt.Fprintf(&b, "- %s: %s branch=%s worktree=%s\n", task.ID, task.Title, task.Branch, task.Worktree)
+	}
+	fmt.Fprintf(&b, "\n## Review Materials\n\n")
+	for _, path := range []string{"review-pack.json", "changed-files.txt", "gates.md", "evidence.md", "residual-risks.md", "diff.patch"} {
+		fmt.Fprintf(&b, "- %s\n", path)
+	}
+	return b.String()
+}
+
+func renderReviewPackList(title string, values []string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# %s\n\n", title)
+	if len(values) == 0 {
+		b.WriteString("(none recorded)\n")
+		return b.String()
+	}
+	for _, value := range values {
+		fmt.Fprintf(&b, "- %s\n", value)
+	}
+	return b.String()
+}
+
+func renderReviewPackEvidence(evidence map[string][]string) string {
+	var b strings.Builder
+	b.WriteString("# Evidence\n\n")
+	normalized := normalizedEvidence(evidence)
+	for _, label := range []string{"direct", "proxy", "local", "blocked"} {
+		fmt.Fprintf(&b, "## %s\n\n", label)
+		if len(normalized[label]) == 0 {
+			b.WriteString("(none recorded)\n\n")
+			continue
+		}
+		for _, item := range normalized[label] {
+			fmt.Fprintf(&b, "- %s\n", item)
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func reviewPackAuthorizationMatrix() []AuthorizationCheck {
+	return []AuthorizationCheck{
+		{Action: "external-review", Status: "authorized-output", Reason: "The pack is portable local/static review material for an independent reviewer."},
+		{Action: "implementation", Status: "not-authorized-by-pack", Reason: "A review pack does not authorize code changes."},
+		{Action: "merge", Status: "not-authorized-by-pack", Reason: "A review pack or external reviewer output is input to an acceptance decision, not merge authorization."},
+		{Action: "push", Status: "not-authorized-by-pack", Reason: "Push requires a separate accepted closeout path."},
+		{Action: "cleanup", Status: "not-authorized-by-pack", Reason: "Cleanup requires a separate merge/reject/abandon decision."},
+	}
+}
+
+func reviewPackLiveProofGate(report ReviewPack) LiveProofGate {
+	combined := strings.Join(append(append([]string{report.PackageID}, report.ChangedPaths...), report.ResidualRisks...), "\n")
+	required := textSuggestsLiveProofRequired(combined)
+	gate := LiveProofGate{
+		Status:   "not-collected-by-review-pack",
+		Required: required,
+		Boundary: "Package review packs collect local/static handoff material only. Direct live/runtime/device/provider proof must be collected separately when required.",
+	}
+	if required {
+		gate.Status = "blocked-or-waiver-required"
+		gate.WaiverRequired = true
+		gate.MissingEvidence = []string{"No direct live proof is collected by this package review pack."}
+	} else {
+		gate.MissingEvidence = []string{"Reviewer must still verify whether this package actually requires direct proof."}
+	}
+	return gate
+}
+
+func runExternalReview(repoPath, ledgerPath, packageID, reviewer, packDir string, timeoutMinutes int, dryRun bool) (ExternalReviewReport, error) {
+	report := newExternalReviewReport(packageID, reviewer, packDir)
+	resolvedPack := expandPath(packDir)
+	if !filepath.IsAbs(resolvedPack) {
+		resolvedPack = filepath.Join(repoPath, resolvedPack)
+	}
+	report.ReviewPackPath = resolvedPack
+	promptPath := filepath.Join(resolvedPack, "reviewer-prompt.md")
+	report.ReviewerPromptPath = promptPath
+	if _, err := os.Stat(promptPath); err != nil {
+		report.Status = "blocked"
+		report.NeedsHuman = true
+		report.BlockedReason = "reviewer-prompt.md is missing from review pack"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Missing reviewer prompt: "+promptPath)
+		return finalizeExternalReviewReport(report), nil
+	}
+	taskIDs, _ := reviewPackTaskIDs(filepath.Join(resolvedPack, "review-pack.json"))
+	report.TaskIDs = taskIDs
+	outputPath := filepath.Join(resolvedPack, safeFileName(reviewer)+"-review.md")
+	report.OutputPath = outputPath
+	timeout := time.Duration(timeoutMinutes) * time.Minute
+	if timeout <= 0 {
+		timeout = 20 * time.Minute
+		report.TimeoutMinutes = 20
+	} else {
+		report.TimeoutMinutes = timeoutMinutes
+	}
+	name, args, display, err := externalReviewerCommand(reviewer, promptPath)
+	if err != nil {
+		report.Status = "blocked"
+		report.NeedsHuman = true
+		report.BlockedReason = err.Error()
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], err.Error())
+		return finalizeExternalReviewReport(report), nil
+	}
+	report.RunnerCommand = display
+	report.Evidence["local"] = append(report.Evidence["local"], "Prepared read-only external reviewer command for "+reviewer+".")
+	if dryRun {
+		report.Status = "passed"
+		report.RunnerOutput = strings.Join(display, " ")
+		report.ActionsTaken = append(report.ActionsTaken, "Dry-run only; external reviewer was not invoked")
+		report.NextSuggestedAction = "Run without --dry-run when the package boundary needs external review."
+		return finalizeExternalReviewReport(report), nil
+	}
+	output, err := commandOutputWithTimeout(resolvedPack, timeout, name, args...)
+	report.RunnerOutput = output
+	if err != nil {
+		report.Status = "failed"
+		report.NeedsHuman = true
+		report.BlockedReason = "external reviewer command failed"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], err.Error())
+		report.ResidualRisks = append(report.ResidualRisks, "External reviewer did not complete successfully; orchestrator must inspect the command output.")
+		return finalizeExternalReviewReport(report), nil
+	}
+	report.Status = "passed"
+	report.Evidence["proxy"] = append(report.Evidence["proxy"], "External reviewer output captured from "+reviewer+".")
+	report.Evidence["local"] = append(report.Evidence["local"], "Reviewer output path: "+outputPath)
+	report.ActionsTaken = append(report.ActionsTaken, "Invoked external reviewer in read-only package review mode")
+	report.NextSuggestedAction = "Import/inspect reviewer findings and compare them with package acceptance criteria before merge."
+	return finalizeExternalReviewReport(report), nil
+}
+
+func newExternalReviewReport(packageID, reviewer, packDir string) ExternalReviewReport {
+	return ExternalReviewReport{
+		SchemaVersion:  1,
+		Command:        "review run",
+		GeneratedAt:    nowISO(),
+		Status:         "blocked",
+		EvidenceLabel:  "proxy/advisory",
+		Boundary:       externalReviewBoundary(),
+		PackageID:      packageID,
+		Reviewer:       reviewer,
+		ReviewPackPath: packDir,
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken:        []string{"Prepared external package review runner"},
+		NextSuggestedAction: "Fix external review setup, or run a supported reviewer manually and import the report.",
+	}
+}
+
+func finalizeExternalReviewReport(report ExternalReviewReport) ExternalReviewReport {
+	report.TaskIDs = uniqueSortedStrings(report.TaskIDs)
+	report.ResidualRisks = uniqueSortedStrings(report.ResidualRisks)
+	report.ActionsTaken = uniqueSortedStrings(report.ActionsTaken)
+	report.Evidence = normalizedEvidence(report.Evidence)
+	report.AuthorizationMatrix = externalReviewAuthorizationMatrix()
+	if report.NextSuggestedAction == "" {
+		report.NextSuggestedAction = "Treat this reviewer output as advisory input to the package acceptance decision."
+	}
+	return report
+}
+
+func externalReviewBoundary() string {
+	return "External reviewer output is proxy/advisory evidence only. It may find issues, but it does not authorize implementation, merge, push, cleanup, release, deploy, or direct runtime/device/provider proof."
+}
+
+func externalReviewAuthorizationMatrix() []AuthorizationCheck {
+	return []AuthorizationCheck{
+		{Action: "review", Status: "advisory-output", Reason: "External model output is useful reviewer signal, not a final acceptance decision."},
+		{Action: "implementation", Status: "not-authorized-by-review", Reason: "Fixes require a separate task or orchestrator decision."},
+		{Action: "merge", Status: "not-authorized-by-review", Reason: "Merge requires Codex App orchestrator acceptance after reviewing findings."},
+		{Action: "push", Status: "not-authorized-by-review", Reason: "Push is outside the external reviewer boundary."},
+		{Action: "cleanup", Status: "not-authorized-by-review", Reason: "Cleanup requires separate closeout after merge/reject/abandon."},
+	}
+}
+
+func externalReviewerCommand(reviewer, promptPath string) (string, []string, []string, error) {
+	switch strings.ToLower(strings.TrimSpace(reviewer)) {
+	case "pi":
+		args := []string{
+			"-p",
+			"--no-session",
+			"--no-extensions",
+			"--no-skills",
+			"--no-context-files",
+			"--thinking", "high",
+			"--tools", "read,grep,ls",
+			"@" + promptPath,
+			"Review this package using the instructions in the attached prompt. Do not edit files.",
+		}
+		return "pi", args, append([]string{"pi"}, args...), nil
+	case "claude":
+		promptData, err := os.ReadFile(promptPath)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		args := []string{
+			"-p",
+			"--output-format", "text",
+			"--permission-mode", "plan",
+			"--tools", "Read,Grep,Glob",
+			"--add-dir", filepath.Dir(promptPath),
+			"--append-system-prompt", string(promptData),
+			"Review the package using reviewer-prompt.md and adjacent review-pack files. Do not edit files.",
+		}
+		display := []string{"claude", "-p", "--output-format", "text", "--permission-mode", "plan", "--tools", "Read,Grep,Glob", "--add-dir", filepath.Dir(promptPath), "--append-system-prompt", "<reviewer-prompt.md>", "<review request>"}
+		return "claude", args, display, nil
+	default:
+		return "", nil, nil, fmt.Errorf("unsupported reviewer %q; supported reviewers: pi, claude", reviewer)
+	}
+}
+
+func commandOutputWithTimeout(cwd string, timeout time.Duration, name string, args ...string) (string, error) {
+	if timeout <= 0 {
+		timeout = 20 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = cwd
+	out, err := cmd.CombinedOutput()
+	output := strings.TrimSpace(string(out))
+	if ctx.Err() == context.DeadlineExceeded {
+		return output, fmt.Errorf("%s timed out after %s", name, timeout)
+	}
+	if err != nil {
+		if output == "" {
+			return output, err
+		}
+		return output, fmt.Errorf("%s", output)
+	}
+	return output, nil
+}
+
+func recordExternalReviewRun(ledgerPath string, report ExternalReviewReport) error {
+	ledger, err := loadLedger(ledgerPath)
+	if err != nil {
+		return err
+	}
+	run := RoutineRun{
+		At:                  nowISO(),
+		RoutineID:           "external-reviewer",
+		PackageID:           report.PackageID,
+		Reviewer:            report.Reviewer,
+		ReportPath:          firstNonEmpty(report.ReportPath, report.OutputPath),
+		Status:              report.Status,
+		Evidence:            normalizedEvidence(report.Evidence),
+		ActionsTaken:        append([]string(nil), report.ActionsTaken...),
+		NeedsHuman:          report.NeedsHuman,
+		BlockedReason:       report.BlockedReason,
+		NextSuggestedAction: report.NextSuggestedAction,
+	}
+	if len(report.TaskIDs) == 1 {
+		run.TaskID = report.TaskIDs[0]
+	}
+	ledger.RoutineRuns = append(ledger.RoutineRuns, run)
+	if err := saveLedger(ledgerPath, &ledger); err != nil {
+		return err
+	}
+	return appendEvent(eventsPathForLedger(ledgerPath), map[string]any{
+		"at":         run.At,
+		"type":       "external-review",
+		"status":     run.Status,
+		"packageId":  run.PackageID,
+		"reviewer":   run.Reviewer,
+		"reportPath": run.ReportPath,
+		"note":       run.NextSuggestedAction,
+	})
+}
+
+func reviewPackTaskIDs(path string) ([]string, error) {
+	var pack ReviewPack
+	data, err := os.ReadFile(expandPath(path))
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(data, &pack); err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	for _, task := range pack.Tasks {
+		if task.ID != "" {
+			ids = append(ids, task.ID)
+		}
+	}
+	return uniqueSortedStrings(ids), nil
+}
+
+func mergeEvidence(dst map[string][]string, src map[string][]string) {
+	for _, label := range []string{"direct", "proxy", "local", "blocked"} {
+		dst[label] = append(dst[label], src[label]...)
+	}
+}
+
+func safeFileName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "unnamed"
+	}
+	var b strings.Builder
+	for _, r := range value {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.' {
+			b.WriteRune(r)
+			continue
+		}
+		b.WriteRune('-')
+	}
+	out := strings.Trim(b.String(), "-.")
+	if out == "" {
+		return "unnamed"
+	}
+	return out
 }
 
 func mergeReadinessAuthorizationMatrix(report MergeReadinessPack) []AuthorizationCheck {
