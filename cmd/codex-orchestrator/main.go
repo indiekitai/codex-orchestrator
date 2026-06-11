@@ -2580,7 +2580,7 @@ func runRoadmapNextTaskSuggesterRoutine(repo string, ledgerPath string) RoutineR
 		return report
 	}
 	report.Evidence["local"] = append(report.Evidence["local"], "Roadmap candidate tasks: "+formatRoadmapCandidateNames(candidates))
-	report.ActionsTaken = append(report.ActionsTaken, "Parsed v3 candidate routines and explicit remaining blocks from docs/roadmap.md")
+	report.ActionsTaken = append(report.ActionsTaken, "Parsed roadmap candidate sections from docs/roadmap.md")
 
 	sourcePath := filepath.Join(repo, "cmd", "codex-orchestrator", "main.go")
 	sourceData, err := os.ReadFile(sourcePath)
@@ -3908,6 +3908,7 @@ func parseRoadmapNextTaskCandidates(text string) ([]roadmapCandidate, error) {
 	inV3 := false
 	collectV3Candidates := false
 	collectRemaining := false
+	collectNextPriorities := false
 	addCandidate := func(name string, line int, kind string) {
 		name = cleanRoadmapCandidateText(name)
 		key := normalizeRoadmapKey(name)
@@ -3929,10 +3930,12 @@ func parseRoadmapNextTaskCandidates(text string) ([]roadmapCandidate, error) {
 			inV3 = strings.Contains(strings.ToLower(currentSection), "v3") && strings.Contains(strings.ToLower(currentSection), "routine")
 			collectV3Candidates = false
 			collectRemaining = false
+			collectNextPriorities = strings.Contains(currentSection, "下一阶段优先级")
 			continue
 		case strings.HasPrefix(trimmed, "### "):
 			collectV3Candidates = false
 			collectRemaining = false
+			collectNextPriorities = false
 			continue
 		case inV3 && strings.HasPrefix(trimmed, "候选 routine"):
 			collectV3Candidates = true
@@ -3941,6 +3944,10 @@ func parseRoadmapNextTaskCandidates(text string) ([]roadmapCandidate, error) {
 		case trimmed == "剩余：":
 			collectRemaining = true
 			collectV3Candidates = false
+			collectNextPriorities = false
+			continue
+		case collectNextPriorities && strings.HasPrefix(trimmed, "暂不进入"):
+			collectNextPriorities = false
 			continue
 		}
 		if collectV3Candidates {
@@ -3967,9 +3974,18 @@ func parseRoadmapNextTaskCandidates(text string) ([]roadmapCandidate, error) {
 				collectRemaining = false
 			}
 		}
+		if collectNextPriorities {
+			switch {
+			case hasNumberedListPrefix(trimmed):
+				addCandidate(trimmed[strings.Index(trimmed, ".")+1:], index+1, "next-priority")
+				continue
+			case trimmed == "" || strings.HasPrefix(trimmed, "- "):
+				continue
+			}
+		}
 	}
 	if len(candidates) == 0 {
-		return nil, errors.New("no v3 candidates or explicit remaining tasks found")
+		return nil, errors.New("no v3 candidates, explicit remaining tasks, or next-stage priorities found")
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		left := roadmapCandidatePriority(candidates[i])
@@ -3988,8 +4004,10 @@ func roadmapCandidatePriority(candidate roadmapCandidate) int {
 		return 0
 	case "remaining":
 		return 1
-	default:
+	case "next-priority":
 		return 2
+	default:
+		return 3
 	}
 }
 
@@ -4374,6 +4392,16 @@ func isObservationReservedStatus(status string) bool {
 func classifyRoadmapCandidateSafety(name string) (bool, string) {
 	key := normalizeRoadmapKey(name)
 	switch {
+	case strings.Contains(key, "runtimestatusreport"),
+		strings.Contains(key, "statusreport"),
+		strings.Contains(key, "statemodel"),
+		strings.Contains(key, "worktreestatemodel"),
+		strings.Contains(key, "reviewchecklist"),
+		strings.Contains(key, "evidencelabellinter"),
+		strings.Contains(key, "docsdriftguard"),
+		strings.Contains(key, "casestudy"),
+		strings.Contains(key, "bootstrapdocs"):
+		return true, "it can stay bounded to repo-local docs/spec/ledger analysis without merge, push, release, or session mutation"
 	case containsAnyFold(name, []string{"rebase", "merge", "push", "cleanup", "delete", "session", "worker pool", "daemon", "release", "tag", "deploy", "hardware", "payment", "prod", "notification"}):
 		return false, "it implies mutating git/release/session/runtime work instead of a local read-only planning or audit slice"
 	case strings.Contains(key, "reviewer"),

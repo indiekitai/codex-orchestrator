@@ -1559,6 +1559,67 @@ func TestRunRoadmapNextTaskSuggesterRoutineQueueDrainedWhenOnlyUnsafeItemsRemain
 	}
 }
 
+func TestRunRoadmapNextTaskSuggesterRoutineParsesNextStagePriorities(t *testing.T) {
+	root := t.TempDir()
+	project, _ := createRoadmapNextTaskFixture(t, root, false)
+	roadmap := `# roadmap
+
+## 下一阶段优先级
+
+1. Runtime status report。
+   - 输出 active workers、pending setup 和 completed-unreviewed。
+
+2. First-class setup/worktree state model。
+   - 把 pendingWorktreeId、真实 worktree、branch 和 clean commit 作为工具级状态。
+
+3. Automated review checklist。
+   - 检查 allowed/forbidden paths、review doc、artifact 和 evidence labels。
+
+4. Evidence-label linter。
+   - 防止 local/proxy/weak 被写成 direct/pre/prod/device proof。
+
+5. Post-merge docs drift guard。
+   - accepted merge 后提示 central docs 是否需要统领更新。
+
+6. Case study and bootstrap docs。
+   - 把真实项目经验写成脱敏案例。
+
+暂不进入的方向：
+
+- 重 daemon；
+- 自动 session scheduler；
+- Homebrew package manager route。
+`
+	if err := os.WriteFile(filepath.Join(project, "docs", "roadmap.md"), []byte(roadmap), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runRoadmapNextTaskSuggesterRoutine(project, "")
+	if report.Status != "passed" {
+		t.Fatalf("expected passed report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"Roadmap candidate tasks: Runtime status report, First-class setup/worktree state model, Automated review checklist, Evidence-label linter, Post-merge docs drift guard, Case study and bootstrap docs",
+		"local suggestion: Runtime status report.",
+		"local suggestion: First-class setup/worktree state model.",
+		"local suggestion: Automated review checklist.",
+		"local suggestion: Evidence-label linter.",
+		"local suggestion: Post-merge docs drift guard.",
+		"local suggestion: Case study and bootstrap docs.",
+	} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, local)
+		}
+	}
+	if strings.Contains(local, "daemon") || strings.Contains(local, "Homebrew") {
+		t.Fatalf("expected excluded future directions not to be suggested, got:\n%s", local)
+	}
+	if !strings.Contains(report.NextSuggestedAction, "Runtime status report") {
+		t.Fatalf("expected primary next action to prefer first next-stage priority, got %q", report.NextSuggestedAction)
+	}
+}
+
 func TestRunRoadmapNextTaskSuggesterRoutineSkipsCompletedCandidateWording(t *testing.T) {
 	root := t.TempDir()
 	project, _ := createRoadmapNextTaskFixture(t, root, false)
