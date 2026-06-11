@@ -82,6 +82,31 @@ Codex App skill name, and helper CLI name.
 The goal is not to own the whole agent runtime. The goal is to make Codex App
 orchestration repeatable, inspectable, and safe enough for real project work.
 
+## Which Codex Orchestrator Is This?
+
+There are other useful projects with similar names. This one is intentionally
+narrower and App-first:
+
+- [`christianreiss/codex-orchestrator`](https://github.com/christianreiss/codex-orchestrator)
+  is a self-hosted fleet/auth/config dashboard for Codex and Claude across
+  machines. It is about credentials, wrappers, admin UI, compatible APIs, and
+  host management. This project does **not** manage your auth, tokens, API
+  proxy, or machine fleet.
+- [`kingbootoshi/codex-orchestrator`](https://github.com/kingbootoshi/codex-orchestrator)
+  is a Claude Code plugin and CLI that launches Codex CLI agents in `tmux`
+  sessions. It is about spawning and talking to background CLI agents. This
+  project does **not** require `tmux`, Bun, or Claude Code, and it does not
+  launch Codex CLI jobs directly.
+- `indiekitai/codex-orchestrator` is for Codex App users who want a supervised
+  engineering loop around App-created worktree sessions: task contracts,
+  heartbeat checks, persistent ledger state, review routines, evidence labels,
+  merge/push discipline, and cleanup.
+
+Use this project if you want Codex App to keep moving through a roadmap without
+turning every worker chat into an unreviewed branch. Use one of the other
+approaches if your main problem is cross-machine auth sync, a web admin
+dashboard, or tmux-based CLI agent spawning.
+
 ## 🔥 The Problem
 
 Running one Codex session at a time is fine for small tasks. But for anything larger — a new API with 4 endpoints, a module rewrite, a multi-service feature — you hit real pain:
