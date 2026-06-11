@@ -12,7 +12,7 @@ if ! command -v go >/dev/null 2>&1; then
 fi
 
 mkdir -p "$BIN_DIR"
-go build -o "$BIN_DIR/$BIN_NAME" "$ROOT_DIR/cmd/codex-orchestrator"
+go build -trimpath -ldflags="-s -w" -o "$BIN_DIR/$BIN_NAME" "$ROOT_DIR/cmd/codex-orchestrator"
 
 echo "Installed $BIN_DIR/$BIN_NAME"
 echo "Make sure $BIN_DIR is on PATH."

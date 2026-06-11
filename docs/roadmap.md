@@ -69,7 +69,7 @@ Future daemon/UI
   - 对高风险动作做 policy/eval gate
 ```
 
-关键点：用户不需要同时打开一个 Codex CLI AI 和一个 Codex App AI 让它们互相聊天。实际使用应该是 **Codex App 统领 session 调用本地 helper 命令**，helper 输出事实报告，App 继续调度。
+关键点：用户不需要同时打开一个 Codex CLI AI 和一个 Codex App AI 让它们互相聊天。实际使用应该是 **Codex App 编排 session 调用本地 helper 命令**，helper 输出事实报告，App 继续调度。
 
 ## v1：Codex App supervised orchestrator skill
 
@@ -93,7 +93,7 @@ Future daemon/UI
 - maturity model；
 - Codex App worktree setup 注意事项；
 - fallback worker 必须先有隔离 worktree，不能污染 orchestrator checkout；
-- 单任务 heartbeat 删除前必须先判断大队列是否继续，不能完成一个 child task 就让统领静默停止。
+- 单任务 heartbeat 删除前必须先判断整体队列是否继续，不能完成一个 child task 就让编排器静默停止。
 
 仍需改进：
 
@@ -137,7 +137,7 @@ Future daemon/UI
 下一步建议：
 
 1. 发布第一个 tag，验证 GitHub release artifacts。已完成到
-   `v0.3.0-beta.3`。
+   `v0.3.0-beta.4`。
 
 2. 继续打磨 Codex App-first install UX。Homebrew tap 或 npm wrapper 只有在
    用户明确想用包管理器维护 helper binary 时才值得做。
@@ -229,7 +229,7 @@ rule-hit 统计；但它仍然是只读、本地、静态的保守检查器。
 
 目标：
 
-把常见的工程 loop 拆成可复用 routine，而不是每次都靠统领 session 临场推理。
+把常见的工程 loop 拆成可复用 routine，而不是每次都靠编排 session 临场推理。
 
 候选 routine：
 

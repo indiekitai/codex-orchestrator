@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -2457,7 +2458,8 @@ func isTerminalStatus(status string) bool {
 
 func writeJSON(path string, value any) error {
 	target := expandPath(path)
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	dir := filepath.Dir(target)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(value, "", "  ")
@@ -2465,7 +2467,33 @@ func writeJSON(path string, value any) error {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(target, data, 0o644)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(target)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpName)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, target); err != nil {
+		return err
+	}
+	cleanup = false
+	return nil
 }
 
 func writeText(path string, value string) error {
@@ -3717,13 +3745,10 @@ func shellOutput(cwd string, timeout time.Duration, command string) (string, err
 	if timeout <= 0 {
 		timeout = 2 * time.Minute
 	}
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, shell, "-lc", command)
+	shell, args := shellCommand(command)
+	cmd := exec.CommandContext(ctx, shell, args...)
 	cmd.Dir = cwd
 	out, err := cmd.CombinedOutput()
 	output := strings.TrimSpace(string(out))
@@ -3734,6 +3759,21 @@ func shellOutput(cwd string, timeout time.Duration, command string) (string, err
 		return output, err
 	}
 	return output, nil
+}
+
+func shellCommand(command string) (string, []string) {
+	if runtime.GOOS == "windows" {
+		shell := os.Getenv("COMSPEC")
+		if shell == "" {
+			shell = "cmd"
+		}
+		return shell, []string{"/C", command}
+	}
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	return shell, []string{"-c", command}
 }
 
 func commandOutput(cwd string, name string, args ...string) (string, error) {

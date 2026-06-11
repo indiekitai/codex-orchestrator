@@ -14,7 +14,7 @@
   ],
   "allowedActions": [
     "inspect changed files and diff",
-    "run narrow verification gates",
+    "inspect recorded verification gates and rerun only trusted local gates when explicitly approved",
     "classify forbidden path or contract violations",
     "recommend merge, reject, or same-task fixup",
     "write a concise review report"
@@ -29,7 +29,6 @@
   "gates": [
     "git diff --check",
     "git diff --name-status main..HEAD",
-    "task-specific narrow test command",
     "forbidden path scan from task contract"
   ],
   "evidenceLabels": [

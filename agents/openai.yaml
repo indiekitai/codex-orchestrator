@@ -1,4 +1,4 @@
 interface:
-  display_name: "Delegated Session Orchestrator"
-  short_description: "Coordinate multi-session build loops"
-  default_prompt: "Use $delegated-session-orchestrator to read the current repo docs, identify the next coherent feature package, split it into bounded isolated worktree/session tasks, require self-review and honest evidence labels, notify me in my preferred language for human actions, review/merge clean branches according to project policy, and dispatch the next batch only when it reduces merge risk."
+  display_name: "Codex Orchestrator"
+  short_description: "Run a supervised Codex App outer loop for multi-session work"
+  default_prompt: "Use $codex-orchestrator to read the current repo docs, identify the next coherent feature package, split it into bounded isolated worktree/session tasks, require self-review and honest direct/proxy/local/blocked evidence labels, notify me in my preferred language for human actions, review/merge clean branches according to project policy, and dispatch the next batch only when it reduces merge risk."

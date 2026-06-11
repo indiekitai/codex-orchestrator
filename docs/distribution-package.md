@@ -9,13 +9,13 @@ CLI-first.
 
 ## Status
 
-Current package: `v0.3.0-beta.3` GitHub prerelease
+Current package: `v0.3.0-beta.4` GitHub prerelease
 
 Implemented:
 
-- `v0.3.0-beta.3` git tag source install path.
+- `v0.3.0-beta.4` git tag source install path.
 - GitHub prerelease with darwin/linux/windows assets:
-  https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.0-beta.3
+  https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.0-beta.4
 - `scripts/install.sh` source install path for users with Go.
 - Release asset download smoke for `darwin_arm64`.
 - Shell completion generation for bash, zsh, and fish.
@@ -43,9 +43,9 @@ worth installing. They are not the product's primary entrypoint.
 
 The intended release-asset path is:
 
-https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.0-beta.3
+https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.0-beta.4
 
-`v0.3.0-beta.3` is published as a GitHub prerelease with release assets for:
+`v0.3.0-beta.4` is published as a GitHub prerelease with release assets for:
 
 - `darwin_amd64`
 - `darwin_arm64`
@@ -61,7 +61,7 @@ smoked with `--help` plus bash/zsh/fish completion generation.
 ```bash
 git clone https://github.com/indiekitai/codex-orchestrator.git
 cd codex-orchestrator
-git checkout v0.3.0-beta.3
+git checkout v0.3.0-beta.4
 scripts/install.sh
 codex-orchestrator --help
 ```
@@ -143,8 +143,8 @@ failure.
 Use the helper scripts when GitHub Release API credentials are available:
 
 ```bash
-scripts/build-release-assets.sh v0.3.0-beta.3 /tmp/codex-orchestrator-dist
-scripts/publish-release.sh v0.3.0-beta.3 /tmp/codex-orchestrator-dist
+scripts/build-release-assets.sh v0.3.0-beta.4 /tmp/codex-orchestrator-dist
+scripts/publish-release.sh v0.3.0-beta.4 /tmp/codex-orchestrator-dist
 ```
 
 `scripts/publish-release.sh` intentionally checks
@@ -175,7 +175,7 @@ go build -trimpath -ldflags='-s -w' -o /tmp/codex-orchestrator ./cmd/codex-orche
 /tmp/codex-orchestrator completion zsh >/tmp/_codex-orchestrator
 /tmp/codex-orchestrator completion fish >/tmp/codex-orchestrator.fish
 go run ./cmd/codex-orchestrator validate-routines --dir routines
-go run ./cmd/codex-orchestrator run-routine release-verifier --tag v0.3.0-beta.3 --repo . --json
+go run ./cmd/codex-orchestrator run-routine release-verifier --tag v0.3.0-beta.4 --repo . --json
 ```
 
 Evidence labels:

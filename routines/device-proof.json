@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "device-proof",
   "title": "Device Proof",
-  "purpose": "Verify behavior on a physical device or emulator while recording model, OS, command, duration, and direct/proxy/blocked evidence.",
+  "purpose": "Verify behavior on a physical device or emulator while recording model, OS, command, duration, and direct/proxy/local/blocked evidence.",
   "trigger": "Run when a task claims mobile, printer, payment-terminal, kiosk, or other device behavior.",
   "inputs": [
     "device identifier",
@@ -15,7 +15,7 @@
     "inspect connected device state",
     "install or launch approved local builds",
     "capture device logs, screenshots, or command output",
-    "ask the human in Chinese before physical actions",
+    "ask the human in their preferred language before physical actions",
     "record direct, proxy, local, and blocked evidence separately"
   ],
   "forbiddenActions": [
@@ -59,7 +59,7 @@
     }
   },
   "escalation": [
-    "Use a Chinese voice/notification checkpoint before human physical action.",
+    "Use the user's preferred voice/notification language before human physical action.",
     "Ask before operating payment, printer, or production hardware.",
     "Stop if device proof would require unsafe or unauthorized manipulation."
   ],

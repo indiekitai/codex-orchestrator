@@ -96,6 +96,58 @@ func TestLedgerTaskLifecycle(t *testing.T) {
 	}
 }
 
+func TestWriteJSONUsesReplaceableTargetWithoutTempLeak(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "state", "ledger.json")
+	if err := writeJSON(target, map[string]any{"version": 1, "status": "ok"}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("expected valid json, got %q: %v", string(data), err)
+	}
+	matches, err := filepath.Glob(filepath.Join(filepath.Dir(target), ".ledger.json.tmp-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("expected no temporary files, got %#v", matches)
+	}
+	if err := writeJSON(target, map[string]any{"version": 2, "status": "updated"}); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(updated), `"version": 2`) {
+		t.Fatalf("expected replaced json, got %s", string(updated))
+	}
+}
+
+func TestShellCommandUsesNonLoginShell(t *testing.T) {
+	shell, args := shellCommand("echo ok")
+	if runtime.GOOS == "windows" {
+		if !strings.EqualFold(filepath.Base(shell), "cmd") && !strings.EqualFold(filepath.Base(shell), "cmd.exe") {
+			t.Fatalf("expected cmd shell on windows, got %q", shell)
+		}
+		if len(args) != 2 || args[0] != "/C" {
+			t.Fatalf("expected cmd /C args, got %#v", args)
+		}
+		return
+	}
+	if shell == "" {
+		t.Fatal("expected shell")
+	}
+	if len(args) != 2 || args[0] != "-c" {
+		t.Fatalf("expected non-login shell args, got %#v", args)
+	}
+}
+
 func TestCompletionScriptsMentionCoreCommands(t *testing.T) {
 	cases := []struct {
 		name string

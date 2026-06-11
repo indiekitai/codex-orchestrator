@@ -142,9 +142,12 @@ escalation rules, and the output shape expected by the orchestrator. It does not
 create Codex App sessions, merge, push, clean worktrees, or upgrade
 local/proxy evidence into direct proof.
 
-The helper includes read-only MVP runners for PR reviewer, stale task rescuer,
-CI fixer, release verifier, docs drift checker, evidence label auditor, and
-roadmap next-task suggester routines:
+The helper includes conservative MVP runners for PR reviewer, stale task
+rescuer, CI fixer, release verifier, docs drift checker, evidence label auditor,
+and roadmap next-task suggester routines. Most runners are read-only. The
+ci-fixer runner is different: it executes trusted gate commands already
+recorded on a ledger task, so use it only when the ledger/gate source is
+trusted.
 
 ```bash
 codex-orchestrator run-routine pr-reviewer --ledger .codex-orchestrator/ledger.json --task-id TASK --write-report /tmp/pr-reviewer-report.json
@@ -173,17 +176,18 @@ missing `baseCommit`, or git inspection failures as `blocked`. Its MVP report
 uses only `local` and `blocked` evidence; it does not stage, commit, merge,
 clean, dispatch, update ledger status, or claim direct/proxy runtime proof.
 
-The ci-fixer runner is also read-only. It is a CI/local gate classifier, not an
-automatic code fixer: it requires explicit gates recorded on the ledger task,
-checks worktree and branch state, refuses dirty worktrees, compares
-`baseCommit..HEAD`, records committed file names, and runs recorded gate
-commands in the task worktree with a local timeout. It classifies passing gates
-with committed work as `passed`, dirty worktrees or failing gates as `failed`
-with a same-worker or same-task takeover next action, and missing gates,
-missing `baseCommit`, branch mismatch, or git inspection failures as
+The ci-fixer runner is a CI/local gate classifier, not an automatic code fixer:
+it requires explicit trusted gates recorded on the ledger task, checks worktree
+and branch state, refuses dirty worktrees, compares `baseCommit..HEAD`, records
+committed file names, and runs recorded gate commands in the task worktree with
+a local timeout. Because recorded gates are shell commands, do not run
+ci-fixer against an untrusted repository or untrusted ledger. It classifies
+passing gates with committed work as `passed`, dirty worktrees or failing gates
+as `failed` with a same-worker or same-task takeover next action, and missing
+gates, missing `baseCommit`, branch mismatch, or git inspection failures as
 `blocked`. Its MVP report uses only `local` and `blocked` evidence; it does not
-stage, commit, merge, push, clean, dispatch, update ledger status, or claim
-direct/proxy runtime proof.
+edit files, stage, commit, merge, push, clean, dispatch, update ledger status,
+or claim direct/proxy runtime proof.
 
 The release verifier runner is read-only and does not load or update the
 ledger. It verifies a supplied local git tag, records the local tag object type,
@@ -580,7 +584,7 @@ contract cannot be merged under current boundaries.
 For hardware, payment, deploy, and environment work:
 
 - Record owner, start/end time, device/env facts, install/clear-data/reboot/config changes.
-- Label proof as `direct`, `proxy`, or `blocked`.
+- Label proof as `direct`, `proxy`, `local`, or `blocked`.
 - Do not upgrade `SENT`, local unit tests, TCP reachability, screenshots, or proxy services into direct proof.
 - If human action is needed, pause at a safe checkpoint and use the available
   notification/voice mechanism for the environment. The prompt must state the
@@ -620,7 +624,7 @@ Also check:
   task's files,
 - the final message or review doc includes a real self-review,
 - progress/roadmap updates are factual and do not mark partial work as done,
-- direct/proxy/blocked labels match the artifacts.
+- direct/proxy/local/blocked labels match the artifacts.
 
 If clean:
 

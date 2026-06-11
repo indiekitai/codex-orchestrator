@@ -35,6 +35,7 @@
         "labels": [
           "direct",
           "proxy",
+          "local",
           "blocked"
         ],
         "notes": "Local unit tests are not production proof."
@@ -55,4 +56,3 @@
     }
   ]
 }
-

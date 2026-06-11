@@ -2,33 +2,33 @@
   "schemaVersion": 1,
   "id": "ci-fixer",
   "title": "CI Fixer",
-  "purpose": "Diagnose a failing CI or local gate, make a scoped fix when safe, and rerun the failing verification surface.",
+  "purpose": "Inspect a task branch and run trusted recorded local gates to classify CI or local verification readiness. The runner does not edit files or make fixes.",
   "trigger": "Run when a CI check, release workflow, or required local gate fails on a task or integration branch.",
   "inputs": [
     "failing command or CI job URL",
-    "failure log excerpt",
+    "trusted failure log excerpt",
     "current git branch and diff",
     "related test or workflow files",
-    "allowed write scope"
+    "allowed inspection scope"
   ],
   "allowedActions": [
-    "reproduce the failing command locally when possible",
+    "run trusted local gate commands already recorded on the ledger task",
     "inspect failure logs and changed files",
-    "make a minimal scoped fix",
-    "rerun the failing gate and a narrow sibling gate",
+    "classify passing, failing, dirty, or blocked task state",
+    "record whether gates left the worktree dirty",
     "record residual risk when CI cannot be reproduced"
   ],
   "forbiddenActions": [
+    "execute gates from an untrusted ledger or repository",
+    "edit files, stage, commit, merge, push, or clean worktrees",
     "disable tests to make CI green",
-    "widen scope beyond the failing surface without reporting why",
     "change secrets, credentials, production settings, or deploy targets",
     "mark CI fixed without rerunning the failing surface or recording blocked evidence",
     "start nested subagents"
   ],
   "gates": [
-    "original failing command or CI rerun",
-    "git diff --check",
-    "narrow sibling test for the touched area",
+    "trusted recorded local gate command",
+    "post-gate git status --short --branch",
     "git status --short --branch"
   ],
   "evidenceLabels": [
@@ -52,10 +52,10 @@
       "blocked"
     ],
     "evidence": {
-      "direct": "Failing CI surface was rerun and passed.",
-      "proxy": "Equivalent local gate passed but remote CI could not be rerun.",
-      "local": "Local reproduction or static validation only.",
-      "blocked": "Missing logs, unavailable CI credentials, flaky infra, or unsafe scope."
+      "direct": "Reserved for a separate trusted CI system rerun outside this local runner.",
+      "proxy": "Reserved for externally reported CI state that this local runner did not verify.",
+      "local": "Trusted local gate execution or static validation in the task worktree.",
+      "blocked": "Missing gates, untrusted gate source, unavailable worktree, flaky infra, or unsafe scope."
     }
   },
   "escalation": [

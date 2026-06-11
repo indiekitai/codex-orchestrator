@@ -318,17 +318,18 @@ new work, or claim direct/proxy runtime proof; MVP evidence is `local` or
 `blocked` only.
 
 `run-routine ci-fixer` is the third runnable routine MVP. Despite the name, it
-does not edit code or auto-fix CI. It loads the ledger task by id, verifies the
-task worktree and expected branch, refuses dirty worktrees, compares
-`baseCommit..HEAD`, records the committed file list, and runs only the gate
-commands already recorded on the ledger task in that task worktree with a local
-timeout. Passing gates plus committed work after `baseCommit` return `passed`
-with a next action to run the orchestrator review/merge flow. Dirty worktrees
-or failing gates return `failed` and send the task back to the same worker or a
-same-task takeover. Missing gates, missing `baseCommit`, branch mismatches, or
-git inspection failures return `blocked`. It does not stage, commit, merge,
-push, clean worktrees, modify ledger status, or claim direct/proxy runtime
-proof; MVP evidence is `local` or `blocked` only.
+does not edit code or auto-fix CI. It does execute trusted gate commands already
+recorded on the ledger task, so do not run it against an untrusted repository or
+untrusted ledger. It loads the ledger task by id, verifies the task worktree and
+expected branch, refuses dirty worktrees, compares `baseCommit..HEAD`, records
+the committed file list, and runs those recorded gates in the task worktree
+with a local timeout. Passing gates plus committed work after `baseCommit`
+return `passed` with a next action to run the orchestrator review/merge flow.
+Dirty worktrees or failing gates return `failed` and send the task back to the
+same worker or a same-task takeover. Missing gates, missing `baseCommit`, branch
+mismatches, or git inspection failures return `blocked`. It does not stage,
+commit, merge, push, clean worktrees, modify ledger status, or claim
+direct/proxy runtime proof; MVP evidence is `local` or `blocked` only.
 
 `run-routine release-verifier` is the fourth runnable routine MVP. It is
 read-only and does not load or update the ledger. It verifies a supplied local
@@ -445,7 +446,11 @@ codex-orchestrator/
 ├── docs/
 │   ├── beta-release-notes-draft.md
 │   ├── beta-usability-package.md
+│   ├── distribution-package.md
 │   ├── roadmap.md
+│   ├── research/
+│   │   └── loop-engineering-alignment.md
+│   ├── reviews/
 │   ├── routines/
 │   │   ├── README.md
 │   │   └── harness-map.md
@@ -470,8 +475,12 @@ codex-orchestrator/
 │       ├── api-proof.blocked.json
 │       └── pr-reviewer.passed.json
 ├── scripts/
+│   ├── build-release-assets.sh
 │   ├── install.sh
-│   └── ledger_heartbeat.py
+│   ├── ledger_heartbeat.py
+│   └── publish-release.sh
+├── Formula/
+│   └── codex-orchestrator.rb
 ├── go.mod
 ├── README.md             # This file
 ├── README.zh-CN.md       # Chinese README

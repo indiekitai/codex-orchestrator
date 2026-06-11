@@ -44,17 +44,19 @@ takeover recommendation. Missing worktrees, branch mismatches, missing
 status, stage, commit, merge, clean, dispatch, or claim direct/proxy runtime
 proof; this MVP emits only `local` or `blocked` evidence.
 
-`run-routine ci-fixer` is a read-only CI/local gate classifier, not an
-auto-fixer. It loads the ledger task by id, requires explicit recorded task
-gates, verifies worktree existence and expected branch, refuses dirty
-worktrees, checks commits and changed files after `baseCommit`, and runs the
-recorded gate commands in the task worktree with a local timeout. Passing gates
-plus committed work after `baseCommit` pass for orchestrator review/merge.
-Dirty worktrees or failing gates fail with local evidence and a same-worker or
-same-task takeover recommendation. Missing gates, missing `baseCommit`, branch
-mismatches, and git inspection failures block. It does not stage, commit,
-merge, push, clean, dispatch, update ledger status, or claim direct/proxy
-runtime proof; this MVP emits only `local` or `blocked` evidence.
+`run-routine ci-fixer` is a CI/local gate classifier, not an auto-fixer. It
+loads the ledger task by id, requires explicit trusted gates recorded on that
+task, verifies worktree existence and expected branch, refuses dirty worktrees,
+checks commits and changed files after `baseCommit`, and runs the recorded gate
+commands in the task worktree with a local timeout. Because those gates are
+shell commands, do not run ci-fixer against an untrusted repository or untrusted
+ledger. Passing gates plus committed work after `baseCommit` pass for
+orchestrator review/merge. Dirty worktrees or failing gates fail with local
+evidence and a same-worker or same-task takeover recommendation. Missing gates,
+missing `baseCommit`, branch mismatches, and git inspection failures block. It
+does not edit files, stage, commit, merge, push, clean, dispatch, update ledger
+status, or claim direct/proxy runtime proof; this MVP emits only `local` or
+`blocked` evidence.
 
 `run-routine release-verifier` is a read-only release-state checker. It does
 not load or update the ledger. It requires a supplied `--tag`, verifies the

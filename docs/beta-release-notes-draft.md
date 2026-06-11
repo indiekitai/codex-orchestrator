@@ -1,9 +1,10 @@
-# v0.3.0-beta.3 Release Notes Draft
+# v0.3.0-beta.4 Release Notes
 
-`v0.3.0-beta.3` tightens the public Codex App-first positioning after the
-first beta package. It keeps the same helper/routine package, but makes the
-entrypoint easier to understand: `codex-orchestrator` is the product, repo,
-Codex App skill, and helper CLI name.
+`v0.3.0-beta.4` is a small hardening release after external review. It keeps
+the same App-first workflow, but fixes naming drift, tightens the `ci-fixer`
+safety boundary, makes evidence labels consistently four-bucket
+`direct`/`proxy`/`local`/`blocked`, and includes the post-beta.3 release
+publishing fix.
 
 ## Highlights
 
@@ -11,7 +12,7 @@ Codex App skill, and helper CLI name.
 - Durable local task ledger with `init`, `record-task`, `observe`, `heartbeat`,
   `status`, and `append-event`.
 - Routine contract validation through `validate-routines`.
-- Read-only routine runners for:
+- Routine runners for:
   - `pr-reviewer`
   - `stale-task-rescuer`
   - `ci-fixer`
@@ -25,23 +26,27 @@ Codex App skill, and helper CLI name.
 - Shell completion generation for bash, zsh, and fish.
 - Beta usability guide for first-time users.
 
-## What Changed Since Alpha
+`ci-fixer` executes trusted gate commands already recorded on a ledger task. It
+does not edit, stage, commit, merge, push, clean, or update ledger state, but it
+should not be run against an untrusted repository or untrusted ledger.
 
-- The public skill name is now `codex-orchestrator`; users no longer need to
-  learn a second skill name.
-- README and docs now describe the project as a supervised Codex App outer
-  loop, not a complete Loop Engineering runtime or standalone daemon.
-- The helper is now a Go CLI suitable for single-binary distribution.
-- Ledger observation distinguishes terminal statuses such as `merged`,
-  `released`, and `cleaned` from active/pending work.
-- Routine runners produce inspectable JSON reports but do not mutate git or
-  create sessions.
-- Documentation now separates the Codex App orchestrator layer from the local
-  helper layer.
-- The roadmap explicitly avoids claiming this is a daemon or full agent OS.
-- The distribution package now documents release-asset install, source/tag
-  install, shell completions, and the App-first boundary that keeps package
-  manager installs optional.
+## What Changed Since Beta.3
+
+- `agents/openai.yaml` now uses the public `codex-orchestrator` skill name.
+- `ci-fixer` docs and routine spec now state that it runs trusted recorded
+  gates rather than being a fully read-only routine or automatic code fixer.
+- `SKILL.md` and `examples/ledger.example.json` consistently use all four
+  evidence labels: `direct`, `proxy`, `local`, and `blocked`.
+- Ledger JSON writes now use a temporary file plus atomic rename to reduce the
+  risk of a truncated durable ledger.
+- `scripts/install.sh` now uses the same trimmed build flags as release assets.
+- Local gate execution now uses a non-login shell and a Windows `cmd /C`
+  fallback when needed.
+- The release workflow now runs `go vet ./...` in addition to `go test ./...`.
+- README file trees, Chinese terminology, and device-proof language were
+  cleaned up for public use.
+- The release publishing helper includes the missing-release lookup fix that
+  landed on main after `v0.3.0-beta.3`.
 
 ## Install
 
