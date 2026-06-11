@@ -197,6 +197,7 @@ routines/
   release-verifier.json
   docs-drift-checker.json
   evidence-label-auditor.json
+  orchestration-policy-auditor.json
   roadmap-next-task-suggester.json
   database-proof.json
   device-proof.json
@@ -208,6 +209,7 @@ cmd/codex-orchestrator run-routine ci-fixer --task-id ...
 cmd/codex-orchestrator run-routine release-verifier --tag ...
 cmd/codex-orchestrator run-routine docs-drift-checker
 cmd/codex-orchestrator run-routine evidence-label-auditor
+cmd/codex-orchestrator run-routine orchestration-policy-auditor
 cmd/codex-orchestrator run-routine roadmap-next-task-suggester
 cmd/codex-orchestrator record-routine-run --routine ... --status ...
 cmd/codex-orchestrator record-task --max-runtime-minutes ... --review-budget-minutes ...
@@ -220,6 +222,11 @@ examples/routine-reports/
 其中 `evidence-label-auditor` 现在已经有第一层本地 policy/eval：命名规则
 `ELA001`-`ELA009`、deterministic false-positive guard，以及按规则汇总的
 rule-hit 统计；但它仍然是只读、本地、静态的保守检查器。
+
+`orchestration-policy-auditor` 启动了 V4 policy/eval 层的第一块：命名规则
+`OPA001`-`OPA005` 覆盖 dry-run 派发屏障、主工作区 fallback guard、heartbeat
+continuation guard、worker 边界和证据升级边界。它同样是只读、本地、静态的保守
+检查器，输出的是可复核疑点，不是语义定罪。
 
 剩余：
 
@@ -239,7 +246,7 @@ rule-hit 统计；但它仍然是只读、本地、静态的保守检查器。
 - docs drift checker；
 - rebase helper；
 - release verifier；
-- evidence label auditor follow-on policy/eval expansion beyond the current named-rule local layer；
+- orchestration policy auditor follow-on eval fixtures and transcript-backed cases beyond the current named-rule local layer；
 
 补充说明：
 

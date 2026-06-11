@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "id": "orchestration-policy-auditor",
+  "title": "Orchestration Policy Auditor",
+  "purpose": "Find local/static orchestration policy regressions in repo docs, prompts, routine specs, routine reports, and ledger/event files with deterministic named rules, without mutating repository or orchestration state.",
+  "trigger": "Run after changing orchestrator prompts, README/SKILL guidance, heartbeat rules, delegated worker contracts, or routine reports, especially after a real Codex App workflow exposes a repeatable orchestration mistake.",
+  "inputs": [
+    "repository path",
+    "README.md",
+    "README.zh-CN.md",
+    "SKILL.md",
+    "docs/roadmap.md when present",
+    "docs/beta-usability-package.md when present",
+    "docs/v2-persistent-ledger-and-heartbeat.md when present",
+    "docs/routines/*.md",
+    "docs/reviews/*.md",
+    "routines/*.json",
+    "examples/routine-reports/*.json",
+    "repo-local .codex-orchestrator/ledger.json and events.jsonl when present"
+  ],
+  "allowedActions": [
+    "inspect repo-local docs, prompts, routine specs, routine reports, and ledger/event files read-only",
+    "scan for dry-run dispatch barrier violations",
+    "scan for main-checkout fallback implementation violations",
+    "scan for heartbeat continuation guard violations",
+    "scan for delegated worker boundary omissions",
+    "scan for local/proxy/weak evidence promotion to direct proof",
+    "write a RoutineRunReport JSON when requested"
+  ],
+  "forbiddenActions": [
+    "stage, commit, merge, push, tag, or release",
+    "create, delete, or clean worktrees",
+    "dispatch sessions or start nested subagents",
+    "mutate the orchestration ledger",
+    "walk hidden user config outside the inspected repository",
+    "claim semantic proof of a violation from heuristic text matches"
+  ],
+  "gates": [
+    "repository path readable",
+    "repo-local orchestration policy input files collected",
+    "local/static rules OPA001-OPA005 applied",
+    "local report includes rule-hit summary counts when findings are present"
+  ],
+  "evidenceLabels": [
+    "direct",
+    "proxy",
+    "local",
+    "blocked"
+  ],
+  "outputSchema": {
+    "requiredFields": [
+      "status",
+      "evidence",
+      "actionsTaken",
+      "needsHuman",
+      "blockedReason",
+      "nextSuggestedAction"
+    ],
+    "statusValues": [
+      "passed",
+      "failed",
+      "blocked"
+    ],
+    "evidence": {
+      "direct": "Reserved for future human-reviewed Codex App transcript proof; the MVP does not emit direct proof.",
+      "proxy": "Reserved for accepted external review artifacts or transcript summaries; the MVP normally does not emit proxy proof.",
+      "local": "Local static scan of repo-local orchestration docs, prompts, routine specs, routine reports, and ledger/event files with deterministic rule-hit summaries.",
+      "blocked": "Repository or orchestration policy audit inputs cannot be inspected safely."
+    }
+  },
+  "escalation": [
+    "Treat findings as local/static suspicions until a reviewer confirms the prompt or docs issue.",
+    "Stop if repository inputs cannot be inspected.",
+    "Do not edit prompts, docs, or routine reports from this routine; report drift and let a separate implementation pass fix it."
+  ],
+  "maxRuntimeMinutes": 10
+}

@@ -235,7 +235,7 @@ review, merge, cleanup, and continuation.
 | **v2: Persistent task ledger** | A real state store behind the loop | Tasks, attempts, worker state, gates, blockers, and outcomes survive across threads and restarts |
 | **v2.5: Verification routine foundation** | Routine contracts become inspectable | Shared output schema, evidence labels, harness map, and validator for reusable routines |
 | **v3: Routine library** | Reusable background routines | PR reviewer, CI fixer, stale-session rescuer, rebase helper, docs drift checker, release verifier |
-| **v4: Eval and safety layer** | Failures become tests and policies | Prompt-injection cases, dangerous-operation classifiers, permission checks, evidence-quality evals |
+| **v4: Eval and safety layer** | Failures become tests and policies | Orchestration policy auditor, prompt-injection cases, dangerous-operation classifiers, permission checks, evidence-quality evals |
 | **v5: Agent operating system** | Many routines coordinate continuously | The human talks to loops/routines, while specialized agents execute, review, secure, and report |
 
 This repository intentionally starts at v1 because that is the layer most teams
@@ -278,6 +278,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 ./codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
 ./codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
+./codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 ./codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
 ./codex-orchestrator record-routine-run --report-json examples/routine-reports/pr-reviewer.passed.json
@@ -368,7 +369,18 @@ not stage, commit, merge, push, tag, release, clean worktrees, dispatch
 sessions, mutate the ledger, or claim runtime proof; MVP evidence is `local`
 or `blocked`.
 
-`run-routine roadmap-next-task-suggester` is the seventh runnable routine MVP.
+`run-routine orchestration-policy-auditor` is the first V4 policy/eval routine
+MVP. It is read-only and does not load or update the ledger. It scans
+repo-local orchestration docs, prompts, routine specs, routine reports, and
+ledger/event files for deterministic orchestration policy rules (`OPA001`-
+`OPA005`): dry-run dispatch barrier, no-main-checkout fallback guard, heartbeat
+continuation guard, delegated worker boundaries, and evidence promotion
+boundaries. Findings are local/static suspicions, not proof of wrongdoing. It
+does not stage, commit, merge, push, tag, release, clean worktrees, dispatch
+sessions, mutate the ledger, or claim runtime proof; MVP evidence is `local`
+or `blocked`.
+
+`run-routine roadmap-next-task-suggester` is the eighth runnable routine MVP.
 It is read-only and does not mutate the ledger. It parses remaining candidate
 tasks from `docs/roadmap.md`, compares them against local runnable routine IDs
 and `routines/*.json`, optionally filters duplicate active or merged matches
@@ -465,6 +477,7 @@ codex-orchestrator/
 │   ├── docs-drift-checker.json
 │   ├── evidence-label-auditor.json
 │   ├── log-proof.json
+│   ├── orchestration-policy-auditor.json
 │   ├── pr-reviewer.json
 │   ├── release-verifier.json
 │   ├── roadmap-next-task-suggester.json

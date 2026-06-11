@@ -1439,6 +1439,85 @@ func TestRunEvidenceLabelAuditorRoutineBlockedWhenSpecsMissing(t *testing.T) {
 	}
 }
 
+func TestRunOrchestrationPolicyAuditorRoutinePassesSafeFixture(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	reportPath := filepath.Join(root, "reports", "orchestration-policy-auditor.json")
+
+	if err := cmdRunRoutine([]string{"orchestration-policy-auditor", "--repo", project, "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report RoutineRunReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.RoutineID != "orchestration-policy-auditor" || report.Status != "passed" {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"Scanned ",
+		"repo-local orchestration policy input file(s)",
+		"Rule hits: none.",
+	} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected local evidence %q in:\n%s", want, local)
+		}
+	}
+}
+
+func TestRunOrchestrationPolicyAuditorRoutineFlagsPolicyMisuse(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	bad := strings.Join([]string{
+		"Dry run mode can dispatch workers immediately.",
+		"",
+		"If worktree setup failed, fallback to the main checkout and implement the task there.",
+		"",
+		"When a child task is completed, delete heartbeat and stop the loop.",
+		"",
+		"Worker prompt: use a worktree branch for this task.",
+		"",
+		"Local proxy smoke counts as direct proof.",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(project, "README.md"), []byte(bad), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runOrchestrationPolicyAuditorRoutine(project)
+	if report.Status != "failed" {
+		t.Fatalf("expected failed report, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	for _, want := range []string{
+		"[OPA001] README.md:1: dry-run wording appears to allow dispatch/session creation without explicit confirmation",
+		"[OPA002] README.md:3: fallback wording appears to allow implementation in the orchestrator/main checkout after setup failure",
+		"[OPA003] README.md:5: heartbeat/child-task completion wording may stop the larger queue without a ledger/roadmap/repo-truth check",
+		"[OPA004] README.md:7: worker/delegation prompt lacks one of the core boundaries",
+		"[OPA005] README.md:9: evidence wording appears to allow local/proxy/weak evidence to be promoted to direct proof",
+		"Rule hits: OPA001=1, OPA002=1, OPA003=1, OPA004=1, OPA005=1.",
+	} {
+		if !strings.Contains(local, want) {
+			t.Fatalf("expected finding %q in:\n%s", want, local)
+		}
+	}
+}
+
+func TestRunOrchestrationPolicyAuditorRoutineBlockedWhenNoInputs(t *testing.T) {
+	root := t.TempDir()
+	report := runOrchestrationPolicyAuditorRoutine(root)
+	if report.Status != "blocked" || report.BlockedReason == "" {
+		t.Fatalf("expected blocked report, got %#v", report)
+	}
+	if got := strings.Join(report.Evidence["blocked"], "\n"); !strings.Contains(got, "Could not collect orchestration policy audit paths") {
+		t.Fatalf("expected input collection blocked evidence, got %#v", report.Evidence)
+	}
+}
+
 func TestRecordRoutineRunFromJSONReport(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
@@ -1793,6 +1872,66 @@ func createEvidenceAuditFixture(t *testing.T, root string) string {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(project, "examples", "routine-reports", "docs-drift-checker.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return project
+}
+
+func createOrchestrationPolicyFixture(t *testing.T, root string) string {
+	t.Helper()
+	project := filepath.Join(root, "repo")
+	for _, dir := range []string{
+		filepath.Join(project, "docs", "routines"),
+		filepath.Join(project, "docs", "reviews"),
+		filepath.Join(project, "routines"),
+		filepath.Join(project, "examples", "routine-reports"),
+		filepath.Join(project, ".codex-orchestrator"),
+	} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	docs := map[string]string{
+		"README.md": strings.Join([]string{
+			"Dry run must output a plan and wait for explicit user confirmation before dispatching workers.",
+			"If setup failed, report a blocker; do not implement in the orchestrator checkout.",
+			"When a child task is completed, inspect ledger, roadmap, repo truth, and queue before deleting heartbeat or stopping.",
+			"Worker prompt: use an isolated worktree session, do not use subagents or Paseo, self-review, do not merge, and do not push.",
+			"Do not promote local or proxy evidence to direct proof.",
+		}, "\n\n"),
+		"README.zh-CN.md": "dry run 后等待确认；worker 使用独立 worktree；不要把 local/proxy 写成 direct。",
+		"SKILL.md":        "Worker prompt must require isolated worktree, no subagents/Paseo, self-review, and no merge/push/cleanup.",
+		filepath.Join("docs", "routines", "README.md"): "The orchestration-policy-auditor scans local docs for dry-run barrier, fallback guard, continuation guard, worker boundary, and evidence boundary issues.",
+		filepath.Join("docs", "roadmap.md"):            "V4 policy/eval adds orchestration-policy-auditor as a local static policy checker.",
+		filepath.Join("docs", "reviews", "safe.md"):    "Completed worker cleanup only after ledger and queue checks.",
+	}
+	for path, text := range docs {
+		if err := os.WriteFile(filepath.Join(project, path), []byte(text+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeEvidenceAuditRoutineSpec(t, project, "orchestration-policy-auditor", "Reserved for future human-reviewed orchestration transcript proof; the MVP does not emit direct proof.")
+	report := RoutineRunReport{
+		RoutineID: "orchestration-policy-auditor",
+		Status:    "passed",
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   []string{"checked orchestration docs"},
+			"blocked": {},
+		},
+		ActionsTaken:        []string{"checked orchestration docs"},
+		NeedsHuman:          false,
+		NextSuggestedAction: "record local report",
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "examples", "routine-reports", "orchestration-policy-auditor.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".codex-orchestrator", "events.jsonl"), []byte(`{"type":"heartbeat","status":"review-needed"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return project

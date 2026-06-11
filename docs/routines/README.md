@@ -19,6 +19,7 @@ codex-orchestrator run-routine ci-fixer --ledger .codex-orchestrator/ledger.json
 codex-orchestrator run-routine release-verifier --tag v0.3.0-alpha.1 --write-report /tmp/release-verifier-report.json
 codex-orchestrator run-routine docs-drift-checker --write-report /tmp/docs-drift-checker-report.json
 codex-orchestrator run-routine evidence-label-auditor --write-report /tmp/evidence-label-auditor-report.json
+codex-orchestrator run-routine orchestration-policy-auditor --write-report /tmp/orchestration-policy-auditor-report.json
 codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/roadmap-next-task-suggester-report.json
 codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ```
@@ -99,6 +100,17 @@ does not stage, commit, merge, push, tag, release, clean worktrees, dispatch
 sessions, mutate the ledger, or claim runtime proof; this MVP emits `local` or
 `blocked` evidence.
 
+`run-routine orchestration-policy-auditor` is a read-only local/static
+policy/eval checker. It does not load or update the ledger. It scans
+repo-local orchestration docs, prompts, routine specs, routine report JSON, and
+ledger/event files for deterministic orchestration policy rules (`OPA001`-
+`OPA005`): dry-run dispatch barrier, no-main-checkout fallback guard, heartbeat
+continuation guard, delegated worker boundary, and evidence promotion boundary.
+Findings are heuristics and are reported as local/static suspicions, not
+semantic proof. It does not stage, commit, merge, push, tag, release, clean
+worktrees, dispatch sessions, mutate the ledger, or claim runtime proof; this
+MVP emits `local` or `blocked` evidence.
+
 `run-routine roadmap-next-task-suggester` is a read-only local planning
 assistant. It reads `docs/roadmap.md`, compares the remaining v3 and explicit
 remaining-task candidates against the local runnable routine ids and
@@ -169,6 +181,9 @@ Do not turn `local` or `proxy` evidence into `direct` proof in the final report.
 - `evidence-label-auditor`: scan local docs, routine specs, routine reports,
   and ledger-shaped JSON for obvious evidence-label misuse without mutating
   repository state.
+- `orchestration-policy-auditor`: scan local orchestration docs, prompts,
+  routine reports, and ledger/event files for dry-run barrier, fallback,
+  continuation, worker-boundary, and evidence-promotion policy regressions.
 - `roadmap-next-task-suggester`: suggest the next safe bounded roadmap task
   from repo-local roadmap, runnable routine, routine-spec, and optional ledger
   state without mutating repository state.

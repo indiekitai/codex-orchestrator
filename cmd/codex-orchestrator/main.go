@@ -251,6 +251,7 @@ Usage:
   codex-orchestrator run-routine release-verifier --tag TAG [--repo PATH] [--expected-asset NAME] [--write-report PATH] [--json]
   codex-orchestrator run-routine docs-drift-checker [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine evidence-label-auditor [--repo PATH] [--write-report PATH] [--json]
+  codex-orchestrator run-routine orchestration-policy-auditor [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator run-routine roadmap-next-task-suggester [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK]
   codex-orchestrator record-routine-run --report-json PATH
@@ -286,7 +287,7 @@ _codex_orchestrator()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   commands="init record-task append-event observe heartbeat status validate-routines run-routine record-routine-run completion help"
-  routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor roadmap-next-task-suggester"
+  routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester"
 
   case "$prev" in
     codex-orchestrator)
@@ -358,6 +359,7 @@ routines=(
   'release-verifier'
   'docs-drift-checker'
   'evidence-label-auditor'
+  'orchestration-policy-auditor'
   'roadmap-next-task-suggester'
 )
 
@@ -421,7 +423,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'validate-routines'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'run-routine' -d 'Run a read-only routine'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run' -d 'Record a routine report in the ledger'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
-complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor roadmap-next-task-suggester'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 complete -c codex-orchestrator -l ledger -d 'Ledger path'
 complete -c codex-orchestrator -l json -d 'Print JSON'
@@ -858,6 +860,8 @@ func cmdRunRoutine(args []string) error {
 		return cmdRunDocsDriftCheckerRoutine(args[1:])
 	case "evidence-label-auditor":
 		return cmdRunEvidenceLabelAuditorRoutine(args[1:])
+	case "orchestration-policy-auditor":
+		return cmdRunOrchestrationPolicyAuditorRoutine(args[1:])
 	case "roadmap-next-task-suggester":
 		return cmdRunRoadmapNextTaskSuggesterRoutine(args[1:])
 	default:
@@ -1811,6 +1815,95 @@ func runEvidenceLabelAuditorRoutine(repo string) RoutineRunReport {
 	report.Status = "passed"
 	report.BlockedReason = ""
 	report.NextSuggestedAction = "Record this local/static report if the conservative evidence-label audit is sufficient; no direct runtime proof was produced."
+	return report
+}
+
+func cmdRunOrchestrationPolicyAuditorRoutine(args []string) error {
+	fs := flag.NewFlagSet("run-routine orchestration-policy-auditor", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path to inspect")
+	writeReport := fs.String("write-report", "", "write routine report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	report := runOrchestrationPolicyAuditorRoutine(*repo)
+	if err := validateRoutineRunReport(report); err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote routine report: %s\n", *writeReport)
+	return nil
+}
+
+func runOrchestrationPolicyAuditorRoutine(repo string) RoutineRunReport {
+	report := RoutineRunReport{
+		RoutineID: "orchestration-policy-auditor",
+		Status:    "blocked",
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		ActionsTaken: []string{
+			"Inspected repo-local orchestration docs, prompts, routine specs, and ledger/event JSON read-only",
+		},
+		NeedsHuman:          false,
+		BlockedReason:       "",
+		NextSuggestedAction: "Fix the blocked orchestration-policy-auditor precondition, then rerun the routine.",
+	}
+	repo = expandPath(repo)
+	if repo == "" {
+		repo = "."
+	}
+	if info, err := os.Stat(repo); err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path does not exist: %s", repo))
+		report.BlockedReason = "repository path is missing"
+		return report
+	} else if !info.IsDir() {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Repository path is not a directory: %s", repo))
+		report.BlockedReason = "repository path is not a directory"
+		return report
+	}
+	report.Evidence["local"] = append(report.Evidence["local"], "Repository exists: "+repo)
+
+	paths, err := orchestrationPolicyAuditPaths(repo)
+	if err != nil {
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not collect orchestration policy audit paths: "+err.Error())
+		report.BlockedReason = "could not collect orchestration policy audit inputs"
+		return report
+	}
+	findings := []policyAuditFinding{}
+	for _, path := range paths {
+		data, readErr := os.ReadFile(filepath.Join(repo, path))
+		if readErr != nil {
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Could not read %s: %v", path, readErr))
+			report.BlockedReason = "could not read orchestration policy audit input"
+			return report
+		}
+		findings = append(findings, auditOrchestrationPolicyText(path, string(data))...)
+	}
+	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static orchestration policy rules OPA001-OPA005")
+	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Scanned %d repo-local orchestration policy input file(s).", len(paths)))
+	report.Evidence["local"] = append(report.Evidence["local"], summarizePolicyAuditFindings(findings))
+
+	if len(findings) > 0 {
+		report.Status = "failed"
+		report.Evidence["local"] = append(report.Evidence["local"], renderPolicyAuditFindings(findings)...)
+		report.NextSuggestedAction = "Review these local/static orchestration policy suspicions, fix confirmed prompt/docs/routine issues, then rerun orchestration-policy-auditor."
+		return report
+	}
+
+	report.Status = "passed"
+	report.BlockedReason = ""
+	report.NextSuggestedAction = "Record this local/static orchestration policy report if sufficient; no Codex App session or runtime proof was produced."
 	return report
 }
 
@@ -3092,6 +3185,11 @@ type evidenceAuditFinding struct {
 	Message string
 }
 
+type policyAuditFinding struct {
+	RuleID  string
+	Message string
+}
+
 const (
 	evidenceRuleSpecDirectWeakLocal  = "ELA001"
 	evidenceRuleSpecLocalOverclaim   = "ELA002"
@@ -3102,6 +3200,12 @@ const (
 	evidenceRuleReportBadObject      = "ELA007"
 	evidenceRuleReportMissingBucket  = "ELA008"
 	evidenceRuleReportReservedDirect = "ELA009"
+
+	policyRuleDryRunBarrier     = "OPA001"
+	policyRuleMainFallbackGuard = "OPA002"
+	policyRuleContinuationGuard = "OPA003"
+	policyRuleWorkerBoundary    = "OPA004"
+	policyRuleEvidenceBoundary  = "OPA005"
 )
 
 func newEvidenceAuditFinding(ruleID string, format string, args ...any) evidenceAuditFinding {
@@ -3126,7 +3230,49 @@ func renderEvidenceAuditFindings(findings []evidenceAuditFinding) []string {
 	return rendered
 }
 
+func newPolicyAuditFinding(ruleID string, format string, args ...any) policyAuditFinding {
+	return policyAuditFinding{
+		RuleID:  ruleID,
+		Message: fmt.Sprintf(format, args...),
+	}
+}
+
+func renderPolicyAuditFindings(findings []policyAuditFinding) []string {
+	sorted := append([]policyAuditFinding{}, findings...)
+	sort.Slice(sorted, func(i int, j int) bool {
+		if sorted[i].RuleID == sorted[j].RuleID {
+			return sorted[i].Message < sorted[j].Message
+		}
+		return sorted[i].RuleID < sorted[j].RuleID
+	})
+	rendered := make([]string, 0, len(sorted))
+	for _, finding := range sorted {
+		rendered = append(rendered, fmt.Sprintf("[%s] %s", finding.RuleID, finding.Message))
+	}
+	return rendered
+}
+
 func summarizeEvidenceAuditFindings(findings []evidenceAuditFinding) string {
+	if len(findings) == 0 {
+		return "Rule hits: none."
+	}
+	counts := map[string]int{}
+	for _, finding := range findings {
+		counts[finding.RuleID]++
+	}
+	ruleIDs := make([]string, 0, len(counts))
+	for ruleID := range counts {
+		ruleIDs = append(ruleIDs, ruleID)
+	}
+	sort.Strings(ruleIDs)
+	parts := make([]string, 0, len(ruleIDs))
+	for _, ruleID := range ruleIDs {
+		parts = append(parts, fmt.Sprintf("%s=%d", ruleID, counts[ruleID]))
+	}
+	return "Rule hits: " + strings.Join(parts, ", ") + "."
+}
+
+func summarizePolicyAuditFindings(findings []policyAuditFinding) string {
 	if len(findings) == 0 {
 		return "Rule hits: none."
 	}
@@ -3294,6 +3440,66 @@ func evidenceAuditPaths(repo string) ([]string, error) {
 	return paths, nil
 }
 
+func orchestrationPolicyAuditPaths(repo string) ([]string, error) {
+	paths := []string{}
+	addIfExists := func(path string) error {
+		full := filepath.Join(repo, path)
+		info, err := os.Stat(full)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	}
+	for _, path := range []string{
+		"README.md",
+		"README.zh-CN.md",
+		"SKILL.md",
+		filepath.Join("docs", "roadmap.md"),
+		filepath.Join("docs", "beta-usability-package.md"),
+		filepath.Join("docs", "v2-persistent-ledger-and-heartbeat.md"),
+		filepath.Join(".codex-orchestrator", "ledger.json"),
+		filepath.Join(".codex-orchestrator", "events.jsonl"),
+	} {
+		if err := addIfExists(path); err != nil {
+			return nil, err
+		}
+	}
+	for _, dir := range []string{
+		"routines",
+		filepath.Join("docs", "routines"),
+		filepath.Join("docs", "reviews"),
+		filepath.Join("examples", "routine-reports"),
+	} {
+		entries, err := os.ReadDir(filepath.Join(repo, dir))
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			if strings.HasSuffix(entry.Name(), ".md") || strings.HasSuffix(entry.Name(), ".json") || strings.HasSuffix(entry.Name(), ".jsonl") {
+				paths = append(paths, filepath.Join(dir, entry.Name()))
+			}
+		}
+	}
+	paths = uniqueSortedStrings(paths)
+	if len(paths) == 0 {
+		return nil, errors.New("no orchestration docs, routine specs, routine reports, or ledger/event files found")
+	}
+	return paths, nil
+}
+
 func auditEvidenceText(path string, text string) []evidenceAuditFinding {
 	findings := []evidenceAuditFinding{}
 	for index, line := range strings.Split(text, "\n") {
@@ -3315,6 +3521,200 @@ func auditEvidenceText(path string, text string) []evidenceAuditFinding {
 		))
 	}
 	return findings
+}
+
+func auditOrchestrationPolicyText(path string, text string) []policyAuditFinding {
+	findings := []policyAuditFinding{}
+	paragraphs := splitPolicyParagraphs(text)
+	for _, paragraph := range paragraphs {
+		line := paragraph.startLine
+		body := strings.TrimSpace(paragraph.text)
+		if body == "" || shouldSkipPolicyParagraph(body) {
+			continue
+		}
+		switch {
+		case violatesDryRunBarrier(body):
+			findings = append(findings, newPolicyAuditFinding(
+				policyRuleDryRunBarrier,
+				"%s:%d: dry-run wording appears to allow dispatch/session creation without explicit confirmation: %s",
+				path,
+				line,
+				compactForFinding(body),
+			))
+		case violatesMainFallbackGuard(body):
+			findings = append(findings, newPolicyAuditFinding(
+				policyRuleMainFallbackGuard,
+				"%s:%d: fallback wording appears to allow implementation in the orchestrator/main checkout after setup failure: %s",
+				path,
+				line,
+				compactForFinding(body),
+			))
+		case violatesContinuationGuard(body):
+			findings = append(findings, newPolicyAuditFinding(
+				policyRuleContinuationGuard,
+				"%s:%d: heartbeat/child-task completion wording may stop the larger queue without a ledger/roadmap/repo-truth check: %s",
+				path,
+				line,
+				compactForFinding(body),
+			))
+		case violatesWorkerBoundary(body):
+			findings = append(findings, newPolicyAuditFinding(
+				policyRuleWorkerBoundary,
+				"%s:%d: worker/delegation prompt lacks one of the core boundaries: isolated worktree, no subagents/Paseo, self-review, or no merge/push/cleanup: %s",
+				path,
+				line,
+				compactForFinding(body),
+			))
+		case violatesEvidenceBoundary(body):
+			findings = append(findings, newPolicyAuditFinding(
+				policyRuleEvidenceBoundary,
+				"%s:%d: evidence wording appears to allow local/proxy/weak evidence to be promoted to direct proof: %s",
+				path,
+				line,
+				compactForFinding(body),
+			))
+		}
+	}
+	return findings
+}
+
+type policyParagraph struct {
+	startLine int
+	text      string
+}
+
+func splitPolicyParagraphs(text string) []policyParagraph {
+	lines := strings.Split(text, "\n")
+	paragraphs := []policyParagraph{}
+	current := []string{}
+	startLine := 1
+	flush := func(endLine int) {
+		if len(current) == 0 {
+			return
+		}
+		paragraphs = append(paragraphs, policyParagraph{
+			startLine: startLine,
+			text:      strings.Join(current, " "),
+		})
+		current = nil
+		startLine = endLine + 1
+	}
+	for index, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			flush(index + 1)
+			startLine = index + 2
+			continue
+		}
+		if len(current) == 0 {
+			startLine = index + 1
+		}
+		current = append(current, trimmed)
+	}
+	flush(len(lines))
+	return paragraphs
+}
+
+func shouldSkipPolicyParagraph(text string) bool {
+	return containsAnyFold(text, []string{
+		"forbiddenActions",
+		"allowedActions",
+		"outputSchema",
+	})
+}
+
+func violatesDryRunBarrier(text string) bool {
+	if !containsAnyFold(text, []string{"dry run", "dry-run", "先做 dry"}) {
+		return false
+	}
+	if containsAnyFold(text, []string{"OPA001", "barrier", "rule", "规则", "屏障"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"dispatch", "create session", "create worker", "start worker", "派发", "创建 session", "创建 worker"}) {
+		return false
+	}
+	return !containsAnyFold(text, []string{"confirm", "confirmation", "approve", "approval", "explicit", "wait", "after user", "用户确认", "明确批准", "等待确认", "先给出计划"})
+}
+
+func violatesMainFallbackGuard(text string) bool {
+	if !containsAnyFold(text, []string{"fallback", "setup failed", "worktree failed", "invalid reference", "回退", "创建失败", "派发失败"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"main checkout", "orchestrator checkout", "main workspace", "主仓库", "主工作区", "统领工作区"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"implement", "edit", "write code", "fix it", "complete the task", "实现", "修改", "写代码", "接管"}) {
+		return false
+	}
+	return !containsAnyFold(text, []string{"do not", "must not", "never", "blocked", "report", "不得", "不要", "不能", "不许", "报告 blocker"})
+}
+
+func violatesContinuationGuard(text string) bool {
+	if !containsAnyFold(text, []string{"delete heartbeat", "stop heartbeat", "stop the loop", "child task", "single task", "任务完成", "删除 heartbeat", "停止"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"complete", "completed", "merged", "cleaned", "完成", "合并", "清理"}) {
+		return false
+	}
+	return !containsAnyFold(text, []string{"ledger", "roadmap", "repo truth", "queue", "next task", "continue", "replace heartbeat", "队列", "路线图", "继续", "下一个", "检查"})
+}
+
+func violatesWorkerBoundary(text string) bool {
+	if containsAnyFold(text, []string{"OPA004"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"codex_delegation", "worker prompt:", "delegated implementation worker", "delegated proof/implementation worker", "你是 delegated", "你是 TastyFuture 的 delegated"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"worktree", "branch", "session", "工作树", "分支"}) {
+		return false
+	}
+	required := [][]string{
+		{"worktree", "isolated", "separate", "独立", "隔离"},
+		{"subagent", "sub agent", "Paseo", "二级", "子 agent"},
+		{"self-review", "self review", "自审"},
+		{"do not merge", "not merge", "do not push", "not push", "不 merge", "不 push", "不要 merge", "不要 push", "不合并", "不推送"},
+	}
+	for _, group := range required {
+		if !containsAnyFold(text, group) {
+			return true
+		}
+	}
+	return false
+}
+
+func violatesEvidenceBoundary(text string) bool {
+	lower := strings.ToLower(text)
+	if !containsAnyFold(text, weakEvidenceTerms()) || !containsAnyFold(text, []string{"direct", "direct proof", "direct evidence", "直接", "直接证明"}) {
+		return false
+	}
+	if containsAnyFold(text, evidenceNegationTerms()) {
+		return false
+	}
+	return strings.Contains(lower, "promote local") ||
+		strings.Contains(lower, "promote proxy") ||
+		strings.Contains(lower, "promote weak") ||
+		strings.Contains(lower, "promote to direct") ||
+		strings.Contains(lower, "treat as direct") ||
+		strings.Contains(lower, "counts as direct") ||
+		strings.Contains(lower, "claim as direct") ||
+		strings.Contains(lower, "upgrade to direct") ||
+		strings.Contains(lower, "写成 direct") ||
+		strings.Contains(lower, "写成直接") ||
+		strings.Contains(lower, "算作 direct") ||
+		strings.Contains(lower, "算作直接") ||
+		strings.Contains(lower, "当成 direct") ||
+		strings.Contains(lower, "当成直接") ||
+		strings.Contains(lower, "升级为 direct") ||
+		strings.Contains(lower, "升级为直接")
+}
+
+func compactForFinding(text string) string {
+	text = strings.Join(strings.Fields(text), " ")
+	if len(text) <= 220 {
+		return text
+	}
+	return text[:217] + "..."
 }
 
 func shouldSkipEvidenceTextLine(line string) bool {
