@@ -232,6 +232,44 @@ func TestObserveClassifications(t *testing.T) {
 	}
 }
 
+func TestObserveRepoFlagResolvesDefaultLedger(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, defaultLedger)
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+
+	otherCWD := filepath.Join(root, "elsewhere")
+	if err := os.MkdirAll(otherCWD, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(otherCWD)
+	if err := cmdObserve([]string{"--repo", project, "--json"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLedgerRepoFlagCompatibilityCommands(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, defaultLedger)
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+
+	missingRepo := filepath.Join(root, "missing-repo")
+	if err := cmdObserve([]string{"--repo", missingRepo, "--ledger", ledger, "--json"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdStatus([]string{"--repo", project, "--json"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdHeartbeat([]string{"--repo", project, "--interval", "0", "--count", "1", "--json"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestHeartbeatWritesReportAndEvent(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
