@@ -87,6 +87,54 @@ type Observation struct {
 	BudgetPressure    *BudgetPressure `json:"budgetPressure,omitempty"`
 }
 
+type RecordTaskOptions struct {
+	LedgerPath          string
+	EventsPath          string
+	ID                  string
+	Title               string
+	ThreadID            string
+	PendingWorktreeID   string
+	Worktree            string
+	Branch              string
+	BaseCommit          string
+	Status              string
+	StatusProvided      bool
+	Evidence            string
+	EvidenceNote        string
+	MaxRuntimeMinutes   int
+	ReviewBudgetMinutes int
+	BudgetNote          string
+	Note                string
+	Allowed             []string
+	Forbidden           []string
+	Gates               []string
+}
+
+type TaskRecordResult struct {
+	Task       Task   `json:"task"`
+	LedgerPath string `json:"ledger"`
+	EventsPath string `json:"events"`
+}
+
+type DispatchResult struct {
+	Command       string            `json:"command"`
+	EvidenceLabel string            `json:"evidenceLabel"`
+	LedgerPath    string            `json:"ledger"`
+	EventsPath    string            `json:"events,omitempty"`
+	Task          Task              `json:"task"`
+	GitWorktree   *GitWorktreeEntry `json:"gitWorktree,omitempty"`
+	Summary       string            `json:"summary"`
+	Warnings      []string          `json:"warnings,omitempty"`
+	NextActions   []string          `json:"nextActions,omitempty"`
+}
+
+type GitWorktreeEntry struct {
+	Path   string `json:"path"`
+	Head   string `json:"head,omitempty"`
+	Branch string `json:"branch,omitempty"`
+	Bare   bool   `json:"bare,omitempty"`
+}
+
 type LocalTaskState struct {
 	EvidenceLabel string `json:"evidenceLabel"`
 	Lifecycle     string `json:"lifecycle"`
@@ -326,6 +374,8 @@ func run(args []string) error {
 	switch args[0] {
 	case "init":
 		return cmdInit(args[1:])
+	case "dispatch":
+		return cmdDispatch(args[1:])
 	case "record-task":
 		return cmdRecordTask(args[1:])
 	case "append-event":
@@ -363,6 +413,8 @@ func usage() {
 
 Usage:
   codex-orchestrator init [--ledger PATH] [--project-root PATH]
+  codex-orchestrator dispatch record --task-id TASK --pending-worktree-id ID [--branch BRANCH] [--allowed PATH] [--forbidden PATH] [--gate CMD] [--json]
+  codex-orchestrator dispatch reconcile --task-id TASK [--branch BRANCH | --worktree PATH] [--json]
   codex-orchestrator record-task --id ID (--worktree PATH --branch BRANCH | --pending-worktree-id ID) [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N]
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
@@ -415,7 +467,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init record-task append-event observe heartbeat status validate-routines run-routine policy eval rules record-routine-run completion help"
+  commands="init dispatch record-task append-event observe heartbeat status validate-routines run-routine policy eval rules record-routine-run completion help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report"
 
   case "$prev" in
@@ -427,6 +479,10 @@ _codex_orchestrator()
       COMPREPLY=( $(compgen -W "$routines" -- "$cur") )
       return 0
       ;;
+    dispatch)
+      COMPREPLY=( $(compgen -W "record reconcile" -- "$cur") )
+      return 0
+      ;;
     completion)
       COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") )
       return 0
@@ -436,6 +492,15 @@ _codex_orchestrator()
   case "${COMP_WORDS[1]}" in
     init)
       COMPREPLY=( $(compgen -W "--ledger --project-root --help" -- "$cur") )
+      ;;
+    dispatch)
+      if [[ ${COMP_WORDS[2]} == "record" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --ledger --events --task-id --title --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --evidence-note --max-runtime-minutes --review-budget-minutes --budget-note --json --help" -- "$cur") )
+      elif [[ ${COMP_WORDS[2]} == "reconcile" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --ledger --events --task-id --worktree --branch --status --json --help" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "record reconcile" -- "$cur") )
+      fi
       ;;
     record-task)
       COMPREPLY=( $(compgen -W "--ledger --id --title --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help" -- "$cur") )
@@ -496,6 +561,7 @@ func completionZsh() string {
 local -a commands routines
 commands=(
   'init:initialize a project-local ledger'
+  'dispatch:record or reconcile App-first dispatch setup'
   'record-task:record a delegated task'
   'append-event:append a task or heartbeat event'
   'observe:inspect ledger and worktree state'
@@ -568,6 +634,15 @@ case $state in
       init)
         _values 'options' --ledger --project-root --help
         ;;
+      dispatch)
+        if (( CURRENT == 3 )); then
+          _values 'subcommand' record reconcile
+        elif [[ $words[3] == "record" ]]; then
+          _values 'options' --repo --ledger --events --task-id --title --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --evidence-note --max-runtime-minutes --review-budget-minutes --budget-note --json --help
+        else
+          _values 'options' --repo --ledger --events --task-id --worktree --branch --status --json --help
+        fi
+        ;;
       record-task)
         _values 'options' --ledger --id --title --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help
         ;;
@@ -599,6 +674,7 @@ func completionFish() string {
 	return `# fish completion for codex-orchestrator
 complete -c codex-orchestrator -f
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'init' -d 'Initialize a project-local ledger'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'dispatch' -d 'Record or reconcile App-first dispatch setup'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-task' -d 'Record a delegated task'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'append-event' -d 'Append a task or heartbeat event'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'observe' -d 'Inspect ledger and worktree state'
@@ -612,6 +688,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'rules' -d 'Propose
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run' -d 'Record a routine report in the ledger'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from dispatch' -a 'record reconcile'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run add-failure'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from rules' -a 'propose'
@@ -691,9 +768,194 @@ func cmdInit(args []string) error {
 
 func cmdRecordTask(args []string) error {
 	fs := flag.NewFlagSet("record-task", flag.ExitOnError)
+	opts, err := parseRecordTaskFlags(fs, args, "id")
+	if err != nil {
+		return err
+	}
+	if _, err := recordLedgerTask(opts); err != nil {
+		return err
+	}
+	fmt.Printf("Recorded task: %s\n", opts.ID)
+	return nil
+}
+
+func cmdDispatch(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: codex-orchestrator dispatch record|reconcile")
+	}
+	switch args[0] {
+	case "record":
+		return cmdDispatchRecord(args[1:])
+	case "reconcile":
+		return cmdDispatchReconcile(args[1:])
+	case "help", "-h", "--help":
+		fmt.Println("usage: codex-orchestrator dispatch record|reconcile")
+		return nil
+	default:
+		return fmt.Errorf("unknown dispatch subcommand: %s", args[0])
+	}
+}
+
+func cmdDispatchRecord(args []string) error {
+	fs := flag.NewFlagSet("dispatch record", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	opts, err := parseRecordTaskFlags(fs, args, "task-id")
+	if err != nil {
+		return err
+	}
+	opts.LedgerPath = resolveDefaultLedgerPath(*repo, opts.LedgerPath, flagProvided(fs, "ledger"))
+	if opts.ID == "" {
+		return errors.New("dispatch record requires --task-id")
+	}
+	if opts.Worktree == "" && opts.PendingWorktreeID == "" {
+		return errors.New("dispatch record requires --pending-worktree-id or --worktree")
+	}
+	if opts.Worktree != "" && opts.Branch == "" {
+		return errors.New("dispatch record requires --branch when --worktree is set")
+	}
+	if opts.MaxRuntimeMinutes < 0 {
+		return errors.New("dispatch record --max-runtime-minutes cannot be negative")
+	}
+	if opts.ReviewBudgetMinutes < 0 {
+		return errors.New("dispatch record --review-budget-minutes cannot be negative")
+	}
+	if opts.Note == "" {
+		opts.Note = "Dispatch recorded from Codex App setup output."
+	}
+	result, err := recordLedgerTask(opts)
+	if err != nil {
+		return err
+	}
+	dispatch := DispatchResult{
+		Command:       "dispatch record",
+		EvidenceLabel: "local/static",
+		LedgerPath:    result.LedgerPath,
+		EventsPath:    result.EventsPath,
+		Task:          result.Task,
+		Summary:       "Dispatch setup was recorded in the local ledger.",
+		Warnings: []string{
+			"pendingWorktreeId is local/static setup evidence only; it is not proof that a worker is running.",
+			"A recorded task is not proof of task correctness; use observe/status and review gates after worktree setup resolves.",
+		},
+		NextActions: []string{
+			"Wait for Codex App worktree setup to resolve.",
+			"Run codex-orchestrator dispatch reconcile --task-id " + opts.ID + " after git worktree truth exists.",
+		},
+	}
+	if *jsonOut {
+		return printJSON(dispatch)
+	}
+	printDispatchResult(dispatch)
+	return nil
+}
+
+func cmdDispatchReconcile(args []string) error {
+	fs := flag.NewFlagSet("dispatch reconcile", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
 	eventsPath := fs.String("events", "", "events path")
-	id := fs.String("id", "", "task id")
+	taskID := fs.String("task-id", "", "task id")
+	worktreePath := fs.String("worktree", "", "resolved task worktree path")
+	branchName := fs.String("branch", "", "resolved task branch")
+	status := fs.String("status", "active", "status to record after reconciliation")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *taskID == "" {
+		return errors.New("dispatch reconcile requires --task-id")
+	}
+	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
+	ledger, err := loadLedger(resolvedLedger)
+	if err != nil {
+		return err
+	}
+	taskIndex := findTaskIndex(ledger.Tasks, *taskID)
+	if taskIndex < 0 {
+		return fmt.Errorf("task not found: %s", *taskID)
+	}
+	task := &ledger.Tasks[taskIndex]
+	entries, err := gitWorktreeEntries(ledger.ProjectRoot)
+	if err != nil {
+		return err
+	}
+	entry, err := resolveDispatchWorktree(entries, *worktreePath, firstNonEmpty(*branchName, task.Branch))
+	if err != nil {
+		return err
+	}
+	resolvedBranch := *branchName
+	if resolvedBranch == "" {
+		resolvedBranch = entry.Branch
+	}
+	if resolvedBranch == "" {
+		return fmt.Errorf("dispatch reconcile could not determine branch for worktree: %s", entry.Path)
+	}
+	if task.Branch != "" && task.Branch != resolvedBranch {
+		return fmt.Errorf("dispatch reconcile branch mismatch for %s: ledger has %s, git has %s", task.ID, task.Branch, resolvedBranch)
+	}
+	now := nowISO()
+	task.Worktree = entry.Path
+	task.Branch = resolvedBranch
+	if *status != "" {
+		task.Status = *status
+	}
+	task.LastObservation = map[string]string{
+		"at":     now,
+		"result": task.Status,
+		"note":   "Dispatch reconciled to local git worktree truth.",
+	}
+	event := map[string]any{
+		"at":       now,
+		"type":     "dispatch-reconcile",
+		"taskId":   task.ID,
+		"status":   task.Status,
+		"worktree": task.Worktree,
+		"branch":   task.Branch,
+		"note":     "Resolved Codex App pending setup to local git worktree truth.",
+	}
+	if task.PendingWorktreeID != "" {
+		event["pendingWorktreeId"] = task.PendingWorktreeID
+	}
+	task.History = append(task.History, compactEvent(event))
+	if err := saveLedger(resolvedLedger, &ledger); err != nil {
+		return err
+	}
+	resolvedEvents := *eventsPath
+	if resolvedEvents == "" {
+		resolvedEvents = eventsPathForLedger(resolvedLedger)
+	}
+	if err := appendEvent(resolvedEvents, event); err != nil {
+		return err
+	}
+	dispatch := DispatchResult{
+		Command:       "dispatch reconcile",
+		EvidenceLabel: "local/static",
+		LedgerPath:    resolvedLedger,
+		EventsPath:    resolvedEvents,
+		Task:          *task,
+		GitWorktree:   entry,
+		Summary:       "Dispatch setup was reconciled to a local git worktree and branch.",
+		Warnings: []string{
+			"Resolved worktree/branch is local/static setup evidence only; it is not proof of task correctness.",
+			"Run observe/status and the task gates before treating the worker output as reviewable or complete.",
+		},
+		NextActions: []string{
+			"Run codex-orchestrator observe --json to classify current task state.",
+			"Review the worker diff and gates before merge/push/cleanup decisions.",
+		},
+	}
+	if *jsonOut {
+		return printJSON(dispatch)
+	}
+	printDispatchResult(dispatch)
+	return nil
+}
+
+func parseRecordTaskFlags(fs *flag.FlagSet, args []string, idFlag string) (RecordTaskOptions, error) {
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	eventsPath := fs.String("events", "", "events path")
+	id := fs.String(idFlag, "", "task id")
 	title := fs.String("title", "", "task title")
 	threadID := fs.String("thread-id", "", "Codex thread id")
 	pendingWorktreeID := fs.String("pending-worktree-id", "", "opaque Codex App pending worktree setup id")
@@ -714,70 +976,96 @@ func cmdRecordTask(args []string) error {
 	fs.Var(&forbidden, "forbidden", "forbidden path, repeatable")
 	fs.Var(&gates, "gate", "verification gate, repeatable")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return RecordTaskOptions{}, err
 	}
-	if *id == "" {
-		return errors.New("record-task requires --id")
+	statusProvided := flagProvided(fs, "status")
+	return RecordTaskOptions{
+		LedgerPath:          *ledgerPath,
+		EventsPath:          *eventsPath,
+		ID:                  *id,
+		Title:               *title,
+		ThreadID:            *threadID,
+		PendingWorktreeID:   *pendingWorktreeID,
+		Worktree:            *worktree,
+		Branch:              *branch,
+		BaseCommit:          *baseCommit,
+		Status:              *status,
+		StatusProvided:      statusProvided,
+		Evidence:            *evidence,
+		EvidenceNote:        *evidenceNote,
+		MaxRuntimeMinutes:   *maxRuntimeMinutes,
+		ReviewBudgetMinutes: *reviewBudgetMinutes,
+		BudgetNote:          *budgetNote,
+		Note:                *note,
+		Allowed:             []string(allowed),
+		Forbidden:           []string(forbidden),
+		Gates:               []string(gates),
+	}, nil
+}
+
+func recordLedgerTask(opts RecordTaskOptions) (TaskRecordResult, error) {
+	if opts.ID == "" {
+		return TaskRecordResult{}, errors.New("record-task requires --id")
 	}
-	if *worktree == "" && *pendingWorktreeID == "" {
-		return errors.New("record-task requires --worktree or --pending-worktree-id")
+	if opts.Worktree == "" && opts.PendingWorktreeID == "" {
+		return TaskRecordResult{}, errors.New("record-task requires --worktree or --pending-worktree-id")
 	}
-	if *worktree != "" && *branch == "" {
-		return errors.New("record-task requires --branch when --worktree is set")
+	if opts.Worktree != "" && opts.Branch == "" {
+		return TaskRecordResult{}, errors.New("record-task requires --branch when --worktree is set")
 	}
-	if *maxRuntimeMinutes < 0 {
-		return errors.New("record-task --max-runtime-minutes cannot be negative")
+	if opts.MaxRuntimeMinutes < 0 {
+		return TaskRecordResult{}, errors.New("record-task --max-runtime-minutes cannot be negative")
 	}
-	if *reviewBudgetMinutes < 0 {
-		return errors.New("record-task --review-budget-minutes cannot be negative")
+	if opts.ReviewBudgetMinutes < 0 {
+		return TaskRecordResult{}, errors.New("record-task --review-budget-minutes cannot be negative")
 	}
-	ledger, err := loadLedger(*ledgerPath)
+	ledger, err := loadLedger(opts.LedgerPath)
 	if err != nil {
-		return err
+		return TaskRecordResult{}, err
 	}
-	if findTaskIndex(ledger.Tasks, *id) >= 0 {
-		return fmt.Errorf("task already exists: %s", *id)
+	if findTaskIndex(ledger.Tasks, opts.ID) >= 0 {
+		return TaskRecordResult{}, fmt.Errorf("task already exists: %s", opts.ID)
 	}
-	base := *baseCommit
+	base := opts.BaseCommit
 	if base == "" {
 		base = headCommit(ledger.ProjectRoot)
 	}
 	now := nowISO()
-	taskTitle := *title
+	taskTitle := opts.Title
 	if taskTitle == "" {
-		taskTitle = *id
+		taskTitle = opts.ID
 	}
-	historyNote := *note
+	historyNote := opts.Note
 	if historyNote == "" {
 		historyNote = "Task recorded."
 	}
-	taskStatus := *status
-	if !flagProvided(fs, "status") && *worktree == "" && *pendingWorktreeID != "" {
+	taskStatus := opts.Status
+	if !opts.StatusProvided && opts.Worktree == "" && opts.PendingWorktreeID != "" {
 		taskStatus = "pending-setup"
 	}
 	observationNote := "Task recorded."
-	if *worktree == "" && *pendingWorktreeID != "" {
+	if opts.Worktree == "" && opts.PendingWorktreeID != "" {
 		observationNote = "Pending worktree setup recorded."
 	}
 	task := Task{
-		ID:                *id,
+		ID:                opts.ID,
 		Title:             taskTitle,
-		ThreadID:          *threadID,
-		PendingWorktreeID: *pendingWorktreeID,
-		Worktree:          *worktree,
-		Branch:            *branch,
+		ThreadID:          opts.ThreadID,
+		PendingWorktreeID: opts.PendingWorktreeID,
+		Worktree:          opts.Worktree,
+		Branch:            opts.Branch,
 		BaseCommit:        base,
 		Status:            taskStatus,
-		Budget:            taskBudgetFromFlags(*maxRuntimeMinutes, *reviewBudgetMinutes, *budgetNote),
+		Budget:            taskBudgetFromFlags(opts.MaxRuntimeMinutes, opts.ReviewBudgetMinutes, opts.BudgetNote),
 		WriteSet: map[string][]string{
-			"allowed":   []string(allowed),
-			"forbidden": []string(forbidden),
+			"allowed":   append([]string(nil), opts.Allowed...),
+			"forbidden": append([]string(nil), opts.Forbidden...),
 		},
-		Gates: []string(gates),
+		Gates: append([]string(nil), opts.Gates...),
 		Evidence: map[string]any{
-			"expected": *evidence,
+			"expected": opts.Evidence,
 			"labels":   []string{"direct", "proxy", "blocked"},
-			"notes":    *evidenceNote,
+			"notes":    opts.EvidenceNote,
 		},
 		LastObservation: map[string]string{
 			"at":     now,
@@ -791,40 +1079,39 @@ func cmdRecordTask(args []string) error {
 			"note":   historyNote,
 		}},
 	}
-	if *pendingWorktreeID != "" {
-		task.History[0]["pendingWorktreeId"] = *pendingWorktreeID
+	if opts.PendingWorktreeID != "" {
+		task.History[0]["pendingWorktreeId"] = opts.PendingWorktreeID
 	}
 	ledger.Tasks = append(ledger.Tasks, task)
-	if err := saveLedger(*ledgerPath, &ledger); err != nil {
-		return err
+	if err := saveLedger(opts.LedgerPath, &ledger); err != nil {
+		return TaskRecordResult{}, err
 	}
-	resolvedEvents := *eventsPath
+	resolvedEvents := opts.EventsPath
 	if resolvedEvents == "" {
-		resolvedEvents = eventsPathForLedger(*ledgerPath)
+		resolvedEvents = eventsPathForLedger(opts.LedgerPath)
 	}
 	event := map[string]any{
 		"at":     nowISO(),
 		"type":   "record-task",
-		"taskId": *id,
+		"taskId": opts.ID,
 		"status": taskStatus,
 	}
-	if *pendingWorktreeID != "" {
-		event["pendingWorktreeId"] = *pendingWorktreeID
+	if opts.PendingWorktreeID != "" {
+		event["pendingWorktreeId"] = opts.PendingWorktreeID
 	}
-	if *worktree != "" {
-		event["worktree"] = *worktree
+	if opts.Worktree != "" {
+		event["worktree"] = opts.Worktree
 	}
-	if *branch != "" {
-		event["branch"] = *branch
+	if opts.Branch != "" {
+		event["branch"] = opts.Branch
 	}
 	if task.Budget != nil {
 		event["budget"] = task.Budget
 	}
 	if err := appendEvent(resolvedEvents, event); err != nil {
-		return err
+		return TaskRecordResult{}, err
 	}
-	fmt.Printf("Recorded task: %s\n", *id)
-	return nil
+	return TaskRecordResult{Task: task, LedgerPath: opts.LedgerPath, EventsPath: resolvedEvents}, nil
 }
 
 func cmdAppendEvent(args []string) error {
@@ -4836,6 +5123,115 @@ func inspectProjectMap(projectRoot string) ProjectMapStatus {
 		return status
 	}
 	return status
+}
+
+func gitWorktreeEntries(repo string) ([]GitWorktreeEntry, error) {
+	root := expandPath(repo)
+	if root == "" {
+		root = "."
+	}
+	out, err := gitOutput(root, "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+	var entries []GitWorktreeEntry
+	var current *GitWorktreeEntry
+	flush := func() {
+		if current == nil {
+			return
+		}
+		entries = append(entries, *current)
+		current = nil
+	}
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			flush()
+			continue
+		}
+		switch {
+		case strings.HasPrefix(line, "worktree "):
+			flush()
+			current = &GitWorktreeEntry{Path: strings.TrimSpace(strings.TrimPrefix(line, "worktree "))}
+		case current == nil:
+			continue
+		case strings.HasPrefix(line, "HEAD "):
+			current.Head = strings.TrimSpace(strings.TrimPrefix(line, "HEAD "))
+		case strings.HasPrefix(line, "branch "):
+			current.Branch = shortBranchName(strings.TrimSpace(strings.TrimPrefix(line, "branch ")))
+		case line == "bare":
+			current.Bare = true
+		}
+	}
+	flush()
+	return entries, nil
+}
+
+func resolveDispatchWorktree(entries []GitWorktreeEntry, worktreePath string, branchName string) (*GitWorktreeEntry, error) {
+	if worktreePath != "" {
+		target := cleanAbsPath(worktreePath)
+		for index := range entries {
+			if cleanAbsPath(entries[index].Path) == target {
+				if branchName != "" && entries[index].Branch != "" && entries[index].Branch != branchName {
+					return nil, fmt.Errorf("dispatch reconcile branch mismatch for worktree %s: expected %s, found %s", worktreePath, branchName, entries[index].Branch)
+				}
+				return &entries[index], nil
+			}
+		}
+		return nil, fmt.Errorf("dispatch reconcile could not find worktree in git worktree list: %s", worktreePath)
+	}
+	if branchName == "" {
+		return nil, errors.New("dispatch reconcile requires --branch, --worktree, or a ledger branch to locate git worktree truth")
+	}
+	for index := range entries {
+		if entries[index].Branch == branchName {
+			return &entries[index], nil
+		}
+	}
+	return nil, fmt.Errorf("dispatch reconcile could not find branch in git worktree list: %s", branchName)
+}
+
+func shortBranchName(value string) string {
+	return strings.TrimPrefix(value, "refs/heads/")
+}
+
+func cleanAbsPath(value string) string {
+	expanded := expandPath(value)
+	if abs, err := filepath.Abs(expanded); err == nil {
+		if evaluated, evalErr := filepath.EvalSymlinks(abs); evalErr == nil {
+			return filepath.Clean(evaluated)
+		}
+		return filepath.Clean(abs)
+	}
+	return filepath.Clean(expanded)
+}
+
+func printDispatchResult(result DispatchResult) {
+	fmt.Printf("%s: %s\n", result.Command, result.Summary)
+	fmt.Printf("evidenceLabel: %s\n", result.EvidenceLabel)
+	fmt.Printf("ledger: %s\n", result.LedgerPath)
+	if result.EventsPath != "" {
+		fmt.Printf("events: %s\n", result.EventsPath)
+	}
+	fmt.Printf("task: %s status=%s\n", result.Task.ID, result.Task.Status)
+	if result.Task.PendingWorktreeID != "" {
+		fmt.Printf("pendingWorktreeId: %s\n", result.Task.PendingWorktreeID)
+	}
+	if result.Task.Branch != "" {
+		fmt.Printf("branch: %s\n", result.Task.Branch)
+	}
+	if result.Task.Worktree != "" {
+		fmt.Printf("worktree: %s\n", result.Task.Worktree)
+	}
+	if result.GitWorktree != nil {
+		fmt.Printf("gitWorktree: path=%s branch=%s head=%s\n", result.GitWorktree.Path, result.GitWorktree.Branch, result.GitWorktree.Head)
+	}
+	for _, warning := range result.Warnings {
+		fmt.Printf("warning: %s\n", warning)
+	}
+	for _, action := range result.NextActions {
+		fmt.Printf("next: %s\n", action)
+	}
 }
 
 func copyStringIntMap(values map[string]int) map[string]int {

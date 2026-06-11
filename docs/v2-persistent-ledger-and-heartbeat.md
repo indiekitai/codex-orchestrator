@@ -160,6 +160,8 @@ This repository includes a conservative Go helper CLI:
 ```bash
 go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
+./codex-orchestrator dispatch record --task-id TASK --pending-worktree-id PENDING_ID --branch codex/task
+./codex-orchestrator dispatch reconcile --task-id TASK
 ./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task
 ./codex-orchestrator observe --ledger examples/ledger.example.json
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
@@ -173,6 +175,8 @@ and prints the next suggested orchestrator action.
 The Go helper supports:
 
 - `init`
+- `dispatch record`
+- `dispatch reconcile`
 - `record-task`
 - `append-event`
 - `observe`
@@ -219,7 +223,34 @@ Initialize a project-local ledger:
 codex-orchestrator init
 ```
 
-Record a delegated task after the App orchestrator creates a worker session:
+Record dispatch setup immediately after the App returns a pending worktree ID:
+
+```bash
+codex-orchestrator dispatch record \
+  --task-id API-AUTH-LOCAL \
+  --title "Auth endpoint implementation" \
+  --thread-id optional-thread-id \
+  --pending-worktree-id pending-worktree-id-from-codex-app \
+  --branch codex/api-auth \
+  --allowed 'src/auth/**' \
+  --allowed 'tests/auth/**' \
+  --forbidden 'src/db/migrations/**' \
+  --gate 'npm test -- --grep auth'
+```
+
+After `git worktree list` can see the worker branch or worktree, reconcile the
+same ledger task:
+
+```bash
+codex-orchestrator dispatch reconcile --task-id API-AUTH-LOCAL
+```
+
+These dispatch commands are local/static closure helpers. A pending worktree ID
+is setup evidence only, not proof that a worker is running. A resolved worktree
+is not proof that the task is correct.
+
+The lower-level task record command remains available after the App orchestrator
+creates a worker session with a known worktree path:
 
 ```bash
 codex-orchestrator record-task \

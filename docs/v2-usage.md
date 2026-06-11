@@ -55,9 +55,33 @@ This creates:
 Keep those files untracked for private local runs. Commit an example/template
 only when the team intentionally wants shared state shape.
 
-## Record A Worker Session
+## Record Dispatch Setup
 
-After the Codex App orchestrator creates a worker session/worktree, record it:
+After the Codex App orchestrator starts worker setup, record the dispatch fact
+immediately. If the App returns only a pending worktree setup ID, do not leave
+that ID in heartbeat text or chat memory:
+
+```bash
+codex-orchestrator dispatch record \
+  --task-id API-AUTH-LOCAL \
+  --title "Auth endpoint implementation" \
+  --thread-id optional-thread-id \
+  --branch codex/api-auth \
+  --pending-worktree-id pending-worktree-id-from-codex-app \
+  --allowed 'src/auth/**' \
+  --allowed 'tests/auth/**' \
+  --forbidden 'src/db/migrations/**' \
+  --gate 'npm test -- --grep auth' \
+  --evidence local \
+  --json
+```
+
+The helper records the current integration `HEAD` as `baseCommit` unless
+`--base-commit` is provided. It preserves task ID, optional thread ID, pending
+worktree setup ID, expected branch, allowed/forbidden write set, gates, and
+evidence-label expectations in the ledger.
+
+If the worker worktree already exists, the older low-level command still works:
 
 ```bash
 codex-orchestrator record-task \
@@ -66,25 +90,6 @@ codex-orchestrator record-task \
   --thread-id optional-thread-id \
   --worktree /absolute/path/to/worktree \
   --branch codex/api-auth \
-  --allowed 'src/auth/**' \
-  --allowed 'tests/auth/**' \
-  --forbidden 'src/db/migrations/**' \
-  --gate 'npm test -- --grep auth' \
-  --evidence local
-```
-
-The helper records the current integration `HEAD` as `baseCommit` unless
-`--base-commit` is provided.
-
-If Codex App returns an opaque pending worktree setup ID before the worktree
-exists, record the task immediately without inventing a path:
-
-```bash
-codex-orchestrator record-task \
-  --id API-AUTH-LOCAL \
-  --title "Auth endpoint implementation" \
-  --thread-id optional-thread-id \
-  --pending-worktree-id pending-worktree-id-from-codex-app \
   --allowed 'src/auth/**' \
   --forbidden 'src/db/migrations/**' \
   --gate 'npm test -- --grep auth' \
@@ -97,18 +102,19 @@ Pending setup is not active work. Until the real worktree path and branch are
 known, `observe`, `status`, and heartbeat reports keep the task in
 `pendingSetup` with local/static evidence.
 
-After the actual worktree and branch are known, reconcile the same task with an
-event:
+After local git truth exists, reconcile the same task to the real worktree and
+branch:
 
 ```bash
-codex-orchestrator append-event \
+codex-orchestrator dispatch reconcile \
   --task-id API-AUTH-LOCAL \
-  --type setup-complete \
-  --status active \
-  --worktree /absolute/path/to/worktree \
-  --branch codex/api-auth \
-  --note "Codex App worktree setup completed."
+  --json
 ```
+
+`dispatch reconcile` uses local `git worktree list --porcelain` truth. It can
+resolve by the branch already stored on the ledger task, or by an explicit
+`--branch` / `--worktree` flag. The resolved worktree is still setup evidence
+only; it is not proof that the task is correct or ready to merge.
 
 ## Runtime Status Snapshot
 
@@ -337,12 +343,12 @@ Before dispatching, run `codex-orchestrator status` and
 `codex-orchestrator observe --json` if the helper is installed. Use the ledger
 and git/worktree truth as durable state, not stale chat memory.
 
-For each new worker session, record it with `codex-orchestrator record-task`
-including task ID, thread ID if available, worktree, branch, base commit,
-allowed/forbidden write set, gates, and evidence label expectations. If Codex
-App only returns a pending worktree setup ID, record `--pending-worktree-id`
-immediately, then append a setup event with `--worktree` and `--branch` after
-the setup completes.
+For each new worker session, record it with
+`codex-orchestrator dispatch record` including task ID, thread ID if available,
+pending worktree setup ID, expected branch, base commit, allowed/forbidden write
+set, gates, and evidence label expectations. After local git worktree truth
+exists, run `codex-orchestrator dispatch reconcile --task-id TASK` to write the
+resolved worktree and branch back to the ledger.
 
 During monitoring, use `codex-orchestrator heartbeat --count 1` or
 `codex-orchestrator observe --json` to classify tasks. Review completed branches

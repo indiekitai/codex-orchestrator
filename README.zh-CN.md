@@ -304,6 +304,8 @@ Loop Engineering 对齐调研见
 ```bash
 go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
+./codex-orchestrator dispatch record --task-id TASK --pending-worktree-id PENDING_ID --branch codex/task --gate "go test ./..."
+./codex-orchestrator dispatch reconcile --task-id TASK
 ./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
@@ -345,6 +347,14 @@ session 或强制执行预算。
 integration 是否干净、活跃和 pending 工作、待审/阻塞/清理队列、可用派发槽、
 budget pressure、下一步建议和 evidence label，而不必直接读 JSON。它不会启动
 server、daemon、scheduler，也不会 merge、push、cleanup 或监控 runtime。
+
+`dispatch record` 和 `dispatch reconcile` 是 App-first 的派发闭环命令。Codex
+App 返回 `pendingWorktreeId` 后，先用 `dispatch record` 立即写入 task ID、可选
+thread ID、预期 branch、base commit、allowed/forbidden paths 和 gates。等本地
+`git worktree list` 已经能看到 worker branch 或 worktree 后，再用
+`dispatch reconcile` 写回真实 worktree/branch。两个命令的输出都标为
+`local/static`：pending worktree ID 只是 setup 证据，不代表 worker 正在运行；
+resolved worktree 也不代表任务正确。
 
 Codex App worktree 派发是 App-first。要用 project worktree session 前，先确认
 这个仓库已经保存为 Codex App project。如果因为 unknown project、没有 saved

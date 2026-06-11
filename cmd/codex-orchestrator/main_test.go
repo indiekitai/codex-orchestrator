@@ -162,6 +162,7 @@ func TestCompletionScriptsMentionCoreCommands(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, want := range []string{
+				"dispatch",
 				"run-routine",
 				"release-verifier",
 				"roadmap-next-task-suggester",
@@ -336,6 +337,155 @@ func TestPendingWorktreeIDTaskLifecycle(t *testing.T) {
 	}
 	if state := summary.Observations[0].State; state.Setup != "worktree-present" || state.Worktree != "present" || state.Branch != "matched" {
 		t.Fatalf("expected reconciled real worktree state, got %#v", state)
+	}
+}
+
+func TestDispatchRecordStoresPendingSetupContract(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, defaultLedger)
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+
+	output := captureStdout(t, func() error {
+		return cmdDispatch([]string{
+			"record",
+			"--repo", project,
+			"--task-id", "DISPATCH-PENDING",
+			"--title", "Dispatch pending",
+			"--thread-id", "thread_456",
+			"--pending-worktree-id", "pwt_456",
+			"--branch", "codex/dispatch-pending",
+			"--base-commit", gitOutputForTest(t, project, "rev-parse", "HEAD"),
+			"--allowed", "cmd/codex-orchestrator/**",
+			"--forbidden", ".github/workflows/**",
+			"--gate", "go test ./...",
+			"--json",
+		})
+	})
+	var payload DispatchResult
+	if err := json.Unmarshal([]byte(output), &payload); err != nil {
+		t.Fatalf("expected dispatch record JSON, got %q: %v", output, err)
+	}
+	if payload.Command != "dispatch record" || payload.EvidenceLabel != "local/static" {
+		t.Fatalf("unexpected payload identity: %#v", payload)
+	}
+	if !strings.Contains(strings.Join(payload.Warnings, "\n"), "not proof that a worker is running") {
+		t.Fatalf("expected honest pending setup warning, got %#v", payload.Warnings)
+	}
+	if payload.Task.ID != "DISPATCH-PENDING" || payload.Task.Status != "pending-setup" {
+		t.Fatalf("expected pending setup task, got %#v", payload.Task)
+	}
+	if payload.Task.PendingWorktreeID != "pwt_456" || payload.Task.ThreadID != "thread_456" {
+		t.Fatalf("expected App setup identifiers to be stored, got %#v", payload.Task)
+	}
+	if payload.Task.Branch != "codex/dispatch-pending" {
+		t.Fatalf("expected branch to be preserved before worktree resolution, got %#v", payload.Task)
+	}
+	if got := payload.Task.WriteSet["allowed"]; len(got) != 1 || got[0] != "cmd/codex-orchestrator/**" {
+		t.Fatalf("expected allowed path to be stored, got %#v", payload.Task.WriteSet)
+	}
+	if got := payload.Task.WriteSet["forbidden"]; len(got) != 1 || got[0] != ".github/workflows/**" {
+		t.Fatalf("expected forbidden path to be stored, got %#v", payload.Task.WriteSet)
+	}
+	if len(payload.Task.Gates) != 1 || payload.Task.Gates[0] != "go test ./..." {
+		t.Fatalf("expected gate to be stored, got %#v", payload.Task.Gates)
+	}
+}
+
+func TestDispatchReconcileResolvesPendingTaskFromGitWorktreeTruth(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, defaultLedger)
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	if err := cmdDispatch([]string{
+		"record",
+		"--repo", project,
+		"--task-id", "DISPATCH-RECONCILE",
+		"--pending-worktree-id", "pwt_789",
+		"--branch", "codex/dispatch-reconcile",
+		"--base-commit", base,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	worker := filepath.Join(root, "worker")
+	git(t, project, "worktree", "add", "-q", "-b", "codex/dispatch-reconcile", worker, "HEAD")
+
+	output := captureStdout(t, func() error {
+		return cmdDispatch([]string{
+			"reconcile",
+			"--repo", project,
+			"--task-id", "DISPATCH-RECONCILE",
+			"--json",
+		})
+	})
+	var payload DispatchResult
+	if err := json.Unmarshal([]byte(output), &payload); err != nil {
+		t.Fatalf("expected dispatch reconcile JSON, got %q: %v", output, err)
+	}
+	if payload.Command != "dispatch reconcile" || payload.EvidenceLabel != "local/static" {
+		t.Fatalf("unexpected payload identity: %#v", payload)
+	}
+	if cleanAbsPath(payload.Task.Worktree) != cleanAbsPath(worker) || payload.Task.Branch != "codex/dispatch-reconcile" {
+		t.Fatalf("expected reconciled worktree and branch, got %#v", payload.Task)
+	}
+	if payload.Task.PendingWorktreeID != "pwt_789" {
+		t.Fatalf("expected pending id to remain durable, got %#v", payload.Task)
+	}
+	if payload.GitWorktree == nil || cleanAbsPath(payload.GitWorktree.Path) != cleanAbsPath(worker) || payload.GitWorktree.Branch != "codex/dispatch-reconcile" {
+		t.Fatalf("expected git worktree truth in payload, got %#v", payload.GitWorktree)
+	}
+	if !strings.Contains(strings.Join(payload.Warnings, "\n"), "not proof of task correctness") {
+		t.Fatalf("expected correctness warning, got %#v", payload.Warnings)
+	}
+
+	stored, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := stored.Tasks[0]
+	if cleanAbsPath(task.Worktree) != cleanAbsPath(worker) || task.Branch != "codex/dispatch-reconcile" || task.Status != "active" {
+		t.Fatalf("expected ledger task to be reconciled active, got %#v", task)
+	}
+	if len(task.History) != 2 || task.History[1]["type"] != "dispatch-reconcile" {
+		t.Fatalf("expected reconcile history event, got %#v", task.History)
+	}
+}
+
+func TestDispatchReconcileRejectsBranchMismatch(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, defaultLedger)
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdDispatch([]string{
+		"record",
+		"--repo", project,
+		"--task-id", "DISPATCH-MISMATCH",
+		"--pending-worktree-id", "pwt_mismatch",
+		"--branch", "codex/expected",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	worker := filepath.Join(root, "worker")
+	git(t, project, "worktree", "add", "-q", "-b", "codex/actual", worker, "HEAD")
+
+	err := cmdDispatch([]string{
+		"reconcile",
+		"--repo", project,
+		"--task-id", "DISPATCH-MISMATCH",
+		"--worktree", worker,
+	})
+	if err == nil {
+		t.Fatal("expected branch mismatch error")
+	}
+	if !strings.Contains(err.Error(), "branch mismatch") {
+		t.Fatalf("expected branch mismatch error, got %v", err)
 	}
 }
 

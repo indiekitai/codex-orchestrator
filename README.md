@@ -351,6 +351,8 @@ The v2 helper CLI currently supports:
 ```bash
 go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
+./codex-orchestrator dispatch record --task-id TASK --pending-worktree-id PENDING_ID --branch codex/task --gate "go test ./..."
+./codex-orchestrator dispatch reconcile --task-id TASK
 ./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
@@ -396,6 +398,14 @@ for a quick human scan of integration cleanliness, active and pending work,
 review/blocked/cleanup queues, dispatch slots, budget pressure, next suggested
 action, and evidence labels without reading raw JSON. It does not start a
 server, daemon, scheduler, merge, push, cleanup, or runtime monitor.
+
+`dispatch record` and `dispatch reconcile` are the App-first dispatch closure
+commands. Use `dispatch record` immediately after Codex App returns a
+`pendingWorktreeId`, along with the task ID, optional thread ID, expected branch,
+base commit, allowed/forbidden paths, and gates. Use `dispatch reconcile` after
+local `git worktree list` truth contains the worker branch or worktree. Both
+commands label their output as `local/static`: a pending worktree ID is setup
+evidence only, and a resolved worktree is not proof that the task is correct.
 
 Codex App worktree dispatch is App-first. Save the repository as a Codex App
 project before relying on project worktree sessions. If dispatch fails because
