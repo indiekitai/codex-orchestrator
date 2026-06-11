@@ -2,11 +2,22 @@
 
 # codex-orchestrator
 
-**A Codex App-first harness for Loop Engineering.** `codex-orchestrator`
-turns Codex App into a supervised engineering loop: splitting roadmap work into
-isolated worktree sessions, checking them with heartbeats and local policy
-guards, reviewing and merging clean branches, rescuing stuck sessions, and
-dispatching the next batch when it is safe to do so.
+**Codex Orchestrator for Codex App.** `codex-orchestrator` is an
+open-source Codex App-first harness for **Loop Engineering**: it turns Codex
+from a single coding assistant into a supervised engineering loop that splits
+roadmap work into isolated worktree sessions, checks them with heartbeats and
+local policy guards, reviews and merges clean branches, rescues stuck sessions,
+and dispatches the next batch when it is safe to do so.
+
+If you are searching for a **Codex App orchestrator**, **Codex skill
+orchestrator**, **Loop Engineering harness**, or **multi-agent coding workflow
+with git worktrees**, this repository is the App-first version: Codex App still
+creates and runs the worker sessions, while this skill and helper provide the
+task contracts, persistent ledger, review routines, evidence-label checks, and
+continuation rules around them.
+
+Read the project story:
+[Loop Engineering for Codex and Claude Code](https://indiekit.ai/blog/2026-06-09-codex-orchestrator-loop-engineering-en).
 
 ## 🚀 Quick Start
 
@@ -58,6 +69,18 @@ If you are evaluating the workflow for the first time, use this order:
 
 Naming note: **codex-orchestrator** is the product name, repository name,
 Codex App skill name, and helper CLI name.
+
+## Positioning
+
+| You may know | This project focuses on |
+|--------------|-------------------------|
+| **Codex App** | Human-supervised worktree sessions and App-native delegation |
+| **OpenAI Symphony** | Issue-tracker-backed always-on orchestration; `codex-orchestrator` is lighter and App-first |
+| **Claude Code `/loop`** | Time-based loop behavior; `codex-orchestrator` adds repo ledger, review, merge, cleanup, and evidence discipline |
+| **Generic multi-agent frameworks** | Narrow engineering workflow: bounded tasks, git worktrees, review gates, and honest proof labels |
+
+The goal is not to own the whole agent runtime. The goal is to make Codex App
+orchestration repeatable, inspectable, and safe enough for real project work.
 
 ## 🔥 The Problem
 
