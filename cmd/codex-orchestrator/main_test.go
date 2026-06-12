@@ -1106,6 +1106,70 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 	}
 }
 
+func TestObserveBlockedPendingSetupAndDrainMode(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdDispatchRecord([]string{
+		"--ledger", ledger,
+		"--task-id", "SETUP-FAILED",
+		"--pending-worktree-id", "pwt_failed",
+		"--branch", "codex/setup-failed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdAppendEvent([]string{
+		"--ledger", ledger,
+		"--type", "setup",
+		"--task-id", "SETUP-FAILED",
+		"--status", "blocked",
+		"--note", "fatal: invalid reference",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summary.RuntimeStatus.PendingSetup) != 0 {
+		t.Fatalf("blocked setup failure must not remain pending setup: %#v", summary.RuntimeStatus.PendingSetup)
+	}
+	if len(summary.RuntimeStatus.Blockers) != 1 || summary.RuntimeStatus.Blockers[0].ID != "SETUP-FAILED" {
+		t.Fatalf("expected setup failure in blockers, got %#v", summary.RuntimeStatus.Blockers)
+	}
+	if summary.RuntimeStatus.Blockers[0].State.Setup != "blocked" {
+		t.Fatalf("expected blocked setup state, got %#v", summary.RuntimeStatus.Blockers[0].State)
+	}
+
+	ledgerData, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ledgerData.Tasks = nil
+	if err := saveLedger(ledger, &ledgerData); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRunModeSet([]string{"--ledger", ledger, "--dispatch-mode", "drain", "--note", "finish current batch only"}); err != nil {
+		t.Fatal(err)
+	}
+	summary, err = observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.DispatchMode != "drain" {
+		t.Fatalf("expected drain dispatch mode, got %q", summary.DispatchMode)
+	}
+	if summary.OverallStatus != "dispatch-draining" {
+		t.Fatalf("expected dispatch-draining status, got %q actions=%v", summary.OverallStatus, summary.RecommendedActions)
+	}
+	if strings.Contains(strings.Join(summary.RecommendedActions, "\n"), "dispatch the next safe roadmap task") {
+		t.Fatalf("drain mode should not recommend dispatch, got %v", summary.RecommendedActions)
+	}
+}
+
 func TestObserveJobSummaryAndProjectMap(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

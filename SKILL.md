@@ -167,6 +167,7 @@ codex-orchestrator init
 codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 codex-orchestrator observe --json
 codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
+codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch; do not dispatch new workers"
 codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json --write-summary .codex-orchestrator/heartbeat-summary.md
 codex-orchestrator append-event --task-id TASK --type review --status completed-unreviewed --note "Ready for orchestrator review."
 ```
@@ -183,6 +184,23 @@ temporary pending task with `status=pending-setup` and include the opaque
 Do not keep pending setup state only in the heartbeat prompt, chat memory, or an
 automation description. Once the real worktree/thread/branch appears, reconcile
 the ledger record instead of dispatching a duplicate same-task worker.
+If setup fails, immediately append a `blocked` setup event with the exact
+failure text. Do not leave a failed setup as `pending-setup` just because it has
+a `pendingWorktreeId`.
+
+Use run-level dispatch mode for stop/drain requests instead of encoding the
+instruction only in a heartbeat prompt:
+
+```bash
+codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch only"
+codex-orchestrator run-mode set --dispatch-mode paused --note "user paused unattended dispatch"
+codex-orchestrator run-mode set --dispatch-mode active --note "user resumed unattended dispatch"
+```
+
+`drain` and `paused` are local/static ledger state. They do not stop existing
+workers, delete automations, merge, push, or dispatch; they make `observe` and
+`status` stop recommending new worker dispatch until the orchestrator switches
+back to `active`.
 
 Optional task runtime/review budget metadata is visibility-only. `observe`,
 `status`, and `heartbeat` can surface recorded budgets plus local/static

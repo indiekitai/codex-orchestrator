@@ -371,6 +371,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
 ./codex-orchestrator dispatch record --task-id TASK --pending-worktree-id PENDING_ID --branch codex/task --gate "go test ./..."
 ./codex-orchestrator dispatch reconcile --task-id TASK
+./codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch only"
 ./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
@@ -436,6 +437,16 @@ base commit, allowed/forbidden paths, and gates. Use `dispatch reconcile` after
 local `git worktree list` truth contains the worker branch or worktree. Both
 commands label their output as `local/static`: a pending worktree ID is setup
 evidence only, and a resolved worktree is not proof that the task is correct.
+If setup fails, record a blocked setup event immediately; a failed
+`pendingWorktreeId` should not keep showing as pending setup.
+
+`run-mode set --dispatch-mode active|drain|paused` records run-level dispatch
+intent in the ledger. Use `drain` when the orchestrator should finish current
+workers but stop filling empty slots, and `paused` when unattended dispatch is
+stopped until explicitly resumed. This is local/static state only: it does not
+stop workers, create or delete automations, merge, push, or cleanup by itself;
+it makes `observe` and `status` avoid recommending new dispatch while drained
+or paused.
 
 `pack merge-readiness` converts a completed-unreviewed ledger task into a
 standard local/static review package. The JSON report includes task metadata,

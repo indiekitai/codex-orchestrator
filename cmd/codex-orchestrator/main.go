@@ -30,6 +30,8 @@ type Ledger struct {
 	DefaultBranch  string       `json:"defaultBranch"`
 	Remote         string       `json:"remote"`
 	PushPolicy     string       `json:"pushPolicy"`
+	DispatchMode   string       `json:"dispatchMode,omitempty"`
+	DispatchNote   string       `json:"dispatchNote,omitempty"`
 	MaxConcurrency int          `json:"maxConcurrency"`
 	CreatedAt      string       `json:"createdAt"`
 	UpdatedAt      string       `json:"updatedAt"`
@@ -271,6 +273,8 @@ type ObserveSummary struct {
 	Version            int                   `json:"version"`
 	ProjectRoot        string                `json:"projectRoot"`
 	DefaultBranch      string                `json:"defaultBranch"`
+	DispatchMode       string                `json:"dispatchMode,omitempty"`
+	DispatchNote       string                `json:"dispatchNote,omitempty"`
 	ObservedAt         string                `json:"observedAt"`
 	OverallStatus      string                `json:"overallStatus"`
 	RecommendedActions []string              `json:"recommendedActions"`
@@ -746,6 +750,8 @@ func run(args []string) error {
 		return cmdInit(args[1:])
 	case "dispatch":
 		return cmdDispatch(args[1:])
+	case "run-mode":
+		return cmdRunMode(args[1:])
 	case "record-task":
 		return cmdRecordTask(args[1:])
 	case "append-event":
@@ -791,6 +797,7 @@ Usage:
   codex-orchestrator init [--ledger PATH] [--project-root PATH]
   codex-orchestrator dispatch record --task-id TASK --pending-worktree-id ID [--branch BRANCH] [--allowed PATH] [--forbidden PATH] [--gate CMD] [--json]
   codex-orchestrator dispatch reconcile --task-id TASK [--branch BRANCH | --worktree PATH] [--json]
+  codex-orchestrator run-mode set --dispatch-mode active|drain|paused [--note TEXT] [--json]
   codex-orchestrator record-task --id ID (--worktree PATH --branch BRANCH | --pending-worktree-id ID) [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N]
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
@@ -850,7 +857,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init dispatch record-task append-event observe heartbeat status pack review validate-routines run-routine roadmap policy eval rules record-routine-run completion help"
+  commands="init dispatch run-mode record-task append-event observe heartbeat status pack review validate-routines run-routine roadmap policy eval rules record-routine-run completion help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report"
 
   case "$prev" in
@@ -864,6 +871,10 @@ _codex_orchestrator()
       ;;
     dispatch)
       COMPREPLY=( $(compgen -W "record reconcile" -- "$cur") )
+      return 0
+      ;;
+    run-mode)
+      COMPREPLY=( $(compgen -W "set" -- "$cur") )
       return 0
       ;;
     pack)
@@ -895,6 +906,13 @@ _codex_orchestrator()
         COMPREPLY=( $(compgen -W "--repo --ledger --events --task-id --worktree --branch --status --json --help" -- "$cur") )
       else
         COMPREPLY=( $(compgen -W "record reconcile" -- "$cur") )
+      fi
+      ;;
+    run-mode)
+      if [[ ${COMP_WORDS[2]} == "set" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --ledger --dispatch-mode --note --json --help" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "set" -- "$cur") )
       fi
       ;;
     record-task)
@@ -986,6 +1004,7 @@ local -a commands routines
 commands=(
   'init:initialize a project-local ledger'
   'dispatch:record or reconcile App-first dispatch setup'
+  'run-mode:set run-level orchestration dispatch mode'
   'record-task:record a delegated task'
   'append-event:append a task or heartbeat event'
   'observe:inspect ledger and worktree state'
@@ -1077,6 +1096,13 @@ case $state in
           _values 'options' --repo --ledger --events --task-id --worktree --branch --status --json --help
         fi
         ;;
+      run-mode)
+        if (( CURRENT == 3 )); then
+          _values 'subcommand' set
+        else
+          _values 'options' --repo --ledger --dispatch-mode --note --json --help
+        fi
+        ;;
       pack)
         if (( CURRENT == 3 )); then
           _values 'subcommand' merge-readiness consultation review
@@ -1129,6 +1155,7 @@ func completionFish() string {
 complete -c codex-orchestrator -f
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'init' -d 'Initialize a project-local ledger'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'dispatch' -d 'Record or reconcile App-first dispatch setup'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'run-mode' -d 'Set run-level orchestration dispatch mode'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-task' -d 'Record a delegated task'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'append-event' -d 'Append a task or heartbeat event'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'observe' -d 'Inspect ledger and worktree state'
@@ -1145,6 +1172,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from dispatch' -a 'record reconcile'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-mode' -a 'set'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness consultation review'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from review' -a 'run import policy'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
@@ -1171,6 +1199,7 @@ complete -c codex-orchestrator -l reviewer -d 'External reviewer name'
 complete -c codex-orchestrator -l pack -d 'Review pack directory'
 complete -c codex-orchestrator -l output -d 'Output directory'
 complete -c codex-orchestrator -l dry-run -d 'Print runner command without invoking reviewer'
+complete -c codex-orchestrator -l dispatch-mode -d 'Run-level dispatch mode: active, drain, or paused'
 `
 }
 
@@ -1258,6 +1287,83 @@ func cmdDispatch(args []string) error {
 	default:
 		return fmt.Errorf("unknown dispatch subcommand: %s", args[0])
 	}
+}
+
+func cmdRunMode(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: codex-orchestrator run-mode set --dispatch-mode active|drain|paused")
+	}
+	switch args[0] {
+	case "set":
+		return cmdRunModeSet(args[1:])
+	case "help", "-h", "--help":
+		fmt.Println("usage: codex-orchestrator run-mode set --dispatch-mode active|drain|paused")
+		return nil
+	default:
+		return fmt.Errorf("unknown run-mode subcommand: %s", args[0])
+	}
+}
+
+func cmdRunModeSet(args []string) error {
+	fs := flag.NewFlagSet("run-mode set", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	eventsPath := fs.String("events", "", "events path")
+	dispatchMode := fs.String("dispatch-mode", "", "dispatch mode: active, drain, or paused")
+	note := fs.String("note", "", "run mode note")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	mode := strings.TrimSpace(*dispatchMode)
+	if !containsString([]string{"active", "drain", "paused"}, mode) {
+		return errors.New("run-mode set requires --dispatch-mode active|drain|paused")
+	}
+	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
+	ledger, err := loadLedger(resolvedLedger)
+	if err != nil {
+		return err
+	}
+	ledger.DispatchMode = mode
+	ledger.DispatchNote = strings.TrimSpace(*note)
+	if mode == "active" && ledger.DispatchNote == "" {
+		ledger.DispatchNote = ""
+	}
+	if err := saveLedger(resolvedLedger, &ledger); err != nil {
+		return err
+	}
+	resolvedEvents := *eventsPath
+	if resolvedEvents == "" {
+		resolvedEvents = eventsPathForLedger(resolvedLedger)
+	}
+	event := map[string]any{
+		"at":           nowISO(),
+		"type":         "run-mode",
+		"status":       mode,
+		"dispatchMode": mode,
+	}
+	if ledger.DispatchNote != "" {
+		event["note"] = ledger.DispatchNote
+	}
+	if err := appendEvent(resolvedEvents, event); err != nil {
+		return err
+	}
+	result := map[string]any{
+		"ledger":       resolvedLedger,
+		"events":       resolvedEvents,
+		"dispatchMode": mode,
+		"dispatchNote": emptyToNil(ledger.DispatchNote),
+	}
+	if *jsonOut {
+		return printJSON(result)
+	}
+	fmt.Printf("Dispatch mode: %s\n", mode)
+	if ledger.DispatchNote != "" {
+		fmt.Printf("Dispatch note: %s\n", ledger.DispatchNote)
+	}
+	fmt.Printf("Ledger: %s\n", resolvedLedger)
+	fmt.Printf("Events: %s\n", resolvedEvents)
+	return nil
 }
 
 func cmdDispatchRecord(args []string) error {
@@ -1797,6 +1903,8 @@ func cmdStatus(args []string) error {
 		"ledger":            resolvedLedger,
 		"projectRoot":       ledger.ProjectRoot,
 		"defaultBranch":     ledger.DefaultBranch,
+		"dispatchMode":      summary.DispatchMode,
+		"dispatchNote":      emptyToNil(summary.DispatchNote),
 		"taskCount":         len(ledger.Tasks),
 		"routineRunCount":   len(ledger.RoutineRuns),
 		"overallStatus":     summary.OverallStatus,
@@ -1832,6 +1940,11 @@ func cmdStatus(args []string) error {
 	}
 	fmt.Printf("Ledger: %s\n", resolvedLedger)
 	fmt.Printf("Project: %s default=%s\n", ledger.ProjectRoot, ledger.DefaultBranch)
+	fmt.Printf("Dispatch mode: %s", summary.DispatchMode)
+	if summary.DispatchNote != "" {
+		fmt.Printf(" note=%q", summary.DispatchNote)
+	}
+	fmt.Println()
 	fmt.Printf("Tasks: %d overall=%s\n", len(ledger.Tasks), summary.OverallStatus)
 	fmt.Printf("Runtime status (%s): %s\n", summary.RuntimeStatus.EvidenceLabel, summary.RuntimeStatus.Summary)
 	fmt.Printf("Jobs: total=%d counts=%s\n", summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
@@ -2208,13 +2321,17 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	fmt.Fprintf(&b, "<header><h1>%s</h1><div class=\"muted\">local/static evidence only · observed %s</div></header>\n", escapeHTML(title), escapeHTML(summary.ObservedAt))
 	fmt.Fprintf(&b, "<section class=\"grid\" aria-label=\"status overview\">\n")
 	renderMetricHTML(&b, "总体状态", summary.OverallStatus, statusClass(summary.OverallStatus))
+	renderMetricHTML(&b, "派发模式", summary.DispatchMode, statusClass(summary.OverallStatus))
 	renderMetricHTML(&b, "任务总数", fmt.Sprint(len(ledger.Tasks)), "")
 	renderMetricHTML(&b, "可用派发槽", fmt.Sprintf("%d / %d", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency), "")
 	renderMetricHTML(&b, "待审/阻塞", fmt.Sprintf("%d / %d", summary.ReviewPressure.ReviewNeeded, summary.ReviewPressure.Blocked), pressureClass(summary.ReviewPressure.Blocked, summary.ReviewPressure.ReviewNeeded))
 	fmt.Fprintf(&b, "</section>\n")
 
 	fmt.Fprintf(&b, "<section class=\"section\"><h2>集成区 / Integration</h2>")
-	fmt.Fprintf(&b, "<p><span class=\"pill\">repo: %s</span><span class=\"pill\">ledger: %s</span><span class=\"pill\">default: %s</span></p>", escapeHTML(ledger.ProjectRoot), escapeHTML(ledgerPath), escapeHTML(ledger.DefaultBranch))
+	fmt.Fprintf(&b, "<p><span class=\"pill\">repo: %s</span><span class=\"pill\">ledger: %s</span><span class=\"pill\">default: %s</span><span class=\"pill\">dispatch: %s</span></p>", escapeHTML(ledger.ProjectRoot), escapeHTML(ledgerPath), escapeHTML(ledger.DefaultBranch), escapeHTML(summary.DispatchMode))
+	if summary.DispatchNote != "" {
+		fmt.Fprintf(&b, "<p class=\"muted\">dispatch note: %s</p>", escapeHTML(summary.DispatchNote))
+	}
 	if summary.Integration.Error != "" {
 		fmt.Fprintf(&b, "<p class=\"bad\">无法检查集成区: %s</p>", escapeHTML(summary.Integration.Error))
 	} else if summary.Integration.Dirty {
@@ -7098,12 +7215,14 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	runtimeStatus := buildRuntimeStatusReport(ledger.Tasks, observations, pressure, observedAt)
 	jobSummary := buildJobSummary(ledger.Tasks, observations, counts)
 	projectMap := inspectProjectMap(ledger.ProjectRoot)
-	overall, actions := summarizeObservations(integration, counts, pressure)
+	overall, actions := summarizeObservations(ledger, integration, counts, pressure)
 	return ObserveSummary{
 		Ledger:             ledgerPath,
 		Version:            ledger.Version,
 		ProjectRoot:        ledger.ProjectRoot,
 		DefaultBranch:      ledger.DefaultBranch,
+		DispatchMode:       normalizedDispatchMode(ledger.DispatchMode),
+		DispatchNote:       ledger.DispatchNote,
 		ObservedAt:         observedAt.Format(time.RFC3339),
 		OverallStatus:      overall,
 		RecommendedActions: actions,
@@ -7635,6 +7754,11 @@ func localTaskState(task Task, status string, signal string, gitStatus string) L
 	case "cleanup-pending":
 		state.Cleanup = "needed"
 		state.Review = "accepted"
+	case "blocked-ledger-status":
+		state.Setup = "blocked"
+		state.Worktree = "not-present-or-not-inspected"
+		state.Branch = "not-inspected"
+		state.Review = "blocked"
 	case "terminal-quiet":
 		state.Setup = "complete"
 		state.Worktree = "not-present-or-not-inspected"
@@ -7662,6 +7786,9 @@ func localTaskState(task Task, status string, signal string, gitStatus string) L
 }
 
 func inspectTask(task Task, staleAfter time.Duration) Observation {
+	if task.Status == "blocked" {
+		return taskObservation(task, "blocked", "resolve recorded blocker before waiting or dispatching", "Task is recorded as blocked; ledger terminal blocker takes precedence over pending setup/worktree hints.", "", "blocked-ledger-status")
+	}
 	if isTerminalStatus(task.Status) {
 		if task.Worktree != "" {
 			worktree := expandPath(task.Worktree)
@@ -7967,7 +8094,7 @@ func calculateReviewPressure(counts map[string]int, maxConcurrency int) ReviewPr
 	}
 }
 
-func summarizeObservations(integration IntegrationState, counts map[string]int, pressure ReviewPressure) (string, []string) {
+func summarizeObservations(ledger Ledger, integration IntegrationState, counts map[string]int, pressure ReviewPressure) (string, []string) {
 	if integration.Error != "" {
 		return "blocked", []string{"Inspect integration checkout git state before dispatching or merging."}
 	}
@@ -7987,10 +8114,29 @@ func summarizeObservations(integration IntegrationState, counts map[string]int, 
 	case counts["stale-needs-inspection"] > 0:
 		return "stale", []string{"Inspect stale task worktrees and either nudge, take over, abandon, or mark blocked."}
 	}
+	switch normalizedDispatchMode(ledger.DispatchMode) {
+	case "drain":
+		return "dispatch-draining", []string{"Dispatch mode is drain; close existing work, but do not dispatch new workers."}
+	case "paused":
+		return "dispatch-paused", []string{"Dispatch mode is paused; do not dispatch new workers until run-mode is active."}
+	}
 	if pressure.AvailableSlots > 0 {
 		return "dispatch-possible", []string{"Capacity is available; dispatch the next safe roadmap task if one exists."}
 	}
 	return "quiet", []string{"Active tasks are within concurrency limit; continue monitoring."}
+}
+
+func normalizedDispatchMode(mode string) string {
+	switch strings.TrimSpace(mode) {
+	case "", "active":
+		return "active"
+	case "drain":
+		return "drain"
+	case "paused":
+		return "paused"
+	default:
+		return "active"
+	}
 }
 
 func isTerminalStatus(status string) bool {
@@ -8080,6 +8226,10 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- ledger: `%s`\n", summary.Ledger)
 	fmt.Fprintf(&b, "- projectRoot: `%s`\n", summary.ProjectRoot)
 	fmt.Fprintf(&b, "- defaultBranch: `%s`\n", summary.DefaultBranch)
+	fmt.Fprintf(&b, "- dispatchMode: `%s`\n", summary.DispatchMode)
+	if summary.DispatchNote != "" {
+		fmt.Fprintf(&b, "- dispatchNote: `%s`\n", summary.DispatchNote)
+	}
 	fmt.Fprintf(&b, "- integrationDirty: `%t`\n", summary.Integration.Dirty)
 	fmt.Fprintf(&b, "- active: `%d`\n", summary.ReviewPressure.Active)
 	fmt.Fprintf(&b, "- reviewNeeded: `%d`\n", summary.ReviewPressure.ReviewNeeded)
@@ -8558,6 +8708,11 @@ func printJSON(value any) error {
 func printObservations(summary ObserveSummary) {
 	fmt.Printf("Ledger: %s\n", summary.Ledger)
 	fmt.Printf("Project: %s default=%s\n", summary.ProjectRoot, summary.DefaultBranch)
+	fmt.Printf("Dispatch mode: %s", summary.DispatchMode)
+	if summary.DispatchNote != "" {
+		fmt.Printf(" note=%q", summary.DispatchNote)
+	}
+	fmt.Println()
 	fmt.Printf("Overall: %s\n", summary.OverallStatus)
 	fmt.Printf("Runtime status (%s): %s\n", summary.RuntimeStatus.EvidenceLabel, summary.RuntimeStatus.Summary)
 	fmt.Printf("Jobs (%s): total=%d counts=%s\n", summary.JobSummary.EvidenceLabel, summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
