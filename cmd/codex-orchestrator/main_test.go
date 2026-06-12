@@ -167,6 +167,7 @@ func TestCompletionScriptsMentionCoreCommands(t *testing.T) {
 				"release-verifier",
 				"roadmap-next-task-suggester",
 				"rules",
+				"watchdog",
 				"completion",
 			} {
 				if !strings.Contains(tc.text, want) {
@@ -180,6 +181,100 @@ func TestCompletionScriptsMentionCoreCommands(t *testing.T) {
 func TestCompletionRejectsUnknownShell(t *testing.T) {
 	if err := cmdCompletion([]string{"powershell"}); err == nil {
 		t.Fatal("expected unsupported shell to fail")
+	}
+}
+
+func TestWatchdogStatusReadsLaunchAgentAndHeartbeatReport(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	t.Setenv("HOME", home)
+	previousInspect := inspectLaunchAgentLoadedFn
+	inspectLaunchAgentLoadedFn = func(label string) (string, string) {
+		return "loaded", ""
+	}
+	t.Cleanup(func() {
+		inspectLaunchAgentLoadedFn = previousInspect
+	})
+	project := createRepo(t, filepath.Join(root, "repo"))
+	stateDir := filepath.Join(project, defaultStateDir)
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	suffix := "unit-test"
+	label := "com.indiekitai.codex-orchestrator.watchdog." + suffix
+	plistPath := filepath.Join(home, "Library", "LaunchAgents", label+".plist")
+	if err := os.MkdirAll(filepath.Dir(plistPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(plistPath, []byte(`<plist><dict><key>Label</key><string>`+label+`</string><key>REPO</key><string>`+project+`</string></dict></plist>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report := ObserveSummary{
+		ObservedAt: "2026-06-12T10:00:00+08:00",
+		HeartbeatStatus: &HeartbeatStatus{
+			EvidenceLabel:       "local/static",
+			Status:              "missed",
+			CurrentHeartbeatAt:  "2026-06-12T10:00:00+08:00",
+			ExpectedInterval:    "20m0s",
+			MissedAfter:         "45m0s",
+			Gap:                 "5h0m0s",
+			EstimatedMissedRuns: 14,
+			Note:                "Possible missed heartbeat.",
+		},
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "watchdog-heartbeat-report.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "watchdog-heartbeat-summary.md"), []byte("# watchdog\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "watchdog-last-error.log"), []byte("sample failure\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := inspectWatchdogStatus(project, suffix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.EvidenceLabel != "local/static" {
+		t.Fatalf("expected local/static evidence, got %q", status.EvidenceLabel)
+	}
+	if !status.Installed {
+		t.Fatal("expected installed LaunchAgent plist")
+	}
+	if status.LoadedStatus != "loaded" {
+		t.Fatalf("expected mocked loaded status, got %q", status.LoadedStatus)
+	}
+	if !status.ReportExists || !status.SummaryExists || !status.LastErrorExists {
+		t.Fatalf("expected watchdog artifacts, got %#v", status)
+	}
+	if status.HeartbeatStatus == nil || status.HeartbeatStatus.Status != "missed" {
+		t.Fatalf("expected missed heartbeat status, got %#v", status.HeartbeatStatus)
+	}
+	if !strings.Contains(strings.Join(status.RecommendedActions, "\n"), "missed") {
+		t.Fatalf("expected missed heartbeat recommended action, got %#v", status.RecommendedActions)
+	}
+}
+
+func TestWatchdogStatusMissingInstallRecommendsInstall(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	t.Setenv("HOME", home)
+	project := createRepo(t, filepath.Join(root, "repo"))
+	status, err := inspectWatchdogStatus(project, "not-installed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Installed {
+		t.Fatal("expected no LaunchAgent plist")
+	}
+	text := strings.Join(status.RecommendedActions, "\n")
+	if !strings.Contains(text, "install") || !strings.Contains(text, "local/static") {
+		t.Fatalf("expected install/local-static recommendation, got %q", text)
 	}
 }
 

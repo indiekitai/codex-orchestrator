@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"hash/crc32"
 	"html"
 	"os"
 	"os/exec"
@@ -23,6 +24,8 @@ const (
 	defaultLedger   = defaultStateDir + "/ledger.json"
 	defaultEvents   = defaultStateDir + "/events.jsonl"
 )
+
+var inspectLaunchAgentLoadedFn = inspectLaunchAgentLoaded
 
 type Ledger struct {
 	Version        int          `json:"version"`
@@ -328,6 +331,34 @@ type HeartbeatStatus struct {
 	GapMinutes          int    `json:"gapMinutes,omitempty"`
 	EstimatedMissedRuns int    `json:"estimatedMissedRuns,omitempty"`
 	Note                string `json:"note"`
+}
+
+type WatchdogStatusReport struct {
+	EvidenceLabel        string           `json:"evidenceLabel"`
+	Repo                 string           `json:"repo"`
+	Label                string           `json:"label"`
+	LabelSuffix          string           `json:"labelSuffix"`
+	PlistPath            string           `json:"plistPath"`
+	Installed            bool             `json:"installed"`
+	LoadedStatus         string           `json:"loadedStatus"`
+	LoadedDetail         string           `json:"loadedDetail,omitempty"`
+	StateDir             string           `json:"stateDir"`
+	ReportPath           string           `json:"reportPath"`
+	ReportExists         bool             `json:"reportExists"`
+	SummaryPath          string           `json:"summaryPath"`
+	SummaryExists        bool             `json:"summaryExists"`
+	StdoutLogPath        string           `json:"stdoutLogPath"`
+	StdoutLogExists      bool             `json:"stdoutLogExists"`
+	StderrLogPath        string           `json:"stderrLogPath"`
+	StderrLogExists      bool             `json:"stderrLogExists"`
+	LastStdoutPath       string           `json:"lastStdoutPath"`
+	LastStdoutExists     bool             `json:"lastStdoutExists"`
+	LastErrorPath        string           `json:"lastErrorPath"`
+	LastErrorExists      bool             `json:"lastErrorExists"`
+	LastErrorSnippet     string           `json:"lastErrorSnippet,omitempty"`
+	LastReportObservedAt string           `json:"lastReportObservedAt,omitempty"`
+	HeartbeatStatus      *HeartbeatStatus `json:"heartbeatStatus,omitempty"`
+	RecommendedActions   []string         `json:"recommendedActions,omitempty"`
 }
 
 type RoutineSpec struct {
@@ -802,6 +833,8 @@ func run(args []string) error {
 		return cmdHeartbeat(args[1:])
 	case "status":
 		return cmdStatus(args[1:])
+	case "watchdog":
+		return cmdWatchdog(args[1:])
 	case "pack":
 		return cmdPack(args[1:])
 	case "validate-routines":
@@ -843,6 +876,7 @@ Usage:
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--missed-after 15m] [--count 0] [--write-report PATH]
   codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--write-html PATH] [--write-summary PATH] [--stale-after 15m]
+  codex-orchestrator watchdog status [--repo PATH] [--label-suffix SUFFIX] [--json]
   codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack consultation --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack review --package-id PKG --task-id TASK [--task-id TASK...] [--repo PATH] [--ledger PATH] [--output DIR] [--write-report PATH] [--json]
@@ -897,7 +931,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init dispatch run-mode record-task append-event observe heartbeat status pack review validate-routines run-routine roadmap policy eval rules record-routine-run completion help"
+  commands="init dispatch run-mode record-task append-event observe heartbeat status watchdog pack review validate-routines run-routine roadmap policy eval rules record-routine-run completion help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report"
 
   case "$prev" in
@@ -919,6 +953,10 @@ _codex_orchestrator()
       ;;
     pack)
       COMPREPLY=( $(compgen -W "merge-readiness consultation review" -- "$cur") )
+      return 0
+      ;;
+    watchdog)
+      COMPREPLY=( $(compgen -W "status" -- "$cur") )
       return 0
       ;;
     review)
@@ -966,6 +1004,13 @@ _codex_orchestrator()
       ;;
     status)
       COMPREPLY=( $(compgen -W "--repo --ledger --json --html --write-html --write-summary --stale-after --help" -- "$cur") )
+      ;;
+    watchdog)
+      if [[ ${COMP_WORDS[2]} == "status" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --label-suffix --json --help" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "status" -- "$cur") )
+      fi
       ;;
     pack)
       if [[ ${COMP_WORDS[2]} == "merge-readiness" ]]; then
@@ -1050,6 +1095,7 @@ commands=(
   'observe:inspect ledger and worktree state'
   'heartbeat:run observe on an interval and write reports'
   'status:print ledger status'
+  'watchdog:inspect macOS external watchdog status'
   'pack:generate local/static handoff artifacts'
   'review:run or import external model reviewer reports'
   'validate-routines:validate routine specs'
@@ -1175,6 +1221,13 @@ case $state in
       status)
         _values 'options' --repo --ledger --json --html --write-html --write-summary --stale-after --help
         ;;
+      watchdog)
+        if (( CURRENT == 3 )); then
+          _values 'subcommand' status
+        else
+          _values 'options' --repo --label-suffix --json --help
+        fi
+        ;;
       heartbeat)
         _values 'options' --repo --ledger --interval --missed-after --count --write-report --write-summary --help
         ;;
@@ -1201,6 +1254,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'append-event' -d '
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'observe' -d 'Inspect ledger and worktree state'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'heartbeat' -d 'Run observe on an interval and write reports'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'status' -d 'Print ledger status'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'watchdog' -d 'Inspect macOS external watchdog status'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'pack' -d 'Generate local/static handoff artifacts'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'review' -d 'Run or import external model reviewer reports'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'validate-routines' -d 'Validate routine specs'
@@ -1213,6 +1267,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Pr
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from dispatch' -a 'record reconcile'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-mode' -a 'set'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from watchdog' -a 'status'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness consultation review'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from review' -a 'run import policy'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
@@ -1235,6 +1290,7 @@ complete -c codex-orchestrator -l tag -d 'Release tag'
 complete -c codex-orchestrator -l expected-asset -d 'Expected release asset'
 complete -c codex-orchestrator -l heartbeat-report -d 'Optional heartbeat report path'
 complete -c codex-orchestrator -l missed-after -d 'Missed heartbeat threshold'
+complete -c codex-orchestrator -l label-suffix -d 'macOS watchdog LaunchAgent label suffix'
 complete -c codex-orchestrator -l package-id -d 'Feature package id'
 complete -c codex-orchestrator -l reviewer -d 'External reviewer name'
 complete -c codex-orchestrator -l pack -d 'Review pack directory'
@@ -2028,6 +2084,168 @@ func cmdStatus(args []string) error {
 		fmt.Printf("Status summary: %s\n", *writeSummary)
 	}
 	return nil
+}
+
+func cmdWatchdog(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: codex-orchestrator watchdog status [--repo PATH] [--label-suffix SUFFIX] [--json]")
+	}
+	switch args[0] {
+	case "status":
+		return cmdWatchdogStatus(args[1:])
+	case "help", "-h", "--help":
+		fmt.Println("usage: codex-orchestrator watchdog status [--repo PATH] [--label-suffix SUFFIX] [--json]")
+		return nil
+	default:
+		return fmt.Errorf("unknown watchdog subcommand: %s", args[0])
+	}
+}
+
+func cmdWatchdogStatus(args []string) error {
+	fs := flag.NewFlagSet("watchdog status", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path")
+	labelSuffix := fs.String("label-suffix", "", "LaunchAgent label suffix")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	report, err := inspectWatchdogStatus(*repo, *labelSuffix)
+	if err != nil {
+		return err
+	}
+	if *jsonOut {
+		return printJSON(report)
+	}
+	printWatchdogStatus(report)
+	return nil
+}
+
+func inspectWatchdogStatus(repo string, labelSuffix string) (WatchdogStatusReport, error) {
+	repoAbs, err := filepath.Abs(expandPath(repo))
+	if err != nil {
+		return WatchdogStatusReport{}, err
+	}
+	repoAbs = filepath.Clean(repoAbs)
+	suffix := strings.TrimSpace(labelSuffix)
+	if suffix == "" {
+		suffix = defaultWatchdogLabelSuffix(repoAbs)
+	}
+	label := "com.indiekitai.codex-orchestrator.watchdog." + suffix
+	plistPath := watchdogPlistPath(label)
+	installed := fileExists(plistPath)
+	if !installed && labelSuffix == "" {
+		if found, ok := findWatchdogPlistForRepo(repoAbs); ok {
+			plistPath = found
+			installed = true
+			label = strings.TrimSuffix(filepath.Base(found), ".plist")
+			suffix = strings.TrimPrefix(label, "com.indiekitai.codex-orchestrator.watchdog.")
+		}
+	}
+	stateDir := filepath.Join(repoAbs, defaultStateDir)
+	report := WatchdogStatusReport{
+		EvidenceLabel:  "local/static",
+		Repo:           repoAbs,
+		Label:          label,
+		LabelSuffix:    suffix,
+		PlistPath:      plistPath,
+		Installed:      installed,
+		LoadedStatus:   "unknown",
+		StateDir:       stateDir,
+		ReportPath:     filepath.Join(stateDir, "watchdog-heartbeat-report.json"),
+		SummaryPath:    filepath.Join(stateDir, "watchdog-heartbeat-summary.md"),
+		StdoutLogPath:  filepath.Join(stateDir, "launchd-watchdog.out.log"),
+		StderrLogPath:  filepath.Join(stateDir, "launchd-watchdog.err.log"),
+		LastStdoutPath: filepath.Join(stateDir, "watchdog-last-stdout.json"),
+		LastErrorPath:  filepath.Join(stateDir, "watchdog-last-error.log"),
+	}
+	report.ReportExists = fileExists(report.ReportPath)
+	report.SummaryExists = fileExists(report.SummaryPath)
+	report.StdoutLogExists = fileExists(report.StdoutLogPath)
+	report.StderrLogExists = fileExists(report.StderrLogPath)
+	report.LastStdoutExists = fileExists(report.LastStdoutPath)
+	report.LastErrorExists = fileExists(report.LastErrorPath)
+	if report.LastErrorExists {
+		report.LastErrorSnippet = readSmallSnippet(report.LastErrorPath, 600)
+	}
+	if installed {
+		report.LoadedStatus, report.LoadedDetail = inspectLaunchAgentLoadedFn(label)
+	} else {
+		report.LoadedStatus = "not-installed"
+	}
+	if report.ReportExists {
+		if observedAt, heartbeatStatus, err := readWatchdogHeartbeatReport(report.ReportPath); err == nil {
+			report.LastReportObservedAt = observedAt
+			report.HeartbeatStatus = heartbeatStatus
+		} else {
+			report.RecommendedActions = append(report.RecommendedActions, "watchdog report exists but could not be parsed; rerun the one-shot watchdog or inspect the report JSON.")
+		}
+	}
+	report.RecommendedActions = append(report.RecommendedActions, watchdogRecommendedActions(report)...)
+	return report, nil
+}
+
+func watchdogRecommendedActions(report WatchdogStatusReport) []string {
+	var actions []string
+	if !report.Installed {
+		actions = append(actions, "No macOS LaunchAgent plist was found for this repo; install with REPO="+shellQuote(report.Repo)+" ./scripts/install-macos-watchdog.sh if hands-off missed-wakeup alerts matter. This remains local/static evidence.")
+	}
+	if report.Installed && report.LoadedStatus != "loaded" {
+		actions = append(actions, "LaunchAgent plist exists but is not confirmed loaded; inspect launchctl status or reinstall the watchdog.")
+	}
+	if !report.ReportExists {
+		actions = append(actions, "No watchdog heartbeat report exists yet; wait for launchd or run scripts/macos-watchdog-run.sh once for local/static evidence.")
+	}
+	if report.HeartbeatStatus != nil && report.HeartbeatStatus.Status == "missed" {
+		actions = append(actions, "Watchdog report says heartbeat may have been missed; surface this before normal review/dispatch work.")
+	}
+	if report.LastErrorExists && strings.TrimSpace(report.LastErrorSnippet) != "" {
+		actions = append(actions, "Last watchdog error log is non-empty; inspect "+report.LastErrorPath+".")
+	}
+	if len(actions) == 0 {
+		actions = append(actions, "Watchdog local/static status has no immediate warning; Codex App heartbeat remains the primary orchestrator wakeup.")
+	}
+	return actions
+}
+
+func printWatchdogStatus(report WatchdogStatusReport) {
+	fmt.Printf("Watchdog evidence: %s\n", report.EvidenceLabel)
+	fmt.Printf("Repo: %s\n", report.Repo)
+	fmt.Printf("Label: %s\n", report.Label)
+	fmt.Printf("Installed: %t plist=%s\n", report.Installed, report.PlistPath)
+	fmt.Printf("Loaded: %s\n", report.LoadedStatus)
+	if report.LoadedDetail != "" {
+		fmt.Printf("Loaded detail: %s\n", report.LoadedDetail)
+	}
+	fmt.Printf("Report: %s exists=%t\n", report.ReportPath, report.ReportExists)
+	fmt.Printf("Summary: %s exists=%t\n", report.SummaryPath, report.SummaryExists)
+	fmt.Printf("Logs: stdout=%t stderr=%t lastStdout=%t lastError=%t\n",
+		report.StdoutLogExists,
+		report.StderrLogExists,
+		report.LastStdoutExists,
+		report.LastErrorExists,
+	)
+	if report.LastReportObservedAt != "" {
+		fmt.Printf("Last report observedAt: %s\n", report.LastReportObservedAt)
+	}
+	if report.HeartbeatStatus != nil {
+		fmt.Printf("Heartbeat status (%s): %s", report.HeartbeatStatus.EvidenceLabel, report.HeartbeatStatus.Status)
+		if report.HeartbeatStatus.Gap != "" {
+			fmt.Printf(" gap=%s", report.HeartbeatStatus.Gap)
+		}
+		if report.HeartbeatStatus.EstimatedMissedRuns > 0 {
+			fmt.Printf(" estimatedMissedRuns=%d", report.HeartbeatStatus.EstimatedMissedRuns)
+		}
+		fmt.Println()
+	}
+	if report.LastErrorSnippet != "" {
+		fmt.Printf("Last error snippet: %s\n", report.LastErrorSnippet)
+	}
+	if len(report.RecommendedActions) > 0 {
+		fmt.Println("Recommended actions:")
+		for _, action := range report.RecommendedActions {
+			fmt.Printf("- %s\n", action)
+		}
+	}
 }
 
 func cmdPack(args []string) error {
@@ -12100,6 +12318,176 @@ func allZeros(value string) bool {
 		}
 	}
 	return value != ""
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(expandPath(path))
+	return err == nil
+}
+
+func defaultWatchdogLabelSuffix(repo string) string {
+	repoName := sanitizeWatchdogComponent(filepath.Base(repo))
+	hash := "unknown"
+	cmd := exec.Command("cksum")
+	cmd.Stdin = strings.NewReader(repo)
+	if out, err := cmd.Output(); err == nil {
+		fields := strings.Fields(string(out))
+		if len(fields) > 0 {
+			hash = fields[0]
+		}
+	} else {
+		hash = strconv.FormatUint(uint64(crc32.ChecksumIEEE([]byte(repo))), 10)
+	}
+	return repoName + "-" + hash
+}
+
+func sanitizeWatchdogComponent(value string) string {
+	var b strings.Builder
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	result := b.String()
+	if result == "" {
+		return "repo"
+	}
+	return result
+}
+
+func watchdogPlistPath(label string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "~"
+	}
+	return filepath.Join(home, "Library", "LaunchAgents", label+".plist")
+}
+
+func findWatchdogPlistForRepo(repo string) (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	matches, err := filepath.Glob(filepath.Join(home, "Library", "LaunchAgents", "com.indiekitai.codex-orchestrator.watchdog.*.plist"))
+	if err != nil {
+		return "", false
+	}
+	needle := xmlEscape(repo)
+	for _, path := range matches {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		text := string(data)
+		if plistRepoMatches(text, repo) || plistRepoMatches(text, needle) {
+			return path, true
+		}
+	}
+	return "", false
+}
+
+func plistRepoMatches(plistText string, repo string) bool {
+	repoKey := "<key>REPO</key>"
+	keyIndex := strings.Index(plistText, repoKey)
+	if keyIndex < 0 {
+		return false
+	}
+	afterKey := plistText[keyIndex+len(repoKey):]
+	startTag := "<string>"
+	endTag := "</string>"
+	start := strings.Index(afterKey, startTag)
+	if start < 0 {
+		return false
+	}
+	afterStart := afterKey[start+len(startTag):]
+	end := strings.Index(afterStart, endTag)
+	if end < 0 {
+		return false
+	}
+	return strings.TrimSpace(afterStart[:end]) == repo
+}
+
+func xmlEscape(value string) string {
+	replacer := strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		`"`, "&quot;",
+		"'", "&apos;",
+	)
+	return replacer.Replace(value)
+}
+
+func inspectLaunchAgentLoaded(label string) (string, string) {
+	if runtime.GOOS != "darwin" {
+		return "unsupported", "launchctl status is only available on macOS."
+	}
+	if _, err := exec.LookPath("launchctl"); err != nil {
+		return "unknown", "launchctl was not found."
+	}
+	target := fmt.Sprintf("gui/%d/%s", os.Getuid(), label)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "launchctl", "print", target)
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return "unknown", "launchctl print timed out."
+	}
+	detail := strings.TrimSpace(string(out))
+	if err != nil {
+		if detail == "" {
+			detail = err.Error()
+		}
+		return "not-loaded", truncateForStatus(detail, 240)
+	}
+	return "loaded", ""
+}
+
+func readWatchdogHeartbeatReport(path string) (string, *HeartbeatStatus, error) {
+	data, err := os.ReadFile(expandPath(path))
+	if err != nil {
+		return "", nil, err
+	}
+	var summary ObserveSummary
+	if err := json.Unmarshal(data, &summary); err == nil {
+		return summary.ObservedAt, summary.HeartbeatStatus, nil
+	}
+	var partial struct {
+		ObservedAt      string           `json:"observedAt"`
+		HeartbeatStatus *HeartbeatStatus `json:"heartbeatStatus"`
+	}
+	if err := json.Unmarshal(data, &partial); err != nil {
+		return "", nil, err
+	}
+	return partial.ObservedAt, partial.HeartbeatStatus, nil
+}
+
+func readSmallSnippet(path string, limit int) string {
+	data, err := os.ReadFile(expandPath(path))
+	if err != nil {
+		return ""
+	}
+	return truncateForStatus(strings.TrimSpace(string(data)), limit)
+}
+
+func truncateForStatus(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	if limit <= 0 || len(value) <= limit {
+		return value
+	}
+	if limit <= 3 {
+		return value[:limit]
+	}
+	return value[:limit-3] + "..."
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }
 
 func expandPath(path string) string {

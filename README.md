@@ -378,6 +378,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator status
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
+./codex-orchestrator watchdog status --repo .
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
 ./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
 ./codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
@@ -459,6 +460,12 @@ On macOS, install a user LaunchAgent watchdog for a project checkout:
 
 ```bash
 REPO=/path/to/project ./scripts/install-macos-watchdog.sh
+```
+
+Check the installed watchdog and its last local/static report:
+
+```bash
+codex-orchestrator watchdog status --repo /path/to/project
 ```
 
 The LaunchAgent runs `scripts/macos-watchdog-run.sh` every 20 minutes by

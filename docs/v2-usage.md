@@ -287,6 +287,14 @@ SAY=0 \
 ./scripts/install-macos-watchdog.sh
 ```
 
+Check the LaunchAgent plist, loaded status, and last local/static watchdog
+report:
+
+```bash
+codex-orchestrator watchdog status --repo /path/to/project
+codex-orchestrator watchdog status --repo /path/to/project --json
+```
+
 The LaunchAgent runs `scripts/macos-watchdog-run.sh`, which performs one
 `heartbeat --count 1` check, writes:
 

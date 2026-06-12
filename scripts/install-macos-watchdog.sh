@@ -131,6 +131,7 @@ echo "Repo: $REPO"
 echo "Report: $REPO/.codex-orchestrator/watchdog-heartbeat-report.json"
 echo "Summary: $REPO/.codex-orchestrator/watchdog-heartbeat-summary.md"
 echo "Logs: $stdout_log / $stderr_log"
+echo "Status: codex-orchestrator watchdog status --repo '$REPO'"
 echo
 echo "To uninstall:"
 echo "  launchctl unload '$plist' && rm '$plist'"

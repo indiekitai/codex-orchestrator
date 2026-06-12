@@ -328,6 +328,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator status
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
+./codex-orchestrator watchdog status --repo .
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
 ./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
 ./codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
@@ -399,6 +400,12 @@ macOS 可以给某个项目安装用户级 LaunchAgent watchdog：
 
 ```bash
 REPO=/path/to/project ./scripts/install-macos-watchdog.sh
+```
+
+查看是否已安装、是否 loaded、最近一次 watchdog report 有没有 missed：
+
+```bash
+codex-orchestrator watchdog status --repo /path/to/project
 ```
 
 它默认每 20 分钟运行一次 `scripts/macos-watchdog-run.sh`，写入

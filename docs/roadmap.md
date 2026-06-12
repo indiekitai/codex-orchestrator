@@ -88,9 +88,13 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
    - 边界：local/static status evidence；不启动 server/daemon，不调度、不 merge、不
      push、不清理 worker。
 
-4. Watchdog install/status polish：待做。
+4. Watchdog install/status polish：已完成。
    - 目标：把 macOS watchdog fallback 的安装、状态检查、last wake/missed count
      做成更清楚的 helper 输出。
+   - 当前落地：新增 `codex-orchestrator watchdog status --repo .`，只读检查
+     LaunchAgent plist、launchctl loaded 状态、watchdog heartbeat report/summary
+     和最近 stdout/stderr/error log，并把 missed heartbeat 和未安装状态转成
+     recommended actions。
    - 边界：仍然只做本地提醒和报告，不替代 Codex App session 调度。
 
 5. v0.3.3 release closeout：待做。
