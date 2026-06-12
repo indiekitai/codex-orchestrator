@@ -37,11 +37,52 @@ Evidence label: `local/project-feedback`.
 
 ## Problems To Productize
 
+### 0. What the 5-hour heartbeat gap was and was not
+
+The heartbeat configuration itself was not five hours. It was intended to wake
+the orchestrator every 20 minutes until 09:00 Asia/Shanghai. The visible record
+showed an automatic wakeup around 01:33 and the next visible wakeup around
+07:10, with no heartbeat message delivered to the thread in between.
+
+The gap was not caused by:
+
+- foreground `sleep` or long polling in the orchestrator turn;
+- the orchestrator deciding the queue was drained;
+- the orchestrator waiting for user confirmation;
+- a worker-level blocker;
+- the heartbeat being intentionally configured to a five-hour interval.
+
+The defensible conclusion is narrower: Codex App heartbeat did not deliver
+20-minute wakeups into that thread during the gap. The exact layer remains
+`blocked`: App automation runner, queue delivery, machine sleep, operating
+system power state, or thread scheduling cannot be proven from repo, ledger, or
+automation file evidence alone.
+
+The orchestrator responsibility was still real: it did not have a missed
+heartbeat detection/reporting loop. A better status surface would have made the
+07:10 wakeup say "missed about 5 hours of scheduled checks" before continuing
+normal task processing.
+
 ### 1. Blocked setup must outrank pending setup
 
 If a task has a `pendingWorktreeId` but setup later fails, the ledger status
 must become `blocked`, and `observe` must not keep presenting the task as
 `pending-setup`.
+
+For `TF-P2-POS-SPLIT-CHECK-UI-LOCAL-READINESS`, the concrete setup error was:
+
+```text
+fatal: invalid reference: codex/TF-P2-POS-SPLIT-CHECK-UI-LOCAL-READINESS
+git worktree add failed
+```
+
+This means the app tried to create a worktree from a git reference that did not
+exist. The orchestrator had passed the desired new worker branch name as though
+it were an existing starting branch/reference. The correct shape is to start
+from `main` or a known base commit, then create or switch to the target worker
+branch using the tool's new-branch semantics. No real worker worktree, task
+branch, or code output existed for that task, so the only correct evidence label
+was `blocked`.
 
 Implemented follow-up:
 

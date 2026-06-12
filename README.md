@@ -439,6 +439,9 @@ commands label their output as `local/static`: a pending worktree ID is setup
 evidence only, and a resolved worktree is not proof that the task is correct.
 If setup fails, record a blocked setup event immediately; a failed
 `pendingWorktreeId` should not keep showing as pending setup.
+`fatal: invalid reference` during setup is an immediate setup failure, not a
+queued worker; it usually means the desired new branch was passed as an
+existing starting reference.
 
 `run-mode set --dispatch-mode active|drain|paused` records run-level dispatch
 intent in the ledger. Use `drain` when the orchestrator should finish current

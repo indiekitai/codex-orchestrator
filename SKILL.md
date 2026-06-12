@@ -187,6 +187,11 @@ the ledger record instead of dispatching a duplicate same-task worker.
 If setup fails, immediately append a `blocked` setup event with the exact
 failure text. Do not leave a failed setup as `pending-setup` just because it has
 a `pendingWorktreeId`.
+Treat `fatal: invalid reference` from worktree setup as an immediate setup
+failure, not a queued worker. It usually means the desired new task branch was
+passed as the starting reference even though it did not exist; recover by
+starting from the default branch or a known base commit and creating the task
+branch with explicit new-branch semantics.
 
 Use run-level dispatch mode for stop/drain requests instead of encoding the
 instruction only in a heartbeat prompt:
