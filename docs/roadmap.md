@@ -175,11 +175,17 @@ Future daemon/UI
    - forbidden-path 和 evidence-label audit；
    - routine library 接口。
 
-4. 添加 launchd/cron 示例，但保持保守：
+4. 添加 launchd/cron 示例，但保持保守：已完成 macOS 用户级 LaunchAgent
+   watchdog 脚本：
 
    ```text
    observe -> write heartbeat-report.json -> notify user/App
    ```
+
+   当前实现为 `scripts/install-macos-watchdog.sh` 和
+   `scripts/macos-watchdog-run.sh`，只写本地 watchdog heartbeat report/summary
+   并在 missed heartbeat 时发 macOS 通知；不创建 session、不派发、不 merge/push、
+   不 cleanup，也不证明 App/OS 层的漏跑原因。
 
 边界：
 

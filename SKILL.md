@@ -181,7 +181,13 @@ Before dispatching hands-off work:
   there is direct evidence from the App/OS layer;
 - for long hands-off runs where missed wakeups matter, recommend an external
   OS-level watchdog or notification, because the helper cannot run when Codex
-  App does not wake the thread.
+  App does not wake the thread. On macOS, use
+  `REPO=/path/to/project scripts/install-macos-watchdog.sh` from this repository
+  to install a user LaunchAgent that runs
+  `scripts/macos-watchdog-run.sh` periodically. This external watchdog is still
+  local/static evidence: it can notify about missed Codex App heartbeats while
+  the Mac is awake, but it does not create sessions, review, merge, push,
+  cleanup, or prove why the App heartbeat was missed.
 
 ## Orchestrator State Ledger
 

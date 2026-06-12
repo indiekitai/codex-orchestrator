@@ -451,6 +451,19 @@ App automation delivery, machine sleep, OS power state, or thread scheduling.
 For long hands-off runs where this matters, use an external OS-level watchdog or
 notification in addition to Codex App heartbeat.
 
+On macOS, install a user LaunchAgent watchdog for a project checkout:
+
+```bash
+REPO=/path/to/project ./scripts/install-macos-watchdog.sh
+```
+
+The LaunchAgent runs `scripts/macos-watchdog-run.sh` every 20 minutes by
+default. It writes `.codex-orchestrator/watchdog-heartbeat-report.json` and
+`.codex-orchestrator/watchdog-heartbeat-summary.md`; if the helper reports
+`heartbeatStatus.status=missed`, it sends a macOS notification. This is an
+external warning layer only: it still does not create Codex sessions, dispatch
+workers, review, merge, push, cleanup, or keep a sleeping Mac awake.
+
 `dispatch record` and `dispatch reconcile` are the App-first dispatch closure
 commands. Use `dispatch record` immediately after Codex App returns a
 `pendingWorktreeId`, along with the task ID, optional thread ID, expected branch,
@@ -822,6 +835,8 @@ codex-orchestrator/
 │   ├── build-release-assets.sh
 │   ├── install.sh
 │   ├── ledger_heartbeat.py
+│   ├── install-macos-watchdog.sh
+│   ├── macos-watchdog-run.sh
 │   └── publish-release.sh
 ├── go.mod
 ├── README.md             # This file

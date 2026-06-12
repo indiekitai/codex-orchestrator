@@ -17,7 +17,7 @@ orchestration work in this repository.
 | `docs/roadmap.md` | Current roadmap and phase status. Update when a feature slice completes or a route is intentionally de-scoped. |
 | `docs/reviews/` | Review and proof notes. Add a dated note for non-trivial changes, especially CLI behavior, release, policy/eval, or safety changes. |
 | `examples/` | Example ledgers, routine reports, heartbeat reports, and external-user prompt artifacts. Keep examples in sync with schema changes. |
-| `scripts/` | Install, release, compatibility, and legacy helper scripts. Do not add package-manager distribution scripts unless explicitly re-scoped. |
+| `scripts/` | Install, release, compatibility, macOS watchdog, and legacy helper scripts. Do not add package-manager distribution scripts unless explicitly re-scoped. |
 
 ## Common Verification Gates
 
@@ -50,6 +50,7 @@ Use the narrowest credible gate for a change:
 |---|---|---|
 | App skill behavior | `SKILL.md`, maybe README/docs | `policy check`, `evidence-label-auditor`, `git diff --check` |
 | CLI observe/status/heartbeat | `cmd/codex-orchestrator/main.go`, tests, `docs/v2-usage.md`, roadmap | `go test ./...`, docs drift, policy check |
+| macOS external watchdog | `scripts/macos-watchdog-run.sh`, `scripts/install-macos-watchdog.sh`, `SKILL.md`, README/docs | `bash -n scripts/*.sh`, one-shot local watchdog smoke, evidence-label auditor |
 | Routine behavior | `cmd/codex-orchestrator/main.go`, `routines/*.json`, `docs/routines/README.md`, tests | `go test ./...`, `validate-routines`, docs drift |
 | Policy/eval rule | `cmd/codex-orchestrator/main.go`, `eval/`, review doc | `policy check`, `eval run`, `go test ./...` |
 | Release packaging | `scripts/`, `docs/distribution-package.md`, release notes/review docs | release verifier, `go test ./...` |

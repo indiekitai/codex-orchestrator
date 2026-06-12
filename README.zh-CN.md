@@ -391,6 +391,19 @@ thread/repo/ledger；动态 worker 状态写进 ledger/status 文件，不写进
 automation 投递、电脑睡眠、系统省电还是 thread 调度。长时间无人看守且很在意漏跑时，
 应额外使用 OS 级 watchdog 或通知。
 
+macOS 可以给某个项目安装用户级 LaunchAgent watchdog：
+
+```bash
+REPO=/path/to/project ./scripts/install-macos-watchdog.sh
+```
+
+它默认每 20 分钟运行一次 `scripts/macos-watchdog-run.sh`，写入
+`.codex-orchestrator/watchdog-heartbeat-report.json` 和
+`.codex-orchestrator/watchdog-heartbeat-summary.md`；如果 helper 报出
+`heartbeatStatus.status=missed`，就发一条 macOS 通知。它只是外部提醒层：
+不创建 Codex session、不派发 worker、不 review、不 merge/push/cleanup，也不能让睡眠
+中的 Mac 自己醒来。
+
 `dispatch record` 和 `dispatch reconcile` 是 App-first 的派发闭环命令。Codex
 App 返回 `pendingWorktreeId` 后，先用 `dispatch record` 立即写入 task ID、可选
 thread ID、预期 branch、base commit、allowed/forbidden paths 和 gates。等本地
@@ -707,6 +720,8 @@ codex-orchestrator/
 │   ├── build-release-assets.sh
 │   ├── install.sh
 │   ├── ledger_heartbeat.py
+│   ├── install-macos-watchdog.sh
+│   ├── macos-watchdog-run.sh
 │   └── publish-release.sh
 ├── go.mod
 ├── README.md             # 英文说明

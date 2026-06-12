@@ -252,6 +252,49 @@ exists. The helper may report metadata gaps, near/exceeded local thresholds, and
 unknown timing evidence, but dispatch, pause, merge, cleanup, or worker-control
 decisions remain with the Codex App orchestrator and human reviewer.
 
+## macOS External Watchdog
+
+For hands-off runs, Codex App heartbeat is still the primary orchestrator
+wakeup. The helper can add an OS-level warning layer so a missed App heartbeat
+is visible the next time the Mac is awake and `launchd` runs.
+
+Install a per-project user LaunchAgent:
+
+```bash
+REPO=/path/to/project ./scripts/install-macos-watchdog.sh
+```
+
+Optional environment variables:
+
+```bash
+REPO=/path/to/project \
+BIN="$HOME/.local/bin/codex-orchestrator" \
+INTERVAL=20m \
+MISSED_AFTER=45m \
+START_INTERVAL_SECONDS=1200 \
+NOTIFY=1 \
+SAY=0 \
+./scripts/install-macos-watchdog.sh
+```
+
+The LaunchAgent runs `scripts/macos-watchdog-run.sh`, which performs one
+`heartbeat --count 1` check, writes:
+
+- `.codex-orchestrator/watchdog-heartbeat-report.json`
+- `.codex-orchestrator/watchdog-heartbeat-summary.md`
+- `.codex-orchestrator/launchd-watchdog.out.log`
+- `.codex-orchestrator/launchd-watchdog.err.log`
+
+If the report contains `heartbeatStatus.status=missed`, the runner sends a
+macOS notification. Set `SAY=1` during installation if voice notification is
+wanted.
+
+This watchdog is intentionally conservative. It does not create Codex sessions,
+dispatch workers, review, merge, push, cleanup, or keep a sleeping Mac awake.
+Its evidence is `local/static`: it can show that heartbeat checks were missed,
+but not prove whether the cause was Codex App automation delivery, machine
+sleep, OS power state, or thread scheduling.
+
 ## Run Read-Only Routines
 
 The helper can emit local/static routine reports without mutating the ledger,
