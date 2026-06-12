@@ -319,10 +319,10 @@ Loop Engineering 对齐调研见
 ```bash
 go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
-./codex-orchestrator dispatch record --task-id TASK --pending-worktree-id PENDING_ID --branch codex/task --gate "go test ./..."
+./codex-orchestrator dispatch record --task-id TASK --package-id PACKAGE --pending-worktree-id PENDING_ID --branch codex/task --gate "go test ./..."
 ./codex-orchestrator dispatch reconcile --task-id TASK
 ./codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch only"
-./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
+./codex-orchestrator record-task --id TASK --package-id PACKAGE --worktree /path/to/wt --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
@@ -356,9 +356,12 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 JSON heartbeat report 会包含 `overallStatus`、按状态聚合的 `counts`、
 `reviewPressure`、只读 `budgetSummary`，以及追加型 `budgetPressure` warnings。
 它还包含一个 `jobSummary` 区块，借鉴 jobs/status 面板：展示任务总数、各状态计数，
-以及每个任务的紧凑行。`observe`、`status` 和 heartbeat summary 也会展示只读
-`projectMap` 信号。helper 会检查常见项目地图文件，例如 `docs/CODEBASE_MAP.md`；
-如果不存在，会提示让 Codex App 在首次编排前生成或读取一份简洁 project map。
+以及每个任务的紧凑行。相关 worker 可以用 `--package-id` 归入同一个功能包；
+`observe`、`status` 和 heartbeat summary 会额外展示 `packageSummary`，列出功能包级
+active/review/blocked/cleanup 状态和下一步建议。`observe`、`status` 和 heartbeat
+summary 也会展示只读 `projectMap` 信号。helper 会检查常见项目地图文件，例如
+`docs/CODEBASE_MAP.md`；如果不存在，会提示让 Codex App 在首次编排前生成或读取一份
+简洁 project map。
 
 通过 `record-task` 记录的 runtime/review budget 会在 `observe`、`status` 和
 heartbeat summary 中展示。runtime pressure 只根据本地 ledger timestamp 计算；
@@ -406,7 +409,7 @@ REPO=/path/to/project ./scripts/install-macos-watchdog.sh
 
 `dispatch record` 和 `dispatch reconcile` 是 App-first 的派发闭环命令。Codex
 App 返回 `pendingWorktreeId` 后，先用 `dispatch record` 立即写入 task ID、可选
-thread ID、预期 branch、base commit、allowed/forbidden paths 和 gates。等本地
+package ID、thread ID、预期 branch、base commit、allowed/forbidden paths 和 gates。等本地
 `git worktree list` 已经能看到 worker branch 或 worktree 后，再用
 `dispatch reconcile` 写回真实 worktree/branch。两个命令的输出都标为
 `local/static`：pending worktree ID 只是 setup 证据，不代表 worker 正在运行；

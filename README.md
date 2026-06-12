@@ -369,10 +369,10 @@ The v2 helper CLI currently supports:
 ```bash
 go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator init
-./codex-orchestrator dispatch record --task-id TASK --pending-worktree-id PENDING_ID --branch codex/task --gate "go test ./..."
+./codex-orchestrator dispatch record --task-id TASK --package-id PACKAGE --pending-worktree-id PENDING_ID --branch codex/task --gate "go test ./..."
 ./codex-orchestrator dispatch reconcile --task-id TASK
 ./codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch only"
-./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
+./codex-orchestrator record-task --id TASK --package-id PACKAGE --worktree /path/to/wt --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
@@ -407,10 +407,13 @@ The JSON heartbeat report includes `overallStatus`, per-status `counts`, a
 `reviewPressure` block, read-only `budgetSummary`, and additive
 `budgetPressure` warnings. It also includes a `jobSummary` block inspired by
 jobs/status dashboards: total tasks, per-status counts, and compact rows for
-each tracked task. `observe`, `status`, and heartbeat summaries also expose a
-read-only `projectMap` signal. The helper checks for common project-map files
-such as `docs/CODEBASE_MAP.md`; when none exists, it asks Codex App to generate
-or read a concise map before first orchestration.
+each tracked task. Related tasks can be grouped with `--package-id`; `observe`,
+`status`, and heartbeat summaries then expose a `packageSummary` with
+package-level active/review/blocked/cleanup state and the next suggested package
+action. `observe`, `status`, and heartbeat summaries also expose a read-only
+`projectMap` signal. The helper checks for common project-map files such as
+`docs/CODEBASE_MAP.md`; when none exists, it asks Codex App to generate or read
+a concise map before first orchestration.
 
 Per-task runtime/review budgets recorded with `record-task` are surfaced in
 `observe`, `status`, and heartbeat summaries for visibility only. Runtime
@@ -466,8 +469,9 @@ workers, review, merge, push, cleanup, or keep a sleeping Mac awake.
 
 `dispatch record` and `dispatch reconcile` are the App-first dispatch closure
 commands. Use `dispatch record` immediately after Codex App returns a
-`pendingWorktreeId`, along with the task ID, optional thread ID, expected branch,
-base commit, allowed/forbidden paths, and gates. Use `dispatch reconcile` after
+`pendingWorktreeId`, along with the task ID, package ID, optional thread ID,
+expected branch, base commit, allowed/forbidden paths, and gates. Use
+`dispatch reconcile` after
 local `git worktree list` truth contains the worker branch or worktree. Both
 commands label their output as `local/static`: a pending worktree ID is setup
 evidence only, and a resolved worktree is not proof that the task is correct.

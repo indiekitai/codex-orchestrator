@@ -42,6 +42,7 @@ type Ledger struct {
 type Task struct {
 	ID                string              `json:"id"`
 	Title             string              `json:"title,omitempty"`
+	PackageID         string              `json:"packageId,omitempty"`
 	ThreadID          string              `json:"threadId,omitempty"`
 	PendingWorktreeID string              `json:"pendingWorktreeId,omitempty"`
 	Worktree          string              `json:"worktree,omitempty"`
@@ -95,6 +96,7 @@ type RecordTaskOptions struct {
 	EventsPath          string
 	ID                  string
 	Title               string
+	PackageID           string
 	ThreadID            string
 	PendingWorktreeID   string
 	Worktree            string
@@ -201,6 +203,7 @@ type BudgetPressureSummary struct {
 type RuntimeStatusItem struct {
 	ID                string         `json:"id"`
 	Title             string         `json:"title,omitempty"`
+	PackageID         string         `json:"packageId,omitempty"`
 	LedgerStatus      string         `json:"ledgerStatus,omitempty"`
 	ObservedStatus    string         `json:"observedStatus,omitempty"`
 	Signal            string         `json:"signal,omitempty"`
@@ -237,11 +240,33 @@ type JobSummary struct {
 	Rows          []JobStatusItem `json:"rows,omitempty"`
 }
 
+type PackageSummary struct {
+	EvidenceLabel string              `json:"evidenceLabel"`
+	Total         int                 `json:"total"`
+	Rows          []PackageStatusItem `json:"rows,omitempty"`
+}
+
+type PackageStatusItem struct {
+	ID                  string         `json:"id"`
+	Status              string         `json:"status"`
+	TaskCount           int            `json:"taskCount"`
+	Counts              map[string]int `json:"counts"`
+	ActiveTaskIDs       []string       `json:"activeTaskIds,omitempty"`
+	ReviewTaskIDs       []string       `json:"reviewTaskIds,omitempty"`
+	BlockedTaskIDs      []string       `json:"blockedTaskIds,omitempty"`
+	CleanupTaskIDs      []string       `json:"cleanupTaskIds,omitempty"`
+	RecentTaskIDs       []string       `json:"recentTaskIds,omitempty"`
+	OtherTaskIDs        []string       `json:"otherTaskIds,omitempty"`
+	LatestUpdatedAt     string         `json:"latestUpdatedAt,omitempty"`
+	NextSuggestedAction string         `json:"nextSuggestedAction,omitempty"`
+}
+
 type JobStatusItem struct {
 	ID                string `json:"id"`
 	Status            string `json:"status"`
 	Signal            string `json:"signal,omitempty"`
 	Title             string `json:"title,omitempty"`
+	PackageID         string `json:"packageId,omitempty"`
 	Branch            string `json:"branch,omitempty"`
 	Worktree          string `json:"worktree,omitempty"`
 	PendingWorktreeID string `json:"pendingWorktreeId,omitempty"`
@@ -286,6 +311,7 @@ type ObserveSummary struct {
 	Integration        IntegrationState      `json:"integration"`
 	RuntimeStatus      RuntimeStatusReport   `json:"runtimeStatus"`
 	JobSummary         JobSummary            `json:"jobSummary"`
+	PackageSummary     PackageSummary        `json:"packageSummary"`
 	ProjectMap         ProjectMapStatus      `json:"projectMap"`
 	Observations       []Observation         `json:"observations"`
 	RecentRoutineRuns  []RoutineRun          `json:"recentRoutineRuns,omitempty"`
@@ -809,10 +835,10 @@ func usage() {
 
 Usage:
   codex-orchestrator init [--ledger PATH] [--project-root PATH]
-  codex-orchestrator dispatch record --task-id TASK --pending-worktree-id ID [--branch BRANCH] [--allowed PATH] [--forbidden PATH] [--gate CMD] [--json]
+  codex-orchestrator dispatch record --task-id TASK --pending-worktree-id ID [--package-id PKG] [--branch BRANCH] [--allowed PATH] [--forbidden PATH] [--gate CMD] [--json]
   codex-orchestrator dispatch reconcile --task-id TASK [--branch BRANCH | --worktree PATH] [--json]
   codex-orchestrator run-mode set --dispatch-mode active|drain|paused [--note TEXT] [--json]
-  codex-orchestrator record-task --id ID (--worktree PATH --branch BRANCH | --pending-worktree-id ID) [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N]
+  codex-orchestrator record-task --id ID (--worktree PATH --branch BRANCH | --pending-worktree-id ID) [--package-id PKG] [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N]
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--missed-after 15m] [--count 0] [--write-report PATH]
@@ -915,7 +941,7 @@ _codex_orchestrator()
       ;;
     dispatch)
       if [[ ${COMP_WORDS[2]} == "record" ]]; then
-        COMPREPLY=( $(compgen -W "--repo --ledger --events --task-id --title --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --evidence-note --max-runtime-minutes --review-budget-minutes --budget-note --json --help" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--repo --ledger --events --task-id --title --package-id --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --evidence-note --max-runtime-minutes --review-budget-minutes --budget-note --json --help" -- "$cur") )
       elif [[ ${COMP_WORDS[2]} == "reconcile" ]]; then
         COMPREPLY=( $(compgen -W "--repo --ledger --events --task-id --worktree --branch --status --json --help" -- "$cur") )
       else
@@ -930,7 +956,7 @@ _codex_orchestrator()
       fi
       ;;
     record-task)
-      COMPREPLY=( $(compgen -W "--ledger --id --title --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--ledger --id --title --package-id --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help" -- "$cur") )
       ;;
     append-event)
       COMPREPLY=( $(compgen -W "--ledger --type --task-id --status --pending-worktree-id --worktree --branch --note --help" -- "$cur") )
@@ -1105,7 +1131,7 @@ case $state in
         if (( CURRENT == 3 )); then
           _values 'subcommand' record reconcile
         elif [[ $words[3] == "record" ]]; then
-          _values 'options' --repo --ledger --events --task-id --title --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --evidence-note --max-runtime-minutes --review-budget-minutes --budget-note --json --help
+          _values 'options' --repo --ledger --events --task-id --title --package-id --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --evidence-note --max-runtime-minutes --review-budget-minutes --budget-note --json --help
         else
           _values 'options' --repo --ledger --events --task-id --worktree --branch --status --json --help
         fi
@@ -1138,7 +1164,7 @@ case $state in
         fi
         ;;
       record-task)
-        _values 'options' --ledger --id --title --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help
+        _values 'options' --ledger --id --title --package-id --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help
         ;;
       append-event)
         _values 'options' --ledger --type --task-id --status --pending-worktree-id --worktree --branch --note --help
@@ -1542,6 +1568,7 @@ func parseRecordTaskFlags(fs *flag.FlagSet, args []string, idFlag string) (Recor
 	eventsPath := fs.String("events", "", "events path")
 	id := fs.String(idFlag, "", "task id")
 	title := fs.String("title", "", "task title")
+	packageID := fs.String("package-id", "", "feature package id")
 	threadID := fs.String("thread-id", "", "Codex thread id")
 	pendingWorktreeID := fs.String("pending-worktree-id", "", "opaque Codex App pending worktree setup id")
 	worktree := fs.String("worktree", "", "task worktree path")
@@ -1569,6 +1596,7 @@ func parseRecordTaskFlags(fs *flag.FlagSet, args []string, idFlag string) (Recor
 		EventsPath:          *eventsPath,
 		ID:                  *id,
 		Title:               *title,
+		PackageID:           *packageID,
 		ThreadID:            *threadID,
 		PendingWorktreeID:   *pendingWorktreeID,
 		Worktree:            *worktree,
@@ -1635,6 +1663,7 @@ func recordLedgerTask(opts RecordTaskOptions) (TaskRecordResult, error) {
 	task := Task{
 		ID:                opts.ID,
 		Title:             taskTitle,
+		PackageID:         strings.TrimSpace(opts.PackageID),
 		ThreadID:          opts.ThreadID,
 		PendingWorktreeID: opts.PendingWorktreeID,
 		Worktree:          opts.Worktree,
@@ -1667,6 +1696,9 @@ func recordLedgerTask(opts RecordTaskOptions) (TaskRecordResult, error) {
 	if opts.PendingWorktreeID != "" {
 		task.History[0]["pendingWorktreeId"] = opts.PendingWorktreeID
 	}
+	if task.PackageID != "" {
+		task.History[0]["packageId"] = task.PackageID
+	}
 	ledger.Tasks = append(ledger.Tasks, task)
 	if err := saveLedger(opts.LedgerPath, &ledger); err != nil {
 		return TaskRecordResult{}, err
@@ -1683,6 +1715,9 @@ func recordLedgerTask(opts RecordTaskOptions) (TaskRecordResult, error) {
 	}
 	if opts.PendingWorktreeID != "" {
 		event["pendingWorktreeId"] = opts.PendingWorktreeID
+	}
+	if task.PackageID != "" {
+		event["packageId"] = task.PackageID
 	}
 	if opts.Worktree != "" {
 		event["worktree"] = opts.Worktree
@@ -1940,6 +1975,7 @@ func cmdStatus(args []string) error {
 		"integration":       summary.Integration,
 		"runtimeStatus":     summary.RuntimeStatus,
 		"jobSummary":        summary.JobSummary,
+		"packageSummary":    summary.PackageSummary,
 		"projectMap":        summary.ProjectMap,
 		"tasks":             ledger.Tasks,
 		"observations":      summary.Observations,
@@ -1972,6 +2008,7 @@ func cmdStatus(args []string) error {
 	fmt.Printf("Tasks: %d overall=%s\n", len(ledger.Tasks), summary.OverallStatus)
 	fmt.Printf("Runtime status (%s): %s\n", summary.RuntimeStatus.EvidenceLabel, summary.RuntimeStatus.Summary)
 	fmt.Printf("Jobs: total=%d counts=%s\n", summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
+	fmt.Printf("Packages: total=%d\n", summary.PackageSummary.Total)
 	fmt.Printf("Project map (%s): %s", summary.ProjectMap.EvidenceLabel, summary.ProjectMap.Status)
 	if summary.ProjectMap.Path != "" {
 		fmt.Printf(" path=%s", summary.ProjectMap.Path)
@@ -1983,6 +2020,7 @@ func cmdStatus(args []string) error {
 		summary.RuntimeStatus.AvailableDispatchSlots,
 	)
 	printRuntimeStatusReport(summary.RuntimeStatus)
+	printPackageSummary(summary.PackageSummary)
 	if *writeHTML != "" {
 		fmt.Printf("Status HTML: %s\n", *writeHTML)
 	}
@@ -2347,6 +2385,7 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	renderMetricHTML(&b, "总体状态", summary.OverallStatus, statusClass(summary.OverallStatus))
 	renderMetricHTML(&b, "派发模式", summary.DispatchMode, statusClass(summary.OverallStatus))
 	renderMetricHTML(&b, "任务总数", fmt.Sprint(len(ledger.Tasks)), "")
+	renderMetricHTML(&b, "功能包", fmt.Sprint(summary.PackageSummary.Total), "")
 	renderMetricHTML(&b, "可用派发槽", fmt.Sprintf("%d / %d", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency), "")
 	renderMetricHTML(&b, "待审/阻塞", fmt.Sprintf("%d / %d", summary.ReviewPressure.ReviewNeeded, summary.ReviewPressure.Blocked), pressureClass(summary.ReviewPressure.Blocked, summary.ReviewPressure.ReviewNeeded))
 	fmt.Fprintf(&b, "</section>\n")
@@ -2413,6 +2452,8 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	renderStatusHTMLCategory(&b, fmt.Sprintf("最近合并/清理 / Recent %dh", summary.RuntimeStatus.RecentWindowHours), summary.RuntimeStatus.RecentMergedOrCleaned)
 	renderStatusHTMLCategory(&b, "停滞待查 / Stale", summary.RuntimeStatus.StaleNeedsInspection)
 	fmt.Fprintf(&b, "</section>\n")
+
+	renderPackageSummaryHTML(&b, summary.PackageSummary)
 
 	if len(summary.BudgetPressure.Warnings) > 0 {
 		fmt.Fprintf(&b, "<section class=\"section\"><h2>预算/审查压力 / Budget Pressure</h2><ul>")
@@ -2505,6 +2546,39 @@ func renderStatusHTMLCategory(b *strings.Builder, title string, items []RuntimeS
 		fmt.Fprintf(b, "</div>")
 	}
 	fmt.Fprintf(b, "</section>\n")
+}
+
+func renderPackageSummaryHTML(b *strings.Builder, summary PackageSummary) {
+	fmt.Fprintf(b, "<section class=\"section\"><h2>功能包 / Packages</h2>")
+	if len(summary.Rows) == 0 {
+		fmt.Fprintf(b, "<p class=\"muted\">No packageId recorded yet. Add <code>--package-id</code> when recording related worker tasks.</p></section>\n")
+		return
+	}
+	for _, row := range summary.Rows {
+		fmt.Fprintf(b, "<div class=\"item\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(row.ID), escapeHTML(row.Status))
+		fmt.Fprintf(b, "<div class=\"meta\">tasks=%d counts=%s", row.TaskCount, escapeHTML(formatIntMap(row.Counts)))
+		if row.LatestUpdatedAt != "" {
+			fmt.Fprintf(b, " · updated=%s", escapeHTML(row.LatestUpdatedAt))
+		}
+		fmt.Fprintf(b, "</div>")
+		if row.NextSuggestedAction != "" {
+			fmt.Fprintf(b, "<div class=\"action\">%s</div>", escapeHTML(row.NextSuggestedAction))
+		}
+		renderPackageTaskIDsHTML(b, "active", row.ActiveTaskIDs)
+		renderPackageTaskIDsHTML(b, "review", row.ReviewTaskIDs)
+		renderPackageTaskIDsHTML(b, "blocked", row.BlockedTaskIDs)
+		renderPackageTaskIDsHTML(b, "cleanup", row.CleanupTaskIDs)
+		renderPackageTaskIDsHTML(b, "other", row.OtherTaskIDs)
+		fmt.Fprintf(b, "</div>")
+	}
+	fmt.Fprintf(b, "</section>\n")
+}
+
+func renderPackageTaskIDsHTML(b *strings.Builder, label string, ids []string) {
+	if len(ids) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "<div class=\"meta\">%s: %s</div>", escapeHTML(label), escapeHTML(strings.Join(ids, ", ")))
 }
 
 func humanTaskName(title string, id string) string {
@@ -7273,6 +7347,7 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	budgetPressure := calculateBudgetPressure(ledger.Tasks, observations, observedAt, budget.RoutineSpecsMissingBudget)
 	runtimeStatus := buildRuntimeStatusReport(ledger.Tasks, observations, pressure, observedAt)
 	jobSummary := buildJobSummary(ledger.Tasks, observations, counts)
+	packageSummary := buildPackageSummary(ledger.Tasks, observations, ledger.RoutineRuns)
 	projectMap := inspectProjectMap(ledger.ProjectRoot)
 	overall, actions := summarizeObservations(ledger, integration, counts, pressure)
 	return ObserveSummary{
@@ -7292,6 +7367,7 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		Integration:        integration,
 		RuntimeStatus:      runtimeStatus,
 		JobSummary:         jobSummary,
+		PackageSummary:     packageSummary,
 		ProjectMap:         projectMap,
 		Observations:       observations,
 		RecentRoutineRuns:  recentRoutineRuns(ledger.RoutineRuns, 5),
@@ -7438,6 +7514,7 @@ func buildJobSummary(tasks []Task, observations []Observation, counts map[string
 			Status:            observation.Status,
 			Signal:            observation.Signal,
 			Title:             title,
+			PackageID:         task.PackageID,
 			Branch:            task.Branch,
 			Worktree:          task.Worktree,
 			PendingWorktreeID: task.PendingWorktreeID,
@@ -7456,6 +7533,130 @@ func buildJobSummary(tasks []Task, observations []Observation, counts map[string
 		Total:         len(observations),
 		Counts:        copyStringIntMap(counts),
 		Rows:          rows,
+	}
+}
+
+func buildPackageSummary(tasks []Task, observations []Observation, routineRuns []RoutineRun) PackageSummary {
+	rowsByID := map[string]*PackageStatusItem{}
+	for index, task := range tasks {
+		packageID := strings.TrimSpace(task.PackageID)
+		if packageID == "" {
+			continue
+		}
+		row := rowsByID[packageID]
+		if row == nil {
+			row = &PackageStatusItem{
+				ID:     packageID,
+				Counts: map[string]int{},
+			}
+			rowsByID[packageID] = row
+		}
+		observation := observations[index]
+		status := observation.Status
+		if status == "" {
+			status = emptyDefault(task.Status, "unknown")
+		}
+		row.TaskCount++
+		row.Counts[status]++
+		switch status {
+		case "active", "pending-setup", "stale-needs-inspection":
+			row.ActiveTaskIDs = append(row.ActiveTaskIDs, task.ID)
+		case "completed-unreviewed":
+			row.ReviewTaskIDs = append(row.ReviewTaskIDs, task.ID)
+		case "blocked":
+			row.BlockedTaskIDs = append(row.BlockedTaskIDs, task.ID)
+		case "cleanup-needed":
+			row.CleanupTaskIDs = append(row.CleanupTaskIDs, task.ID)
+		case "merged", "released", "cleaned":
+			row.RecentTaskIDs = append(row.RecentTaskIDs, task.ID)
+		default:
+			row.OtherTaskIDs = append(row.OtherTaskIDs, task.ID)
+		}
+		if observation.LastUpdatedAt > row.LatestUpdatedAt {
+			row.LatestUpdatedAt = observation.LastUpdatedAt
+		}
+	}
+	for _, run := range routineRuns {
+		packageID := strings.TrimSpace(run.PackageID)
+		if packageID == "" {
+			continue
+		}
+		row := rowsByID[packageID]
+		if row == nil {
+			row = &PackageStatusItem{
+				ID:     packageID,
+				Counts: map[string]int{},
+			}
+			rowsByID[packageID] = row
+		}
+		if run.At > row.LatestUpdatedAt {
+			row.LatestUpdatedAt = run.At
+		}
+	}
+	rows := make([]PackageStatusItem, 0, len(rowsByID))
+	for _, row := range rowsByID {
+		sort.Strings(row.ActiveTaskIDs)
+		sort.Strings(row.ReviewTaskIDs)
+		sort.Strings(row.BlockedTaskIDs)
+		sort.Strings(row.CleanupTaskIDs)
+		sort.Strings(row.RecentTaskIDs)
+		sort.Strings(row.OtherTaskIDs)
+		row.Status, row.NextSuggestedAction = packageStatusAndAction(*row)
+		rows = append(rows, *row)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Status != rows[j].Status {
+			return packageStatusRank(rows[i].Status) < packageStatusRank(rows[j].Status)
+		}
+		if rows[i].LatestUpdatedAt != rows[j].LatestUpdatedAt {
+			return rows[i].LatestUpdatedAt > rows[j].LatestUpdatedAt
+		}
+		return rows[i].ID < rows[j].ID
+	})
+	return PackageSummary{
+		EvidenceLabel: "local/static",
+		Total:         len(rows),
+		Rows:          rows,
+	}
+}
+
+func packageStatusAndAction(row PackageStatusItem) (string, string) {
+	switch {
+	case len(row.BlockedTaskIDs) > 0:
+		return "blocked", "Resolve or explicitly defer package blockers before dispatching unrelated package work."
+	case len(row.ReviewTaskIDs) > 0:
+		return "review-needed", "Review completed package worker(s), run gates, then merge/push/cleanup if accepted; keep active workers in the same lane monitored."
+	case len(row.CleanupTaskIDs) > 0:
+		return "cleanup-needed", "Clean accepted package worktree/branch before continuing the package lane."
+	case len(row.OtherTaskIDs) > 0:
+		return "attention-needed", "Inspect package task status before treating this lane as closed."
+	case len(row.ActiveTaskIDs) > 0:
+		return "active", "Wait for active package worker progress; do not dispatch unrelated filler tasks."
+	case row.TaskCount == 0:
+		return "review-only", "Review package-level routine output before deciding whether package work is complete."
+	default:
+		return "cleaned", "Package has no active local task pressure; choose the next worker in the same lane or close the package."
+	}
+}
+
+func packageStatusRank(status string) int {
+	switch status {
+	case "blocked":
+		return 0
+	case "review-needed":
+		return 1
+	case "cleanup-needed":
+		return 2
+	case "attention-needed":
+		return 3
+	case "active":
+		return 4
+	case "review-only":
+		return 5
+	case "cleaned":
+		return 6
+	default:
+		return 7
 	}
 }
 
@@ -7484,6 +7685,7 @@ func runtimeStatusItem(task Task, observation Observation) RuntimeStatusItem {
 	item := RuntimeStatusItem{
 		ID:                task.ID,
 		Title:             task.Title,
+		PackageID:         task.PackageID,
 		LedgerStatus:      task.Status,
 		ObservedStatus:    observation.Status,
 		Signal:            observation.Signal,
@@ -8392,6 +8594,7 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- availableSlots: `%d`\n", summary.ReviewPressure.AvailableSlots)
 	fmt.Fprintf(&b, "- runtimeStatus: `%s`\n", summary.RuntimeStatus.Summary)
 	fmt.Fprintf(&b, "- jobs: `total=%d %s`\n", summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
+	fmt.Fprintf(&b, "- packages: `total=%d`\n", summary.PackageSummary.Total)
 	fmt.Fprintf(&b, "- projectMap: `%s`", summary.ProjectMap.Status)
 	if summary.ProjectMap.Path != "" {
 		fmt.Fprintf(&b, " path=`%s`", summary.ProjectMap.Path)
@@ -8427,6 +8630,7 @@ func renderSummary(summary ObserveSummary) string {
 		}
 	}
 	renderRuntimeStatusMarkdown(&b, summary.RuntimeStatus)
+	renderPackageSummaryMarkdown(&b, summary.PackageSummary)
 	renderJobSummaryMarkdown(&b, summary.JobSummary)
 	renderProjectMapMarkdown(&b, summary.ProjectMap)
 	fmt.Fprintf(&b, "\n## Tasks\n\n")
@@ -8530,6 +8734,28 @@ func renderRuntimeStatusCategoryMarkdown(b *strings.Builder, title string, items
 	}
 }
 
+func renderPackageSummaryMarkdown(b *strings.Builder, summary PackageSummary) {
+	fmt.Fprintf(b, "\n## Package Summary\n\n")
+	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", summary.EvidenceLabel)
+	fmt.Fprintf(b, "- total: `%d`\n", summary.Total)
+	if len(summary.Rows) == 0 {
+		fmt.Fprintf(b, "- no packageId recorded yet; use `--package-id` when recording related worker tasks.\n")
+		return
+	}
+	fmt.Fprintf(b, "\n| Package | Status | Tasks | Counts | Updated | Next |\n")
+	fmt.Fprintf(b, "|---|---|---:|---|---|---|\n")
+	for _, row := range summary.Rows {
+		fmt.Fprintf(b, "| `%s` | `%s` | `%d` | `%s` | `%s` | %s |\n",
+			row.ID,
+			row.Status,
+			row.TaskCount,
+			escapeMarkdownTable(formatIntMap(row.Counts)),
+			row.LatestUpdatedAt,
+			escapeMarkdownTable(row.NextSuggestedAction),
+		)
+	}
+}
+
 func printRuntimeStatusReport(report RuntimeStatusReport) {
 	printRuntimeStatusCategory("Active workers", report.ActiveWorkers)
 	printRuntimeStatusCategory("Pending setup", report.PendingSetup)
@@ -8573,6 +8799,19 @@ func printRuntimeStatusCategory(title string, items []RuntimeStatusItem) {
 	}
 }
 
+func printPackageSummary(summary PackageSummary) {
+	if len(summary.Rows) == 0 {
+		return
+	}
+	fmt.Println("Packages:")
+	for _, row := range summary.Rows {
+		fmt.Printf("- %s: %s tasks=%d counts=%s\n", row.ID, row.Status, row.TaskCount, formatIntMap(row.Counts))
+		if row.NextSuggestedAction != "" {
+			fmt.Printf("  next: %s\n", row.NextSuggestedAction)
+		}
+	}
+}
+
 func renderJobSummaryMarkdown(b *strings.Builder, summary JobSummary) {
 	fmt.Fprintf(b, "\n## Job Summary\n\n")
 	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", summary.EvidenceLabel)
@@ -8581,11 +8820,12 @@ func renderJobSummaryMarkdown(b *strings.Builder, summary JobSummary) {
 	if len(summary.Rows) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "\n| Job | Status | Signal | Branch | Updated | Action |\n")
-	fmt.Fprintf(b, "|---|---|---|---|---|---|\n")
+	fmt.Fprintf(b, "\n| Job | Package | Status | Signal | Branch | Updated | Action |\n")
+	fmt.Fprintf(b, "|---|---|---|---|---|---|---|\n")
 	for _, row := range summary.Rows {
-		fmt.Fprintf(b, "| `%s` | `%s` | `%s` | `%s` | `%s` | %s |\n",
+		fmt.Fprintf(b, "| `%s` | `%s` | `%s` | `%s` | `%s` | `%s` | %s |\n",
 			row.ID,
+			row.PackageID,
 			row.Status,
 			row.Signal,
 			row.Branch,

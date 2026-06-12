@@ -65,6 +65,7 @@ that ID in heartbeat text or chat memory:
 codex-orchestrator dispatch record \
   --task-id API-AUTH-LOCAL \
   --title "Auth endpoint implementation" \
+  --package-id AUTH-PACKAGE \
   --thread-id optional-thread-id \
   --branch codex/api-auth \
   --pending-worktree-id pending-worktree-id-from-codex-app \
@@ -77,9 +78,9 @@ codex-orchestrator dispatch record \
 ```
 
 The helper records the current integration `HEAD` as `baseCommit` unless
-`--base-commit` is provided. It preserves task ID, optional thread ID, pending
-worktree setup ID, expected branch, allowed/forbidden write set, gates, and
-evidence-label expectations in the ledger.
+`--base-commit` is provided. It preserves task ID, package ID, optional thread
+ID, pending worktree setup ID, expected branch, allowed/forbidden write set,
+gates, and evidence-label expectations in the ledger.
 
 If the worker worktree already exists, the older low-level command still works:
 
@@ -87,6 +88,7 @@ If the worker worktree already exists, the older low-level command still works:
 codex-orchestrator record-task \
   --id API-AUTH-LOCAL \
   --title "Auth endpoint implementation" \
+  --package-id AUTH-PACKAGE \
   --thread-id optional-thread-id \
   --worktree /absolute/path/to/worktree \
   --branch codex/api-auth \
@@ -141,8 +143,11 @@ useful buckets when possible:
 
 The same `status` / `observe` reports also include a `jobSummary` block for a
 jobs/status-style view: total task count, per-status counts, and compact task
-rows with id, status, signal, branch, pending worktree id, latest timestamp, and
-next action. This is still local/static ledger and git evidence; it does not
+rows with id, package ID, status, signal, branch, pending worktree id, latest
+timestamp, and next action. When related workers are recorded with
+`--package-id`, reports also include `packageSummary`: package-level
+active/review/blocked/cleanup state, member task counts, and the next suggested
+package action. This is still local/static ledger and git evidence; it does not
 attach to live Codex App sessions.
 
 Reports include a `projectMap` block as a lightweight onboarding signal. The
@@ -388,10 +393,11 @@ and git/worktree truth as durable state, not stale chat memory.
 
 For each new worker session, record it with
 `codex-orchestrator dispatch record` including task ID, thread ID if available,
-pending worktree setup ID, expected branch, base commit, allowed/forbidden write
-set, gates, and evidence label expectations. After local git worktree truth
-exists, run `codex-orchestrator dispatch reconcile --task-id TASK` to write the
-resolved worktree and branch back to the ledger.
+package ID, pending worktree setup ID, expected branch, base commit,
+allowed/forbidden write set, gates, and evidence label expectations. After
+local git worktree truth exists, run
+`codex-orchestrator dispatch reconcile --task-id TASK` to write the resolved
+worktree and branch back to the ledger.
 
 During monitoring, use `codex-orchestrator heartbeat --count 1` or
 `codex-orchestrator observe --json` to classify tasks. Review completed branches

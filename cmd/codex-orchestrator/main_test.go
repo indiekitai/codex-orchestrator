@@ -1106,6 +1106,96 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 	}
 }
 
+func TestStatusIncludesPackageSummary(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "PKG-ACTIVE",
+		"--title", "Package active worker",
+		"--package-id", "PKG-CHECKOUT",
+		"--pending-worktree-id", "pwt_pkg_active",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "PKG-BLOCKED",
+		"--title", "Package blocked worker",
+		"--package-id", "PKG-CHECKOUT",
+		"--pending-worktree-id", "pwt_pkg_blocked",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "blocker", "--task-id", "PKG-BLOCKED", "--status", "blocked", "--note", "needs owner input"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stored, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Tasks[0].PackageID != "PKG-CHECKOUT" {
+		t.Fatalf("expected task package id to be recorded, got %#v", stored.Tasks[0])
+	}
+
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.PackageSummary.Total != 1 || len(summary.PackageSummary.Rows) != 1 {
+		t.Fatalf("expected one package summary row, got %#v", summary.PackageSummary)
+	}
+	pkg := summary.PackageSummary.Rows[0]
+	if pkg.ID != "PKG-CHECKOUT" || pkg.Status != "blocked" || pkg.TaskCount != 2 {
+		t.Fatalf("expected blocked package row, got %#v", pkg)
+	}
+	if !containsString(pkg.ActiveTaskIDs, "PKG-ACTIVE") || !containsString(pkg.BlockedTaskIDs, "PKG-BLOCKED") {
+		t.Fatalf("expected active and blocked task ids, got %#v", pkg)
+	}
+
+	statusJSON := captureStdout(t, func() error {
+		return cmdStatus([]string{"--ledger", ledger, "--json"})
+	})
+	var statusPayload struct {
+		PackageSummary PackageSummary `json:"packageSummary"`
+		JobSummary     JobSummary     `json:"jobSummary"`
+	}
+	if err := json.Unmarshal([]byte(statusJSON), &statusPayload); err != nil {
+		t.Fatalf("expected status JSON, got %q: %v", statusJSON, err)
+	}
+	if len(statusPayload.PackageSummary.Rows) != 1 || statusPayload.PackageSummary.Rows[0].ID != "PKG-CHECKOUT" {
+		t.Fatalf("expected status JSON package summary, got %#v", statusPayload.PackageSummary)
+	}
+	if len(statusPayload.JobSummary.Rows) != 2 || statusPayload.JobSummary.Rows[0].PackageID != "PKG-CHECKOUT" {
+		t.Fatalf("expected job rows to include package id, got %#v", statusPayload.JobSummary.Rows)
+	}
+
+	rendered := renderSummary(summary)
+	if !strings.Contains(rendered, "## Package Summary") || !strings.Contains(rendered, "PKG-CHECKOUT") {
+		t.Fatalf("expected package summary in Markdown:\n%s", rendered)
+	}
+	statusHTML := captureStdout(t, func() error {
+		return cmdStatus([]string{"--ledger", ledger, "--html"})
+	})
+	if !strings.Contains(statusHTML, "功能包 / Packages") || !strings.Contains(statusHTML, "PKG-CHECKOUT") {
+		t.Fatalf("expected package summary in HTML:\n%s", statusHTML)
+	}
+
+	unknownSummary := buildPackageSummary(
+		[]Task{{ID: "PKG-REJECTED", PackageID: "PKG-UNKNOWN", Status: "rejected"}},
+		[]Observation{{ID: "PKG-REJECTED", Status: "rejected", LastUpdatedAt: "2026-06-12T10:00:00+08:00"}},
+		nil,
+	)
+	if len(unknownSummary.Rows) != 1 || unknownSummary.Rows[0].Status != "attention-needed" || !containsString(unknownSummary.Rows[0].OtherTaskIDs, "PKG-REJECTED") {
+		t.Fatalf("expected unknown package task status to need attention, got %#v", unknownSummary.Rows)
+	}
+}
+
 func TestObserveBlockedPendingSetupAndDrainMode(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
@@ -1259,7 +1349,7 @@ func TestObserveJobSummaryAndProjectMap(t *testing.T) {
 		t.Fatalf("expected detected project map, got %#v", summary.ProjectMap)
 	}
 	rendered := renderSummary(summary)
-	for _, want := range []string{"## Job Summary", "| `STATUS-ROW` | `active`", "## Project Map", "docs/CODEBASE_MAP.md"} {
+	for _, want := range []string{"## Job Summary", "| `STATUS-ROW` | `` | `active`", "## Project Map", "docs/CODEBASE_MAP.md"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected rendered summary to include %q:\n%s", want, rendered)
 		}

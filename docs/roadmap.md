@@ -66,11 +66,17 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
    - 下一步：继续让 scorer 输出 package lane / do-not-dispatch reason，而不只是
      单条 task score。
 
-2. Package ledger / package status：待做。
+2. Package ledger / package status：已补第一轮本地闭环。
    - 目标：把 3-5 个相关 worker 归到一个 feature package 下，展示 package outcome、
      active/review/blocked/cleaned 状态、外部 review 状态和下一步闭环动作。
    - 价值：避免“多开几个 session”，让编排器真正推进一个功能或模块闭环。
-   - 边界：local/static orchestration state；不自动派发、不自动 merge。
+   - 当前落地：`record-task` / `dispatch record` 支持 `--package-id`；ledger task、
+     job rows、runtime status item、`observe` JSON、`status` JSON/HTML/Markdown 和
+     heartbeat summary 都会保留或展示 package 信息；`packageSummary` 会按功能包汇总
+     active、review-needed、blocked、cleanup-needed、cleaned/recent task 状态，并给出
+     “继续同一 lane / 先验收 / 先处理 blocker”等下一步建议。
+   - 边界：local/static orchestration state；不自动派发、不自动 merge；routine-run
+     只有 `packageId` 而没有 task 时会显示 review-only 包状态。
 
 3. Human-friendly status page：待做。
    - 目标：让每轮 heartbeat/status 默认输出用户能看懂的一页摘要：当前功能包、
