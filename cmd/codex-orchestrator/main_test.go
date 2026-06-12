@@ -1163,7 +1163,7 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 		"阻塞 / Blocked",
 		"需要清理 / Cleanup",
 		"最近合并/清理 / Recent",
-		"可用派发槽",
+		"派发槽",
 		"证据标签 / Evidence Labels",
 		"预算/审查压力 / Budget Pressure",
 		"Pending &lt;setup&gt;",
@@ -1393,6 +1393,66 @@ func TestHumanProgressSummaryBranches(t *testing.T) {
 	empty := buildHumanProgressSummary(ObserveSummary{})
 	if empty.Headline != "当前空闲" || empty.CurrentLane != "暂无功能包" {
 		t.Fatalf("expected empty ledger branch, got %#v", empty)
+	}
+}
+
+func TestIntegrationStateDirOnlyAndDrainSlotDisplay(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	stateDir := filepath.Join(project, defaultStateDir)
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "status.md"), []byte("local status\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	integration := inspectIntegration(project)
+	if integration.Dirty || !integration.StateDirChanges || !integration.StateDirOnly {
+		t.Fatalf("expected state-dir-only integration state, got %#v", integration)
+	}
+	if integration.BusinessGitStatus != "" || !strings.Contains(integration.StateDirStatus, defaultStateDir) {
+		t.Fatalf("expected state dir status separated from business status, got %#v", integration)
+	}
+	summary := ObserveSummary{
+		DispatchMode: "drain",
+		Integration:  integration,
+		RuntimeStatus: RuntimeStatusReport{
+			EvidenceLabel:          "local/static",
+			AvailableDispatchSlots: 2,
+			MaxConcurrency:         2,
+		},
+	}
+	label, className := dispatchSlotDisplay(summary)
+	if !strings.Contains(label, "排空中，不派发") || className != "warn" {
+		t.Fatalf("expected drain dispatch slot warning, got label=%q class=%q", label, className)
+	}
+	risks := strings.Join(humanRiskLines(summary), "\n")
+	for _, want := range []string{defaultStateDir + "/ 有本地编排状态变化", "run-mode=drain", "不应该继续派发"} {
+		if !strings.Contains(risks, want) {
+			t.Fatalf("expected risk %q in:\n%s", want, risks)
+		}
+	}
+}
+
+func TestGitOutputDisablesQuotePathForUnicodePaths(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	dir := filepath.Join(project, "docs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "中文路径.md"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "add", "docs/中文路径.md")
+	git(t, project, "commit", "-q", "-m", "add unicode path")
+	out, err := gitOutput(project, "diff", "--name-status", base+"..HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "docs/中文路径.md") || strings.Contains(out, "\\344") {
+		t.Fatalf("expected unquoted unicode path, got %q", out)
 	}
 }
 

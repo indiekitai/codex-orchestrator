@@ -155,10 +155,14 @@ type LocalTaskState struct {
 }
 
 type IntegrationState struct {
-	Path      string `json:"path"`
-	Dirty     bool   `json:"dirty"`
-	GitStatus string `json:"gitStatus,omitempty"`
-	Error     string `json:"error,omitempty"`
+	Path              string `json:"path"`
+	Dirty             bool   `json:"dirty"`
+	StateDirChanges   bool   `json:"stateDirChanges,omitempty"`
+	StateDirOnly      bool   `json:"stateDirOnly,omitempty"`
+	StateDirStatus    string `json:"stateDirStatus,omitempty"`
+	BusinessGitStatus string `json:"businessGitStatus,omitempty"`
+	GitStatus         string `json:"gitStatus,omitempty"`
+	Error             string `json:"error,omitempty"`
 }
 
 type ReviewPressure struct {
@@ -2679,7 +2683,8 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	renderMetricHTML(&b, "派发模式", summary.DispatchMode, statusClass(summary.OverallStatus))
 	renderMetricHTML(&b, "任务总数", fmt.Sprint(len(ledger.Tasks)), "")
 	renderMetricHTML(&b, "功能包", fmt.Sprint(summary.PackageSummary.Total), "")
-	renderMetricHTML(&b, "可用派发槽", fmt.Sprintf("%d / %d", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency), "")
+	slotLabel, slotClass := dispatchSlotDisplay(summary)
+	renderMetricHTML(&b, "派发槽", slotLabel, slotClass)
 	renderMetricHTML(&b, "待审/阻塞", fmt.Sprintf("%d / %d", summary.ReviewPressure.ReviewNeeded, summary.ReviewPressure.Blocked), pressureClass(summary.ReviewPressure.Blocked, summary.ReviewPressure.ReviewNeeded))
 	fmt.Fprintf(&b, "</section>\n")
 
@@ -2692,8 +2697,16 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 		fmt.Fprintf(&b, "<p class=\"bad\">无法检查集成区: %s</p>", escapeHTML(summary.Integration.Error))
 	} else if summary.Integration.Dirty {
 		fmt.Fprintf(&b, "<p class=\"warn\">集成区有未提交变化，派发前需要人工确认。</p>")
-		if summary.Integration.GitStatus != "" {
-			fmt.Fprintf(&b, "<pre>%s</pre>", escapeHTML(summary.Integration.GitStatus))
+		if summary.Integration.BusinessGitStatus != "" {
+			fmt.Fprintf(&b, "<pre>%s</pre>", escapeHTML(summary.Integration.BusinessGitStatus))
+		}
+		if summary.Integration.StateDirStatus != "" {
+			fmt.Fprintf(&b, "<p class=\"muted\">本地编排状态目录也有变化：</p><pre>%s</pre>", escapeHTML(summary.Integration.StateDirStatus))
+		}
+	} else if summary.Integration.StateDirOnly {
+		fmt.Fprintf(&b, "<p class=\"ok\">业务代码干净；只有 <code>%s/</code> 本地编排状态变化。</p>", escapeHTML(defaultStateDir))
+		if summary.Integration.StateDirStatus != "" {
+			fmt.Fprintf(&b, "<pre>%s</pre>", escapeHTML(summary.Integration.StateDirStatus))
 		}
 	} else {
 		fmt.Fprintf(&b, "<p class=\"ok\">集成区干净，可作为本地派发/审查依据。</p>")
@@ -2848,6 +2861,17 @@ func renderMetricHTML(b *strings.Builder, label string, value string, className 
 		className = " " + className
 	}
 	fmt.Fprintf(b, "<div class=\"card\"><div class=\"label\">%s</div><div class=\"metric%s\">%s</div></div>\n", escapeHTML(label), escapeHTML(className), escapeHTML(value))
+}
+
+func dispatchSlotDisplay(summary ObserveSummary) (string, string) {
+	switch normalizedDispatchMode(summary.DispatchMode) {
+	case "drain":
+		return fmt.Sprintf("排空中，不派发（底层槽位 %d / %d）", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency), "warn"
+	case "paused":
+		return fmt.Sprintf("已暂停，不派发（底层槽位 %d / %d）", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency), "warn"
+	default:
+		return fmt.Sprintf("%d / %d", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency), ""
+	}
 }
 
 func renderStatusHTMLCategory(b *strings.Builder, title string, items []RuntimeStatusItem) {
@@ -8923,7 +8947,11 @@ func inspectIntegration(projectRoot string) IntegrationState {
 		return state
 	}
 	state.GitStatus = status
+	state.StateDirStatus = strings.Join(stateDirStatusLines(status), "\n")
+	state.BusinessGitStatus = strings.Join(businessStatusLines(status), "\n")
+	state.StateDirChanges = state.StateDirStatus != ""
 	state.Dirty = hasDirtyChangesIgnoringStateDir(status)
+	state.StateDirOnly = state.StateDirChanges && !state.Dirty
 	return state
 }
 
@@ -9359,6 +9387,15 @@ func humanObservationNote(item RuntimeStatusItem) string {
 
 func humanRiskLines(summary ObserveSummary) []string {
 	lines := []string{}
+	if summary.Integration.StateDirOnly {
+		lines = append(lines, defaultStateDir+"/ 有本地编排状态变化；这不等同于业务代码 dirty。")
+	}
+	switch normalizedDispatchMode(summary.DispatchMode) {
+	case "drain":
+		lines = append(lines, "run-mode=drain：即使 raw availableSlots 大于 0，也不应该继续派发新 worker。")
+	case "paused":
+		lines = append(lines, "run-mode=paused：availableSlots 只是机器状态，不代表可以派发。")
+	}
 	if summary.RuntimeStatus.EvidenceLabel != "" {
 		if summary.RuntimeStatus.EvidenceLabel == "local/static" {
 			lines = append(lines, "当前状态页证据是 local/static，不是 direct/pre/prod/device proof。")
@@ -9475,6 +9512,9 @@ func renderSummary(summary ObserveSummary) string {
 		}
 	}
 	fmt.Fprintf(&b, "- integrationDirty: `%t`\n", summary.Integration.Dirty)
+	if summary.Integration.StateDirChanges {
+		fmt.Fprintf(&b, "- integrationStateDirOnly: `%t`\n", summary.Integration.StateDirOnly)
+	}
 	fmt.Fprintf(&b, "- active: `%d`\n", summary.ReviewPressure.Active)
 	fmt.Fprintf(&b, "- reviewNeeded: `%d`\n", summary.ReviewPressure.ReviewNeeded)
 	fmt.Fprintf(&b, "- stale: `%d`\n", summary.ReviewPressure.Stale)
@@ -12739,8 +12779,11 @@ func eventsPathForLedger(ledgerPath string) string {
 	return filepath.Join(filepath.Dir(expandPath(ledgerPath)), "events.jsonl")
 }
 
+// gitOutput keeps path output human-readable for review/status checks, including
+// non-ASCII repo paths that would otherwise be quoted by Git.
 func gitOutput(cwd string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	gitArgs := append([]string{"-c", "core.quotePath=false"}, args...)
+	cmd := exec.Command("git", gitArgs...)
 	cmd.Dir = cwd
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -12895,15 +12938,40 @@ func hasDirtyChangesIgnoringStateDir(statusOutput string) bool {
 		if line == "" || strings.HasPrefix(line, "## ") {
 			continue
 		}
-		if strings.HasPrefix(line, "?? "+defaultStateDir+"/") || strings.HasPrefix(line, "?? "+defaultStateDir) {
-			continue
-		}
-		if strings.Contains(line, " "+defaultStateDir+"/") {
+		if isStateDirStatusLine(line) {
 			continue
 		}
 		return true
 	}
 	return false
+}
+
+func stateDirStatusLines(statusOutput string) []string {
+	lines := []string{}
+	for _, line := range strings.Split(statusOutput, "\n") {
+		if isStateDirStatusLine(line) {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func businessStatusLines(statusOutput string) []string {
+	lines := []string{}
+	for _, line := range strings.Split(statusOutput, "\n") {
+		if line == "" || strings.HasPrefix(line, "## ") || isStateDirStatusLine(line) {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func isStateDirStatusLine(line string) bool {
+	if strings.HasPrefix(line, "?? "+defaultStateDir+"/") || strings.HasPrefix(line, "?? "+defaultStateDir) {
+		return true
+	}
+	return strings.Contains(line, " "+defaultStateDir+"/")
 }
 
 func hasCommitsAfterBase(worktree string, baseCommit string) (bool, bool) {

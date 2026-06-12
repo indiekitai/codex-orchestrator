@@ -434,6 +434,11 @@ human action, next step, and risk/evidence boundaries before listing detailed
 task tables. The package section now renders product-lane cards with progress,
 review status, member task queues, and package-specific next actions. It
 intentionally keeps dispatch-slot and raw ledger jargon below the first screen.
+When `run-mode` is `drain` or `paused`, the status page labels dispatch slots
+as non-dispatchable even if raw capacity is available, so the page does not
+encourage unrelated filler workers. It also treats untracked
+`.codex-orchestrator/` files as local orchestration state rather than business
+code dirtiness.
 It is meant for a quick human scan without reading raw JSON.
 It does not start a server, daemon, scheduler, merge, push, cleanup, or runtime
 monitor.
@@ -496,6 +501,11 @@ If setup fails, record a blocked setup event immediately; a failed
 `fatal: invalid reference` during setup is an immediate setup failure, not a
 queued worker; it usually means the desired new branch was passed as an
 existing starting reference.
+
+Git path inspection uses `core.quotePath=false` internally so non-ASCII paths
+such as Chinese review files are compared as human-readable paths instead of
+escaped octal strings. This reduces false allowed/forbidden path findings in
+merge-readiness and package acceptance checks.
 
 `run-mode set --dispatch-mode active|drain|paused` records run-level dispatch
 intent in the ledger. Use `drain` when the orchestrator should finish current

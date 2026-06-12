@@ -162,6 +162,10 @@ tables remain below that summary for the orchestrator or reviewer. The package
 section is deliberately closer to a product dashboard than a raw job table: it
 shows progress like `3/5 worker 已收口`, external review status, waiting queues,
 and a package-specific next action.
+When the ledger run mode is `drain` or `paused`, HTML status renders dispatch
+slots as "do not dispatch" even when the raw available slot count is greater
+than zero. Untracked `.codex-orchestrator/` files are separated as local
+orchestration state, not business-code dirty status.
 
 Reports include a `projectMap` block as a lightweight onboarding signal. The
 helper checks common files such as `docs/CODEBASE_MAP.md`,
@@ -191,6 +195,8 @@ Git/worktree truth wins over advisory thread state. A worker thread that still
 looks active but has a clean commit after `baseCommit` is reported as
 `completed-unreviewed`; a worktree on detached `HEAD` while a branch is recorded
 is `blocked`; dirty uncommitted work stays separate from clean committed work.
+Git path commands are run with `core.quotePath=false` so non-ASCII paths remain
+human-readable for path-boundary checks and review reports.
 
 ## Observe State
 

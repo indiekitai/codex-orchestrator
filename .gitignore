@@ -47,10 +47,5 @@ temp/
 /codex-orchestrator
 /codex-orchestrator.exe
 
-# Local v2 ledgers created inside this repository during experiments.
-.codex-orchestrator/ledger.json
-.codex-orchestrator/events.jsonl
-.codex-orchestrator/heartbeat-report.*
-.codex-orchestrator/heartbeat-summary.*
-.codex-orchestrator/*.tmp
-.codex-orchestrator/*.local.json
+# Local orchestration state created by helper smoke runs.
+.codex-orchestrator/
