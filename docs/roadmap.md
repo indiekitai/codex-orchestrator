@@ -242,10 +242,11 @@ Future daemon/UI
 
 下一步建议：
 
-1. 发布第一个 stable tag，验证 GitHub release artifacts。已完成到 `v0.3.2`。
-   `main` 之后又加入 missed heartbeat 检测、macOS watchdog fallback、
-   reusable status snapshot 和 package/external review workflow；这些属于下一次
-   release 的候选内容，不应被当前 `v0.3.2` release 文档提前声明为已发布资产。
+1. 发布可用的 beta tag，验证 GitHub release artifacts。已完成到 `v0.3.4`。
+   当前 release 已包含 missed heartbeat 检测、macOS watchdog fallback、
+   reusable status snapshot、package/external review workflow、package closeout
+   status、starter templates 和更清晰的 current-action rows。后续 release 文档
+   只应声明已经发布并验证过的资产。
 
 2. 继续打磨 Codex App-first install UX。Homebrew、npm wrapper、tap 或其他
    package-manager 分发路线不在当前产品范围内；helper binary 只能作为 Codex App

@@ -203,14 +203,14 @@ review, merge, push, and cleanup behavior.
 
 ## Beta Release Checklist
 
-Use this checklist before `v0.3.0-beta.4`:
+Use this checklist before publishing a new beta release:
 
 - `go test ./...`
 - `go build -trimpath -ldflags='-s -w' -o /tmp/codex-orchestrator ./cmd/codex-orchestrator`
 - `codex-orchestrator validate-routines --dir routines`
 - `codex-orchestrator run-routine docs-drift-checker --repo . --json`
 - `codex-orchestrator run-routine evidence-label-auditor --repo . --json`
-- `codex-orchestrator run-routine release-verifier --tag v0.3.0-beta.4 --repo . --json` after release publication
+- `codex-orchestrator run-routine release-verifier --tag <release-tag> --repo . --json` after release publication
 - README quickstart works from a clean clone.
 - Chinese README matches the English quickstart at the workflow level.
 - `SKILL.md` is synced with the release.
