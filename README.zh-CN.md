@@ -2,17 +2,32 @@
 
 # codex-orchestrator
 
-**给真实代码仓库用的 Codex App-first Loop Engineering 工作流。**
-`codex-orchestrator` 把 Codex App 从“一次开一个聊天写代码”，推进到一个受监督的
-工程循环：有界任务契约、隔离的 Codex worktree session、heartbeat/status 可见性、
-先审查再合并、卡住任务救援，以及诚实的证据标签。
+**给真实代码仓库用的 Codex App-first 受监督工程循环。**
+
+`codex-orchestrator` 把 Codex App 从“一次开一个聊天写代码”，推进到一个可重复的
+工程循环：规划有界任务，在隔离的 Codex worktree session 里执行，用 heartbeat
+唤醒检查，用 git truth 对账，先审查再合并，push 已接受的工作，清理分支，然后继续
+推进路线图。
+
+核心想法很简单：有用的 Agent loop 不是“让 Agent 一直自动写下去”，而是让每一个
+worker branch 都可审查、可拒绝、可合并、可清理。
 
 它不是 daemon，不是以 Homebrew/npm 这类 package manager 为主的安装方案，不是完整
 Agent Operating System，也不是不经审查就自动写代码的 bot。Codex App 仍然负责创建
 和运行 worker session；这个仓库提供 skill、prompt、本地 ledger helper、routine 和
 review 规则，让这些 session 变得可检查、可恢复、可合并。
 
-它解决的核心问题：
+30 秒版本：
+
+- Codex App 仍然是创建和监督 session 的地方；
+- 每个 worker 都有小而清楚的任务契约：允许路径、禁止路径、gate 和证据要求；
+- 本地 ledger 记录派发过什么、现在到什么状态；
+- heartbeat/status 检查会把聊天状态和真实 git/worktree 状态对起来；
+- 完成的分支先审查，再 merge / push / cleanup；
+- 证据标签保持诚实：`local`、`proxy`、`direct`、`blocked` 不混写。
+
+如果你是从 Loop Engineering、maintainer-orchestrator 或 multi-agent 讨论过来的，
+这个项目关注的是让 loop 能真正落到真实仓库里的基础工程层：
 
 - 每个任务都有清楚的允许路径、禁止路径、验收 gate 和证据要求；
 - worker 跑在隔离的 Codex App worktree session 里，而不是挤在一个超长聊天里；

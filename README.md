@@ -2,18 +2,37 @@
 
 # codex-orchestrator
 
-**Codex App-first Loop Engineering for real repositories.**
-`codex-orchestrator` is an open-source workflow for turning Codex App from one
-chat-at-a-time coding help into a supervised engineering loop: bounded task
-contracts, isolated Codex worktree sessions, heartbeat/status visibility,
-review-before-merge discipline, stale-task rescue, and honest evidence labels.
+**A Codex App-first orchestration workflow for supervised engineering loops in
+real repositories.**
+
+`codex-orchestrator` turns Codex App from one-chat-at-a-time coding help into a
+repeatable engineering loop: plan a bounded task, run it in an isolated Codex
+worktree session, wake up on a heartbeat, reconcile with git truth, review
+before merge, push accepted work, clean the branch, and continue through the
+roadmap.
+
+The core idea is simple: a useful agent loop is not "let agents write forever."
+It is "make every worker branch reviewable, rejectable, mergeable, and
+cleanable."
 
 It is not a daemon, a package-manager-first install, a full agent operating
 system, or an unreviewed autonomous coding bot. Codex App still creates and
 runs the worker sessions. This repository supplies the skill, prompts, local
 ledger helper, routines, and review rules that make those sessions inspectable.
 
-What it gives you:
+30-second version:
+
+- Codex App stays the place where sessions are created and supervised.
+- Each worker gets a small contract: allowed paths, forbidden paths, gates, and
+  evidence expectations.
+- A local ledger records what was dispatched and what state it reached.
+- Heartbeat/status checks compare chat state with actual git/worktree truth.
+- Completed branches are reviewed before merge, push, and cleanup.
+- Evidence stays honest: `local`, `proxy`, `direct`, and `blocked` are not mixed.
+
+If you are coming from Loop Engineering, maintainer-orchestrator, or
+multi-agent discussions, this project focuses on the operational layer that
+makes loops usable on real repos:
 
 - clear task contracts with allowed paths, forbidden paths, gates, and proof
   expectations;
