@@ -3155,12 +3155,43 @@ func renderHumanProgressHTML(b *strings.Builder, summary ObserveSummary) {
 	}
 	fmt.Fprintf(b, "<div class=\"human-grid\">")
 	renderHumanProgressBlockHTML(b, "派发模式", []string{humanDispatchModeExplanation(summary.DispatchMode)})
+	renderHumanProgressBlockHTML(b, "heartbeat / watchdog", humanMonitoringLines(summary))
 	renderHumanProgressBlockHTML(b, "已经完成", progress.Completed)
 	renderHumanProgressBlockHTML(b, "正在跑", progress.CurrentWork)
 	renderHumanProgressBlockHTML(b, "是否需要你处理", []string{progress.HumanAction})
 	renderHumanProgressBlockHTML(b, "风险边界", progress.Risks)
 	fmt.Fprintf(b, "</div><div class=\"human-block\" style=\"margin-top:12px\"><h3>下一步</h3><p>%s</p></div>", escapeHTML(progress.NextStep))
 	fmt.Fprintf(b, "</section>\n")
+}
+
+func humanMonitoringLines(summary ObserveSummary) []string {
+	lines := []string{}
+	if summary.HeartbeatStatus != nil {
+		if summary.HeartbeatStatus.Status == "missed" {
+			lines = append(lines, humanHeartbeatMissedLine(summary.HeartbeatStatus))
+		} else {
+			detail := "heartbeat=" + summary.HeartbeatStatus.Status
+			if summary.HeartbeatStatus.Gap != "" {
+				detail += "，gap=" + summary.HeartbeatStatus.Gap
+			}
+			lines = append(lines, detail+"。")
+		}
+	} else {
+		lines = append(lines, "没有可读的 repo-local heartbeat report；只能依赖本轮 status/preflight 的 local/static 检查。")
+	}
+	if summary.Preflight != nil {
+		for _, check := range summary.Preflight.Checks {
+			if check.Name != "heartbeat-gap" && check.Name != "macos-watchdog" {
+				continue
+			}
+			line := check.Name + "=" + check.Status + "：" + check.Detail
+			if check.Action != "" {
+				line += " 下一步：" + check.Action
+			}
+			lines = append(lines, line)
+		}
+	}
+	return lines
 }
 
 func renderHumanProgressBlockHTML(b *strings.Builder, title string, lines []string) {
@@ -8351,8 +8382,9 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	}
 	observedAt := time.Now()
 	observations := make([]Observation, 0, len(ledger.Tasks))
+	worktrees, _ := gitWorktreeEntries(ledger.ProjectRoot)
 	for _, task := range ledger.Tasks {
-		observations = append(observations, inspectTask(task, staleAfter))
+		observations = append(observations, inspectTaskWithGitWorktrees(task, staleAfter, worktrees))
 	}
 	integration := inspectIntegration(ledger.ProjectRoot)
 	counts := countObservationStatuses(observations)
@@ -8390,6 +8422,9 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		Timeline:           timeline,
 		Observations:       observations,
 		RecentRoutineRuns:  recentRoutineRuns(ledger.RoutineRuns, 5),
+	}
+	if heartbeatStatus := loadRepoHeartbeatStatus(ledger.ProjectRoot); heartbeatStatus != nil {
+		summary.HeartbeatStatus = heartbeatStatus
 	}
 	return summary, nil
 }
@@ -8895,8 +8930,8 @@ func buildJobSummary(tasks []Task, observations []Observation, counts map[string
 			Signal:            observation.Signal,
 			Title:             title,
 			PackageID:         task.PackageID,
-			Branch:            task.Branch,
-			Worktree:          task.Worktree,
+			Branch:            firstNonEmpty(observation.Branch, task.Branch),
+			Worktree:          firstNonEmpty(observation.Worktree, task.Worktree),
 			PendingWorktreeID: task.PendingWorktreeID,
 			LastUpdatedAt:     observation.LastUpdatedAt,
 			Action:            observation.Action,
@@ -9272,8 +9307,8 @@ func runtimeStatusItem(task Task, observation Observation) RuntimeStatusItem {
 		LedgerStatus:      task.Status,
 		ObservedStatus:    observation.Status,
 		Signal:            observation.Signal,
-		Branch:            task.Branch,
-		Worktree:          task.Worktree,
+		Branch:            firstNonEmpty(observation.Branch, task.Branch),
+		Worktree:          firstNonEmpty(observation.Worktree, task.Worktree),
 		PendingWorktreeID: task.PendingWorktreeID,
 		LastUpdatedAt:     observation.LastUpdatedAt,
 		Action:            observation.Action,
@@ -9706,6 +9741,58 @@ func inspectTask(task Task, staleAfter time.Duration) Observation {
 	return taskObservation(task, "active", "quiet", "Clean worktree has no commits after baseCommit.", status, "active-clean")
 }
 
+func inspectTaskWithGitWorktrees(task Task, staleAfter time.Duration, entries []GitWorktreeEntry) Observation {
+	if task.Worktree != "" || task.Branch == "" || isTerminalStatus(task.Status) || task.Status == "blocked" {
+		return inspectTask(task, staleAfter)
+	}
+	entry, ok := findWorktreeByBranch(entries, task.Branch)
+	if !ok {
+		return inspectTask(task, staleAfter)
+	}
+	reconciled := task
+	reconciled.Worktree = entry.Path
+	observation := inspectTask(reconciled, staleAfter)
+	observation.Worktree = entry.Path
+	observation.Branch = firstNonEmpty(observation.Branch, task.Branch)
+	observation.Signal = firstNonEmpty(observation.Signal, "pending-setup-worktree-found")
+	observation.Action = "run dispatch reconcile to record the real worktree/branch in ledger before review or new dispatch"
+	prefix := fmt.Sprintf("Git worktree exists for recorded branch %s at %s, but ledger still has no worktree path.", task.Branch, entry.Path)
+	if observation.Note != "" {
+		observation.Note = prefix + " " + observation.Note
+	} else {
+		observation.Note = prefix
+	}
+	observation.State.Setup = "worktree-found-ledger-missing"
+	observation.State.Worktree = "present-unrecorded"
+	observation.State.Branch = "matched"
+	return observation
+}
+
+func findWorktreeByBranch(entries []GitWorktreeEntry, branch string) (*GitWorktreeEntry, bool) {
+	branch = shortBranchName(strings.TrimSpace(branch))
+	if branch == "" {
+		return nil, false
+	}
+	for index := range entries {
+		if entries[index].Branch == branch {
+			return &entries[index], true
+		}
+	}
+	return nil, false
+}
+
+func loadRepoHeartbeatStatus(repo string) *HeartbeatStatus {
+	reportPath, ok := resolveOptionalHeartbeatReportPath(expandPath(repo), "")
+	if !ok {
+		return nil
+	}
+	summary, err := loadObserveSummary(reportPath)
+	if err != nil || summary.HeartbeatStatus == nil {
+		return nil
+	}
+	return summary.HeartbeatStatus
+}
+
 func loadLedger(path string) (Ledger, error) {
 	var ledger Ledger
 	data, err := os.ReadFile(expandPath(path))
@@ -9967,6 +10054,9 @@ func summarizeObservations(ledger Ledger, integration IntegrationState, counts m
 		return "dispatch-draining", []string{"Dispatch mode is drain; close existing work, but do not dispatch new workers."}
 	case "paused":
 		return "dispatch-paused", []string{"Dispatch mode is paused; do not dispatch new workers until run-mode is active."}
+	}
+	if pressure.Active > 0 || pressure.PendingSetup > 0 {
+		return "quiet", []string{"Active or pending worker exists; wait for package-lane progress or reconcile setup before dispatching more work."}
 	}
 	if pressure.AvailableSlots > 0 {
 		return "dispatch-possible", []string{"Capacity is available; dispatch the next safe roadmap task if one exists."}
@@ -10386,8 +10476,7 @@ func buildHumanProgressSummary(summary ObserveSummary) humanProgressSummary {
 }
 
 func currentLaneName(summary ObserveSummary) string {
-	if len(summary.PackageSummary.Rows) > 0 {
-		row := summary.PackageSummary.Rows[0]
+	if row, ok := currentPackageLane(summary.PackageSummary); ok {
 		name := humanIdentifier(row.ID)
 		if row.TaskCount > 0 {
 			return fmt.Sprintf("%s（%d 个任务，%s）", name, row.TaskCount, humanStatusLabel(row.Status))
@@ -10398,6 +10487,32 @@ func currentLaneName(summary ObserveSummary) string {
 		return "未归入功能包的任务队列"
 	}
 	return "暂无功能包"
+}
+
+func currentPackageLane(summary PackageSummary) (PackageStatusItem, bool) {
+	if len(summary.Rows) == 0 {
+		return PackageStatusItem{}, false
+	}
+	preferred := []string{"active", "blocked", "cleanup-needed", "attention-needed", "review-needed", "review-only", "cleaned"}
+	for _, status := range preferred {
+		var candidates []PackageStatusItem
+		for _, row := range summary.Rows {
+			if row.Status == status {
+				candidates = append(candidates, row)
+			}
+		}
+		if len(candidates) == 0 {
+			continue
+		}
+		sort.Slice(candidates, func(i, j int) bool {
+			if candidates[i].LatestUpdatedAt != candidates[j].LatestUpdatedAt {
+				return candidates[i].LatestUpdatedAt > candidates[j].LatestUpdatedAt
+			}
+			return candidates[i].ID < candidates[j].ID
+		})
+		return candidates[0], true
+	}
+	return summary.Rows[0], true
 }
 
 func humanCompletedLines(summary ObserveSummary) []string {
@@ -10517,8 +10632,7 @@ func humanRiskLines(summary ObserveSummary) []string {
 }
 
 func humanNextAction(summary ObserveSummary) string {
-	if len(summary.PackageSummary.Rows) > 0 {
-		row := summary.PackageSummary.Rows[0]
+	if row, ok := currentPackageLane(summary.PackageSummary); ok {
 		if row.NextSuggestedAction != "" {
 			return row.NextSuggestedAction
 		}

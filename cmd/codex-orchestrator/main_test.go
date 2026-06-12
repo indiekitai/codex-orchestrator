@@ -435,6 +435,66 @@ func TestPendingWorktreeIDTaskLifecycle(t *testing.T) {
 	}
 }
 
+func TestObserveReconcilesPendingSetupFromGitWorktreeTruthReadOnly(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	branch := "codex/pending-reconcile"
+	worker := filepath.Join(root, "worker")
+	git(t, project, "worktree", "add", "-q", "-b", branch, worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "PENDING-RECONCILE",
+		"--title", "Pending reconcile",
+		"--package-id", "PKG-ONE",
+		"--pending-worktree-id", "pwt_reconcile",
+		"--branch", branch,
+		"--base-commit", base,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := observeWithOptions(ledger, 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.ReviewPressure.PendingSetup != 0 {
+		t.Fatalf("expected pending setup to reconcile to worktree truth, got %#v", summary.ReviewPressure)
+	}
+	if summary.ReviewPressure.Active != 1 || len(summary.RuntimeStatus.ActiveWorkers) != 1 {
+		t.Fatalf("expected active worker from git worktree truth, got pressure=%#v runtime=%#v", summary.ReviewPressure, summary.RuntimeStatus)
+	}
+	item := summary.RuntimeStatus.ActiveWorkers[0]
+	expectedWorker, err := filepath.EvalSymlinks(worker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualWorker, err := filepath.EvalSymlinks(item.Worktree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actualWorker != expectedWorker || item.State.Setup != "worktree-found-ledger-missing" || item.State.Worktree != "present-unrecorded" {
+		t.Fatalf("expected read-only reconciled worktree state, got %#v", item)
+	}
+	if !strings.Contains(item.Action, "dispatch reconcile") || !strings.Contains(item.Note, "ledger still has no worktree path") {
+		t.Fatalf("expected reconcile action/note, got action=%q note=%q", item.Action, item.Note)
+	}
+	if summary.OverallStatus != "quiet" || strings.Contains(strings.Join(summary.RecommendedActions, "\n"), "dispatch the next safe roadmap task") {
+		t.Fatalf("expected active worker to suppress generic dispatch recommendation, got status=%q actions=%v", summary.OverallStatus, summary.RecommendedActions)
+	}
+	stored, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Tasks[0].Worktree != "" {
+		t.Fatalf("observe must not mutate ledger worktree, got %#v", stored.Tasks[0])
+	}
+}
+
 func TestDispatchRecordStoresPendingSetupContract(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
@@ -1619,6 +1679,54 @@ func TestStatusAtAGlanceLinesCoverAttentionBranches(t *testing.T) {
 	}
 }
 
+func TestStatusLoadsRepoHeartbeatReportIntoHumanSummary(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	stateDir := filepath.Join(project, defaultStateDir)
+	report := ObserveSummary{
+		ObservedAt: "2026-06-12T18:00:00+08:00",
+		HeartbeatStatus: &HeartbeatStatus{
+			EvidenceLabel:       "local/static",
+			Status:              "missed",
+			CurrentHeartbeatAt:  "2026-06-12T18:00:00+08:00",
+			ExpectedInterval:    "20m0s",
+			MissedAfter:         "45m0s",
+			Gap:                 "4h25m31s",
+			EstimatedMissedRuns: 12,
+			Note:                "Possible missed heartbeat.",
+		},
+	}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "heartbeat-report.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := observeWithOptions(ledger, 15*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.HeartbeatStatus == nil || summary.HeartbeatStatus.Status != "missed" {
+		t.Fatalf("expected observe/status to load repo heartbeat report, got %#v", summary.HeartbeatStatus)
+	}
+	loaded, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := renderStatusHTML(summary, loaded, ledger)
+	for _, want := range []string{"heartbeat 漏跑提示", "gap=4h25m31s", "estimatedMissedRuns=12", "heartbeat / watchdog"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected status HTML to include %q:\n%s", want, rendered)
+		}
+	}
+}
+
 func TestHumanProgressSummaryBranches(t *testing.T) {
 	if got := humanIdentifier("TF-PRE-STAFF_RBAC-API-LOCAL"); got != "Staff RBAC API" {
 		t.Fatalf("expected humanized identifier, got %q", got)
@@ -1663,6 +1771,16 @@ func TestHumanProgressSummaryBranches(t *testing.T) {
 	empty := buildHumanProgressSummary(ObserveSummary{})
 	if empty.Headline != "当前空闲" || empty.CurrentLane != "暂无功能包" {
 		t.Fatalf("expected empty ledger branch, got %#v", empty)
+	}
+
+	lane := currentLaneName(ObserveSummary{
+		PackageSummary: PackageSummary{Rows: []PackageStatusItem{
+			{ID: "staff-rbac-old-review", Status: "review-needed", TaskCount: 4, LatestUpdatedAt: "2026-06-12T08:00:00+08:00"},
+			{ID: "pre-web-runtime-rewrite-unblock", Status: "active", TaskCount: 1, LatestUpdatedAt: "2026-06-12T09:00:00+08:00"},
+		}},
+	})
+	if !strings.Contains(lane, "Web Runtime Rewrite Unblock") || strings.Contains(lane, "Staff") {
+		t.Fatalf("expected current lane to prefer active package over old review debt, got %q", lane)
 	}
 }
 
