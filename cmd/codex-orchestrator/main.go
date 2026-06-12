@@ -978,6 +978,8 @@ func run(args []string) error {
 		return cmdRules(args[1:])
 	case "record-routine-run":
 		return cmdRecordRoutineRun(args[1:])
+	case "self-update":
+		return cmdSelfUpdate(args[1:])
 	case "completion":
 		return cmdCompletion(args[1:])
 	case "help", "-h", "--help":
@@ -1028,10 +1030,223 @@ Usage:
   codex-orchestrator rules propose (--from-review PATH | --text TEXT | --text-file PATH) [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK] [--package-id PKG] [--reviewer NAME] [--report-path PATH]
   codex-orchestrator record-routine-run --report-json PATH
+  codex-orchestrator self-update [--source PATH|--from-github] [--repo-url URL] [--cache-dir PATH] [--skill-only|--helper-only|--with-helper|--no-helper] [--dry-run] [--json]
   codex-orchestrator completion bash|zsh|fish
 
 This helper is conservative: it does not create Codex sessions, merge, push,
 delete branches, or clean worktrees.`)
+}
+
+type SelfUpdatePlan struct {
+	Command       string   `json:"command"`
+	EvidenceLabel string   `json:"evidenceLabel"`
+	Source        string   `json:"source"`
+	Script        string   `json:"script"`
+	Args          []string `json:"args"`
+	DryRun        bool     `json:"dryRun"`
+	WillRun       bool     `json:"willRun"`
+	Notes         []string `json:"notes"`
+}
+
+func cmdSelfUpdate(args []string) error {
+	fs := flag.NewFlagSet("self-update", flag.ExitOnError)
+	source := fs.String("source", "", "repository checkout or installed skill directory containing scripts/update-local.sh")
+	fromGitHub := fs.Bool("from-github", false, "fetch the latest source into a local cache before updating")
+	repoURL := fs.String("repo-url", "https://github.com/indiekitai/codex-orchestrator.git", "git repository URL used with --from-github")
+	cacheDir := fs.String("cache-dir", defaultSelfUpdateCacheDir(), "source cache directory used with --from-github")
+	skillOnly := fs.Bool("skill-only", false, "only sync the installed Codex App skill")
+	helperOnly := fs.Bool("helper-only", false, "only rebuild the helper")
+	withHelper := fs.Bool("with-helper", false, "force helper rebuild after skill sync")
+	noHelper := fs.Bool("no-helper", false, "sync skill without rebuilding helper")
+	dryRun := fs.Bool("dry-run", false, "print the update plan without running it")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	selected := 0
+	for _, value := range []bool{*skillOnly, *helperOnly, *withHelper, *noHelper} {
+		if value {
+			selected++
+		}
+	}
+	if selected > 1 {
+		return errors.New("self-update accepts only one of --skill-only, --helper-only, --with-helper, or --no-helper")
+	}
+	if *source != "" && *fromGitHub {
+		return errors.New("self-update accepts only one source mode: --source or --from-github")
+	}
+	resolvedSource := ""
+	notes := []string{
+		"Updates the local Codex skill and optional helper from an existing checkout or installed skill directory.",
+		"Does not dispatch sessions, mutate project ledgers, merge, push, release, or clean worktrees.",
+	}
+	var err error
+	if *fromGitHub {
+		if *dryRun {
+			resolvedSource = expandPath(*cacheDir)
+			if abs, absErr := filepath.Abs(resolvedSource); absErr == nil {
+				resolvedSource = abs
+			}
+			notes = append(notes, "Dry run only: would fetch the GitHub repository into the local source cache before updating.")
+		} else {
+			var gitNotes []string
+			resolvedSource, gitNotes, err = prepareSelfUpdateSourceFromGit(*repoURL, *cacheDir)
+			if err != nil {
+				return err
+			}
+			notes = append(notes, gitNotes...)
+		}
+	} else {
+		resolvedSource, err = resolveSelfUpdateSource(*source)
+	}
+	if err != nil {
+		return err
+	}
+	script := filepath.Join(resolvedSource, "scripts", "update-local.sh")
+	scriptArgs := selfUpdateScriptArgs(*skillOnly, *helperOnly, *withHelper, *noHelper)
+	plan := SelfUpdatePlan{
+		Command:       "self-update",
+		EvidenceLabel: "local/static",
+		Source:        resolvedSource,
+		Script:        script,
+		Args:          scriptArgs,
+		DryRun:        *dryRun,
+		WillRun:       !*dryRun,
+		Notes:         notes,
+	}
+	if *dryRun {
+		if *jsonOut {
+			return printJSON(plan)
+		}
+		printSelfUpdatePlan(plan)
+		return nil
+	}
+	cmd := exec.Command(script, scriptArgs...)
+	cmd.Dir = resolvedSource
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("self-update failed: %w", err)
+	}
+	if *jsonOut {
+		return printJSON(plan)
+	}
+	fmt.Println("Self-update complete.")
+	fmt.Println("Evidence: local/static update smoke only; no project ledger or orchestration action was performed.")
+	return nil
+}
+
+func printSelfUpdatePlan(plan SelfUpdatePlan) {
+	fmt.Println("Self-update plan")
+	fmt.Printf("Source: %s\n", plan.Source)
+	fmt.Printf("Script: %s\n", plan.Script)
+	if len(plan.Args) > 0 {
+		fmt.Printf("Args: %s\n", strings.Join(plan.Args, " "))
+	} else {
+		fmt.Println("Args: (none)")
+	}
+	for _, note := range plan.Notes {
+		fmt.Printf("- %s\n", note)
+	}
+}
+
+func selfUpdateScriptArgs(skillOnly, helperOnly, withHelper, noHelper bool) []string {
+	switch {
+	case skillOnly:
+		return []string{"--skill-only"}
+	case helperOnly:
+		return []string{"--helper-only"}
+	case withHelper:
+		return []string{"--with-helper"}
+	case noHelper:
+		return []string{"--no-helper"}
+	default:
+		return nil
+	}
+}
+
+func resolveSelfUpdateSource(explicit string) (string, error) {
+	candidates := []string{}
+	if explicit != "" {
+		candidates = append(candidates, explicit)
+	} else {
+		if cwd, err := os.Getwd(); err == nil {
+			candidates = append(candidates, cwd)
+		}
+		codexHome := os.Getenv("CODEX_HOME")
+		if codexHome == "" {
+			if home, err := os.UserHomeDir(); err == nil {
+				codexHome = filepath.Join(home, ".codex")
+			}
+		}
+		if codexHome != "" {
+			candidates = append(candidates, filepath.Join(codexHome, "skills", "codex-orchestrator"))
+		}
+	}
+	for _, candidate := range candidates {
+		resolved := expandPath(candidate)
+		if abs, err := filepath.Abs(resolved); err == nil {
+			resolved = abs
+		}
+		script := filepath.Join(resolved, "scripts", "update-local.sh")
+		if fileExists(script) {
+			return resolved, nil
+		}
+	}
+	if explicit != "" {
+		return "", fmt.Errorf("self-update source does not contain scripts/update-local.sh: %s", explicit)
+	}
+	return "", errors.New("self-update could not find scripts/update-local.sh in the current directory or installed skill; run from the repository checkout or pass --source")
+}
+
+func defaultSelfUpdateCacheDir() string {
+	if value := os.Getenv("CODEX_ORCHESTRATOR_UPDATE_CACHE"); value != "" {
+		return value
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".cache", "codex-orchestrator", "source")
+	}
+	return filepath.Join(os.TempDir(), "codex-orchestrator-source")
+}
+
+func prepareSelfUpdateSourceFromGit(repoURL string, cacheDir string) (string, []string, error) {
+	if repoURL == "" {
+		return "", nil, errors.New("self-update --from-github requires --repo-url")
+	}
+	resolvedCache := expandPath(cacheDir)
+	if abs, err := filepath.Abs(resolvedCache); err == nil {
+		resolvedCache = abs
+	}
+	notes := []string{}
+	if !fileExists(filepath.Join(resolvedCache, ".git")) {
+		if err := os.RemoveAll(resolvedCache); err != nil {
+			return "", nil, fmt.Errorf("could not reset source cache %s: %w", resolvedCache, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(resolvedCache), 0o755); err != nil {
+			return "", nil, fmt.Errorf("could not create source cache parent: %w", err)
+		}
+		cmd := exec.Command("git", "clone", "--depth", "1", repoURL, resolvedCache)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return "", nil, fmt.Errorf("git clone update source failed: %w\n%s", err, strings.TrimSpace(string(out)))
+		}
+		notes = append(notes, "Cloned latest source into local update cache: "+resolvedCache)
+	} else {
+		fetch := exec.Command("git", "-C", resolvedCache, "fetch", "--depth", "1", "origin", "main")
+		if out, err := fetch.CombinedOutput(); err != nil {
+			return "", nil, fmt.Errorf("git fetch update source failed: %w\n%s", err, strings.TrimSpace(string(out)))
+		}
+		reset := exec.Command("git", "-C", resolvedCache, "reset", "--hard", "FETCH_HEAD")
+		if out, err := reset.CombinedOutput(); err != nil {
+			return "", nil, fmt.Errorf("git reset update source failed: %w\n%s", err, strings.TrimSpace(string(out)))
+		}
+		notes = append(notes, "Refreshed local update cache from origin/main: "+resolvedCache)
+	}
+	if !fileExists(filepath.Join(resolvedCache, "scripts", "update-local.sh")) {
+		return "", nil, fmt.Errorf("updated source cache does not contain scripts/update-local.sh: %s", resolvedCache)
+	}
+	return resolvedCache, notes, nil
 }
 
 func cmdCompletion(args []string) error {
@@ -1059,7 +1274,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init dispatch run-mode record-task append-event observe heartbeat status preflight watchdog pack review validate-routines run-routine roadmap policy eval rules record-routine-run completion help"
+  commands="init dispatch run-mode record-task append-event observe heartbeat status preflight watchdog pack review validate-routines run-routine roadmap policy eval rules record-routine-run self-update completion help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report"
 
   case "$prev" in
@@ -1209,6 +1424,9 @@ _codex_orchestrator()
     record-routine-run)
       COMPREPLY=( $(compgen -W "--ledger --routine --status --task-id --package-id --reviewer --report-path --evidence-local --evidence-proxy --evidence-direct --evidence-blocked --action --next --needs-human --blocked-reason --report-json --help" -- "$cur") )
       ;;
+    self-update)
+      COMPREPLY=( $(compgen -W "--source --from-github --repo-url --cache-dir --skill-only --helper-only --with-helper --no-helper --dry-run --json --help" -- "$cur") )
+      ;;
   esac
 }
 complete -F _codex_orchestrator codex-orchestrator
@@ -1239,6 +1457,7 @@ commands=(
   'eval:run local eval fixtures'
   'rules:propose review-only rule updates'
   'record-routine-run:record a routine report in the ledger'
+  'self-update:update the installed local skill and optional helper'
   'completion:print shell completion'
   'help:show help'
 )
@@ -1376,6 +1595,9 @@ case $state in
       record-routine-run)
         _values 'options' --ledger --routine --status --task-id --package-id --reviewer --report-path --evidence-local --evidence-proxy --evidence-direct --evidence-blocked --action --next --needs-human --blocked-reason --report-json --help
         ;;
+      self-update)
+        _values 'options' --source --from-github --repo-url --cache-dir --skill-only --helper-only --with-helper --no-helper --dry-run --json --help
+        ;;
     esac
     ;;
 esac
@@ -1403,6 +1625,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'policy' -d 'Run po
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'eval' -d 'Run local eval fixtures'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'rules' -d 'Propose review-only rule updates'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run' -d 'Record a routine report in the ledger'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'self-update' -d 'Update the installed local skill and optional helper'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from dispatch' -a 'record reconcile'
@@ -1423,6 +1646,14 @@ complete -c codex-orchestrator -l write-summary -d 'Write Markdown summary'
 complete -c codex-orchestrator -l stale-after -d 'Stale threshold'
 complete -c codex-orchestrator -l task-id -d 'Task id'
 complete -c codex-orchestrator -l pending-worktree-id -d 'Opaque Codex App pending worktree setup id'
+complete -c codex-orchestrator -l source -d 'Self-update source checkout or installed skill directory'
+complete -c codex-orchestrator -l from-github -d 'Fetch latest source into local cache before self-update'
+complete -c codex-orchestrator -l repo-url -d 'Git repository URL used with --from-github'
+complete -c codex-orchestrator -l cache-dir -d 'Source cache directory used with --from-github'
+complete -c codex-orchestrator -l skill-only -d 'Only sync the installed Codex App skill'
+complete -c codex-orchestrator -l helper-only -d 'Only rebuild the helper'
+complete -c codex-orchestrator -l with-helper -d 'Force helper rebuild during self-update'
+complete -c codex-orchestrator -l no-helper -d 'Do not rebuild the helper during self-update'
 complete -c codex-orchestrator -l worktree -d 'Task worktree path'
 complete -c codex-orchestrator -l branch -d 'Task branch'
 complete -c codex-orchestrator -l repo -d 'Repository path'

@@ -168,6 +168,7 @@ func TestCompletionScriptsMentionCoreCommands(t *testing.T) {
 				"roadmap-next-task-suggester",
 				"rules",
 				"watchdog",
+				"self-update",
 				"completion",
 			} {
 				if !strings.Contains(tc.text, want) {
@@ -181,6 +182,127 @@ func TestCompletionScriptsMentionCoreCommands(t *testing.T) {
 func TestCompletionRejectsUnknownShell(t *testing.T) {
 	if err := cmdCompletion([]string{"powershell"}); err == nil {
 		t.Fatal("expected unsupported shell to fail")
+	}
+}
+
+func TestSelfUpdateScriptArgs(t *testing.T) {
+	cases := []struct {
+		name       string
+		skillOnly  bool
+		helperOnly bool
+		withHelper bool
+		noHelper   bool
+		want       []string
+	}{
+		{name: "default"},
+		{name: "skill", skillOnly: true, want: []string{"--skill-only"}},
+		{name: "helper", helperOnly: true, want: []string{"--helper-only"}},
+		{name: "with-helper", withHelper: true, want: []string{"--with-helper"}},
+		{name: "no-helper", noHelper: true, want: []string{"--no-helper"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := selfUpdateScriptArgs(tc.skillOnly, tc.helperOnly, tc.withHelper, tc.noHelper)
+			if strings.Join(got, "\x00") != strings.Join(tc.want, "\x00") {
+				t.Fatalf("expected %#v, got %#v", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestResolveSelfUpdateSource(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "codex-orchestrator")
+	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "update-local.sh"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := resolveSelfUpdateSource(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != source {
+		t.Fatalf("expected %q, got %q", source, got)
+	}
+	if _, err := resolveSelfUpdateSource(filepath.Join(root, "missing")); err == nil {
+		t.Fatal("expected missing source to fail")
+	}
+}
+
+func TestPrepareSelfUpdateSourceFromGitRefreshesCache(t *testing.T) {
+	root := t.TempDir()
+	remote := filepath.Join(root, "remote")
+	cache := filepath.Join(root, "cache")
+	if err := os.MkdirAll(filepath.Join(remote, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(t, remote, "init", "-q", "-b", "main")
+	git(t, remote, "config", "user.email", "test@example.com")
+	git(t, remote, "config", "user.name", "Test")
+	script := filepath.Join(remote, "scripts", "update-local.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho first\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(t, remote, "add", "scripts/update-local.sh")
+	git(t, remote, "commit", "-q", "-m", "first")
+
+	got, notes, err := prepareSelfUpdateSourceFromGit(remote, cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != cache {
+		t.Fatalf("expected cache %q, got %q", cache, got)
+	}
+	if len(notes) == 0 || !strings.Contains(notes[0], "Cloned") {
+		t.Fatalf("expected clone note, got %#v", notes)
+	}
+	cachedScript := filepath.Join(cache, "scripts", "update-local.sh")
+	data, err := os.ReadFile(cachedScript)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "first") {
+		t.Fatalf("expected first script content, got %s", data)
+	}
+
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho second\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(t, remote, "add", "scripts/update-local.sh")
+	git(t, remote, "commit", "-q", "-m", "second")
+	if _, notes, err := prepareSelfUpdateSourceFromGit(remote, cache); err != nil {
+		t.Fatal(err)
+	} else if len(notes) == 0 || !strings.Contains(notes[0], "Refreshed") {
+		t.Fatalf("expected refresh note, got %#v", notes)
+	}
+	updated, err := os.ReadFile(cachedScript)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(updated), "second") {
+		t.Fatalf("expected refreshed script content, got %s", updated)
+	}
+}
+
+func TestDefaultSelfUpdateCacheDirUsesEnv(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("CODEX_ORCHESTRATOR_UPDATE_CACHE", root)
+	if got := defaultSelfUpdateCacheDir(); got != root {
+		t.Fatalf("expected env cache dir %q, got %q", root, got)
+	}
+}
+
+func TestSelfUpdateRejectsConflictingModes(t *testing.T) {
+	if err := cmdSelfUpdate([]string{"--skill-only", "--with-helper", "--dry-run"}); err == nil {
+		t.Fatal("expected conflicting self-update modes to fail")
+	}
+}
+
+func TestSelfUpdateRejectsConflictingSources(t *testing.T) {
+	if err := cmdSelfUpdate([]string{"--source", t.TempDir(), "--from-github", "--dry-run"}); err == nil {
+		t.Fatal("expected conflicting self-update sources to fail")
 	}
 }
 

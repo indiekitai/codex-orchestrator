@@ -9,6 +9,8 @@ skill plus helper/routines workflow.
 ## Change Summary
 
 - Added `scripts/update-local.sh` for local checkout updates.
+- Added `codex-orchestrator self-update` as the user-facing update command,
+  including a `--from-github` path for users without a local checkout.
 - Documented a Codex App-first update prompt in `README.md` and
   `README.zh-CN.md`.
 - Added a command-line update path to `docs/v2-usage.md`.
@@ -19,6 +21,12 @@ skill plus helper/routines workflow.
 
 - `local`: `scripts/update-local.sh` syncs the installed Codex skill from a
   checked-out repository and can rebuild the Go helper.
+- `local`: `codex-orchestrator self-update` resolves a checkout or installed
+  skill directory and delegates to `scripts/update-local.sh`.
+- `local/proxy`: `codex-orchestrator self-update --from-github` can clone or
+  fetch this repository into a local update cache before syncing the local
+  install. GitHub fetch success is repository-source evidence, not proof that
+  any project orchestration state is correct.
 - `local`: the update path explicitly avoids project ledgers, dispatch,
   merge, push, release, and worktree cleanup.
 - `local/static`: README and v2 usage docs now include a copy-paste update
@@ -34,7 +42,5 @@ skill plus helper/routines workflow.
 
 ## Residual Risk
 
-- The script updates from the current checkout. Users still need to fetch,
-  pull, or download the repository version they want before running it.
 - The helper has no dedicated `version` command yet; update smoke currently
   checks `codex-orchestrator --help`.

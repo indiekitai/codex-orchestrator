@@ -240,34 +240,45 @@ Release assets 和 shell completion 见
 
 ## 更新方式
 
-更新也保持 Codex App-first。你不确定本机 skill 或 helper 是否最新时，可以在本仓库
-checkout 里把这段发给 Codex App：
+更新也保持 Codex App-first。第一次安装和后续升级，对用户来说应该是同一种体验：
+把 GitHub 仓库交给 Codex App，让它自己刷新本机 skill/helper。
+
+你不确定本机 skill 或 helper 是否最新时，可以把这段发给 Codex App：
 
 ```text
-请从当前仓库更新我的本地 codex-orchestrator。
+请从 https://github.com/indiekitai/codex-orchestrator 更新我的本地 codex-orchestrator。
 
 检查 ~/.codex/skills/codex-orchestrator 里的已安装 skill，以及 PATH 上的 helper
-binary。从这个 checkout 更新 Codex App skill；只有在 helper 已经安装或明确有用时
-才重建 Go helper；不要触碰任何项目里的 .codex-orchestrator/ledger.json。更新后跑
-一个 smoke check，并告诉我改了什么。
+binary。需要时 fetch 或 clone 最新仓库，更新 Codex App skill；只有在 helper 已经
+安装或明确有用时才重建 Go helper；不要触碰任何项目里的
+.codex-orchestrator/ledger.json。更新后跑一个 smoke check，并告诉我改了什么。
 ```
 
 如果你更熟悉命令行，也可以在本仓库 checkout 里执行：
 
 ```bash
 # 同步本地 Codex App skill；如果 helper 已存在，则顺手重建。
-scripts/update-local.sh
+codex-orchestrator self-update
 
 # 强制重建 helper。
-scripts/update-local.sh --with-helper
+codex-orchestrator self-update --with-helper
 
 # 只更新 skill，不动 helper binary。
-scripts/update-local.sh --skill-only
+codex-orchestrator self-update --skill-only
 ```
 
-`scripts/update-local.sh` 不会运行 `git pull`，不会派发 session，不会修改项目
-ledger，不会 merge / push / cleanup worktree。它只刷新本地 skill 目录，并在需要时
-重建 helper。
+`codex-orchestrator self-update` 底层会调用 `scripts/update-local.sh`。它不会派发
+session，不会修改项目 ledger，不会 merge / push / cleanup worktree。它只刷新本地
+skill 目录，并在需要时重建 helper。
+
+如果你不在本仓库 checkout 里，也可以让 helper 先把 GitHub 仓库拉到本地缓存：
+
+```bash
+codex-orchestrator self-update --from-github
+```
+
+这个命令可能只在 update cache 里运行 `git clone` / `git fetch`，仍然不会修改你正在
+编排的项目。
 
 接入后，直接让 Codex App 使用 codex-orchestrator；Codex 会在需要时调用已安装的 skill：
 

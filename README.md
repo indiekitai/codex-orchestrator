@@ -279,36 +279,51 @@ For release assets and shell completions, see
 
 ## Updating
 
-The update story is also Codex App-first. If you are not sure whether your
-installed skill or helper is current, paste this into Codex App from this
-repository checkout:
+The update story is also Codex App-first. First install and later updates should
+feel the same to the user: give Codex App the GitHub repository and let it
+refresh the installed skill/helper.
+
+If you are not sure whether your installed skill or helper is current, paste
+this into Codex App:
 
 ```text
-Please update my local codex-orchestrator installation from this repository.
+Please update my local codex-orchestrator installation from
+https://github.com/indiekitai/codex-orchestrator.
 
 Check the installed skill at ~/.codex/skills/codex-orchestrator and the helper
-binary on PATH. Update the Codex App skill from this checkout, rebuild the Go
-helper only if it is already installed or clearly useful, and do not touch any
-project .codex-orchestrator/ledger.json files. After updating, run a smoke check
-and tell me what changed.
+binary on PATH. Fetch or clone the latest repository if needed, update the
+Codex App skill, rebuild the Go helper only if it is already installed or
+clearly useful, and do not touch any project .codex-orchestrator/ledger.json
+files. After updating, run a smoke check and tell me what changed.
 ```
 
 If you prefer the command line from a cloned checkout:
 
 ```bash
 # Sync the local Codex App skill. Rebuild the helper only if it already exists.
-scripts/update-local.sh
+codex-orchestrator self-update
 
 # Force a helper rebuild too.
-scripts/update-local.sh --with-helper
+codex-orchestrator self-update --with-helper
 
 # Only update the skill, leaving any helper binary unchanged.
-scripts/update-local.sh --skill-only
+codex-orchestrator self-update --skill-only
 ```
 
-`scripts/update-local.sh` does not run `git pull`, dispatch sessions, mutate
-project ledgers, merge, push, or clean worktrees. It only refreshes the local
-skill directory and, when requested or already installed, rebuilds the helper.
+`codex-orchestrator self-update` uses `scripts/update-local.sh` under the hood.
+It does not dispatch sessions, mutate project ledgers, merge, push, or clean
+worktrees. It only refreshes the local skill directory and, when requested or
+already installed, rebuilds the helper.
+
+If you are not inside a checkout, the helper can fetch this repository into a
+local cache first:
+
+```bash
+codex-orchestrator self-update --from-github
+```
+
+That command may run `git clone`/`git fetch` only inside its update cache; it
+still does not mutate the project you are orchestrating.
 
 After setup, ask Codex App to use codex-orchestrator. Codex may invoke the
 installed skill when appropriate:
