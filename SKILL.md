@@ -172,6 +172,15 @@ Before dispatching hands-off work:
   list as persistent prompt state;
 - refresh fixed status artifacts before leaving and on every later wakeup:
   `.codex-orchestrator/status.html` and `.codex-orchestrator/status.md`;
+- run a one-shot helper preflight before leaving and surface warnings:
+  `codex-orchestrator preflight --repo . --write-report .codex-orchestrator/preflight.json
+  --write-summary .codex-orchestrator/preflight.md`. Treat it as local/static
+  readiness evidence only. It checks repo cleanliness, ledger shape, dispatch
+  mode, heartbeat gap, watchdog status, project map, package-lane health, and
+  missing external-review evidence. It does not prove Codex App delivery, OS
+  wake behavior, runtime, device, provider, pre/prod, or direct proof. Warnings
+  exit successfully by default for status snapshots; use `--fail-on-warning`
+  only when you intentionally want a shell gate;
 - run a single-count helper heartbeat with missed-run detection on each wakeup,
   for example `codex-orchestrator heartbeat --count 1 --interval 20m
   --missed-after 45m --write-report .codex-orchestrator/heartbeat-report.json
@@ -204,6 +213,7 @@ codex-orchestrator init
 codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 codex-orchestrator observe --json
 codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
+codex-orchestrator preflight --repo . --write-report .codex-orchestrator/preflight.json --write-summary .codex-orchestrator/preflight.md
 codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch; do not dispatch new workers"
 codex-orchestrator heartbeat --count 1 --interval 20m --missed-after 45m --write-report .codex-orchestrator/heartbeat-report.json --write-summary .codex-orchestrator/heartbeat-summary.md
 codex-orchestrator append-event --task-id TASK --type review --status completed-unreviewed --note "Ready for orchestrator review."
@@ -212,6 +222,12 @@ codex-orchestrator append-event --task-id TASK --type review --status completed-
 The helper is not a session launcher and must not be treated as one. It is a
 state and heartbeat tool. The Codex App orchestrator still owns worker dispatch,
 review, merge, push, and cleanup decisions.
+
+On every monitor/review turn, read or regenerate the status surfaces. The
+current helper exposes `packageSummary`, `packageLaneGuard`, `preflight`, and
+`timeline` in `observe`/`status`. Use those fields to keep work grouped by one
+feature package, to explain recent progress in human language, and to avoid
+filling spare concurrency slots with unrelated safe tasks.
 
 When `create_thread` returns a `pendingWorktreeId`, record that pending setup in
 durable ledger truth immediately, even before the final worktree path is known.
@@ -778,6 +794,12 @@ reads `.codex-orchestrator/review-policy.json` when present and otherwise uses
 built-in defaults. The command is local/static planning evidence only: it checks
 reviewer command availability and recommends zero, one, or two reviewers for the
 package risk level. It does not run reviewers or decide acceptance.
+
+Also check the package row in `status` / `observe`. Package rows now expose
+`reviewRequired`, `reviewDecision`, and `reviewNextAction` derived from the
+local/static review policy. If a package has enough related workers or matches a
+high-risk lane, generate/import the review evidence before calling the package
+fully closed.
 
 ## Dynamic Heartbeat Prompt Pattern
 

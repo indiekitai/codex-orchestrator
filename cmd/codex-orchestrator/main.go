@@ -258,6 +258,9 @@ type PackageStatusItem struct {
 	Status              string         `json:"status"`
 	ProgressLabel       string         `json:"progressLabel,omitempty"`
 	ReviewStatus        string         `json:"reviewStatus,omitempty"`
+	ReviewRequired      bool           `json:"reviewRequired,omitempty"`
+	ReviewDecision      string         `json:"reviewDecision,omitempty"`
+	ReviewNextAction    string         `json:"reviewNextAction,omitempty"`
 	HumanSummary        string         `json:"humanSummary,omitempty"`
 	TaskCount           int            `json:"taskCount"`
 	Counts              map[string]int `json:"counts"`
@@ -292,6 +295,51 @@ type ProjectMapStatus struct {
 	RecommendedAction string   `json:"recommendedAction,omitempty"`
 }
 
+type PreflightReport struct {
+	SchemaVersion       int                 `json:"schemaVersion"`
+	Command             string              `json:"command"`
+	GeneratedAt         string              `json:"generatedAt"`
+	Status              string              `json:"status"`
+	EvidenceLabel       string              `json:"evidenceLabel"`
+	Boundary            string              `json:"boundary"`
+	RepoPath            string              `json:"repoPath"`
+	LedgerPath          string              `json:"ledgerPath"`
+	Summary             string              `json:"summary"`
+	Checks              []PreflightCheck    `json:"checks"`
+	RecommendedActions  []string            `json:"recommendedActions,omitempty"`
+	NeedsHuman          bool                `json:"needsHuman"`
+	Evidence            map[string][]string `json:"evidence"`
+	NextSuggestedAction string              `json:"nextSuggestedAction"`
+}
+
+type PreflightCheck struct {
+	Name          string `json:"name"`
+	Status        string `json:"status"`
+	EvidenceLabel string `json:"evidenceLabel"`
+	Detail        string `json:"detail"`
+	Action        string `json:"action,omitempty"`
+}
+
+type PackageLaneGuard struct {
+	EvidenceLabel       string   `json:"evidenceLabel"`
+	Status              string   `json:"status"`
+	CurrentPackageID    string   `json:"currentPackageId,omitempty"`
+	ActivePackageIDs    []string `json:"activePackageIds,omitempty"`
+	RecommendedAction   string   `json:"recommendedAction"`
+	Warnings            []string `json:"warnings,omitempty"`
+	DoNotDispatchReason string   `json:"doNotDispatchReason,omitempty"`
+}
+
+type TimelineItem struct {
+	At        string `json:"at,omitempty"`
+	Kind      string `json:"kind"`
+	ID        string `json:"id,omitempty"`
+	PackageID string `json:"packageId,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Title     string `json:"title,omitempty"`
+	Note      string `json:"note,omitempty"`
+}
+
 type routineBudgetCoverage struct {
 	Total               int
 	WithMaxRuntime      int
@@ -322,7 +370,10 @@ type ObserveSummary struct {
 	RuntimeStatus      RuntimeStatusReport   `json:"runtimeStatus"`
 	JobSummary         JobSummary            `json:"jobSummary"`
 	PackageSummary     PackageSummary        `json:"packageSummary"`
+	PackageLaneGuard   PackageLaneGuard      `json:"packageLaneGuard"`
 	ProjectMap         ProjectMapStatus      `json:"projectMap"`
+	Preflight          *PreflightReport      `json:"preflight,omitempty"`
+	Timeline           []TimelineItem        `json:"timeline,omitempty"`
 	Observations       []Observation         `json:"observations"`
 	RecentRoutineRuns  []RoutineRun          `json:"recentRoutineRuns,omitempty"`
 }
@@ -867,6 +918,8 @@ func run(args []string) error {
 		return cmdHeartbeat(args[1:])
 	case "status":
 		return cmdStatus(args[1:])
+	case "preflight":
+		return cmdPreflight(args[1:])
 	case "watchdog":
 		return cmdWatchdog(args[1:])
 	case "pack":
@@ -910,6 +963,7 @@ Usage:
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--missed-after 15m] [--count 0] [--write-report PATH]
   codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--write-html PATH] [--write-summary PATH] [--stale-after 15m]
+  codex-orchestrator preflight [--repo PATH] [--ledger PATH] [--interval 20m] [--missed-after 45m] [--stale-after 15m] [--fail-on-warning] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator watchdog status [--repo PATH] [--label-suffix SUFFIX] [--json]
   codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack consultation --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
@@ -966,7 +1020,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init dispatch run-mode record-task append-event observe heartbeat status watchdog pack review validate-routines run-routine roadmap policy eval rules record-routine-run completion help"
+  commands="init dispatch run-mode record-task append-event observe heartbeat status preflight watchdog pack review validate-routines run-routine roadmap policy eval rules record-routine-run completion help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report"
 
   case "$prev" in
@@ -1039,6 +1093,9 @@ _codex_orchestrator()
       ;;
     status)
       COMPREPLY=( $(compgen -W "--repo --ledger --json --html --write-html --write-summary --stale-after --help" -- "$cur") )
+      ;;
+    preflight)
+      COMPREPLY=( $(compgen -W "--repo --ledger --interval --missed-after --stale-after --fail-on-warning --json --write-report --write-summary --help" -- "$cur") )
       ;;
     watchdog)
       if [[ ${COMP_WORDS[2]} == "status" ]]; then
@@ -1130,6 +1187,7 @@ commands=(
   'observe:inspect ledger and worktree state'
   'heartbeat:run observe on an interval and write reports'
   'status:print ledger status'
+  'preflight:check hands-off readiness before walking away'
   'watchdog:inspect macOS external watchdog status'
   'pack:generate local/static handoff artifacts'
   'review:run or import external model reviewer reports'
@@ -1256,6 +1314,9 @@ case $state in
       status)
         _values 'options' --repo --ledger --json --html --write-html --write-summary --stale-after --help
         ;;
+      preflight)
+        _values 'options' --repo --ledger --interval --missed-after --stale-after --fail-on-warning --json --write-report --write-summary --help
+        ;;
       watchdog)
         if (( CURRENT == 3 )); then
           _values 'subcommand' status
@@ -1289,6 +1350,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'append-event' -d '
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'observe' -d 'Inspect ledger and worktree state'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'heartbeat' -d 'Run observe on an interval and write reports'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'status' -d 'Print ledger status'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'preflight' -d 'Check hands-off readiness before walking away'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'watchdog' -d 'Inspect macOS external watchdog status'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'pack' -d 'Generate local/static handoff artifacts'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'review' -d 'Run or import external model reviewer reports'
@@ -1324,7 +1386,9 @@ complete -c codex-orchestrator -l repo -d 'Repository path'
 complete -c codex-orchestrator -l tag -d 'Release tag'
 complete -c codex-orchestrator -l expected-asset -d 'Expected release asset'
 complete -c codex-orchestrator -l heartbeat-report -d 'Optional heartbeat report path'
+complete -c codex-orchestrator -l interval -d 'Heartbeat/preflight interval'
 complete -c codex-orchestrator -l missed-after -d 'Missed heartbeat threshold'
+complete -c codex-orchestrator -l fail-on-warning -d 'Exit non-zero when preflight returns warning'
 complete -c codex-orchestrator -l label-suffix -d 'macOS watchdog LaunchAgent label suffix'
 complete -c codex-orchestrator -l package-id -d 'Feature package id'
 complete -c codex-orchestrator -l reviewer -d 'External reviewer name'
@@ -2049,6 +2113,7 @@ func cmdStatus(args []string) error {
 	if err != nil {
 		return err
 	}
+	summary.Preflight = buildPreflightReportFromSummary(resolvedLedger, eventsPathForLedger(resolvedLedger), ledger, summary, 20*time.Minute, 45*time.Minute)
 	result := map[string]any{
 		"ledger":            resolvedLedger,
 		"projectRoot":       ledger.ProjectRoot,
@@ -2067,7 +2132,10 @@ func cmdStatus(args []string) error {
 		"runtimeStatus":     summary.RuntimeStatus,
 		"jobSummary":        summary.JobSummary,
 		"packageSummary":    summary.PackageSummary,
+		"packageLaneGuard":  summary.PackageLaneGuard,
 		"projectMap":        summary.ProjectMap,
+		"preflight":         summary.Preflight,
+		"timeline":          summary.Timeline,
 		"tasks":             ledger.Tasks,
 		"observations":      summary.Observations,
 		"recentRoutineRuns": summary.RecentRoutineRuns,
@@ -2100,6 +2168,14 @@ func cmdStatus(args []string) error {
 	fmt.Printf("Runtime status (%s): %s\n", summary.RuntimeStatus.EvidenceLabel, summary.RuntimeStatus.Summary)
 	fmt.Printf("Jobs: total=%d counts=%s\n", summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
 	fmt.Printf("Packages: total=%d\n", summary.PackageSummary.Total)
+	fmt.Printf("Lane guard (%s): %s", summary.PackageLaneGuard.EvidenceLabel, summary.PackageLaneGuard.Status)
+	if summary.PackageLaneGuard.CurrentPackageID != "" {
+		fmt.Printf(" current=%s", summary.PackageLaneGuard.CurrentPackageID)
+	}
+	fmt.Println()
+	if summary.Preflight != nil {
+		fmt.Printf("Preflight (%s): %s - %s\n", summary.Preflight.EvidenceLabel, summary.Preflight.Status, summary.Preflight.Summary)
+	}
 	fmt.Printf("Project map (%s): %s", summary.ProjectMap.EvidenceLabel, summary.ProjectMap.Status)
 	if summary.ProjectMap.Path != "" {
 		fmt.Printf(" path=%s", summary.ProjectMap.Path)
@@ -2117,6 +2193,68 @@ func cmdStatus(args []string) error {
 	}
 	if *writeSummary != "" {
 		fmt.Printf("Status summary: %s\n", *writeSummary)
+	}
+	return nil
+}
+
+func cmdPreflight(args []string) error {
+	fs := flag.NewFlagSet("preflight", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	writeReport := fs.String("write-report", "", "write JSON report")
+	writeSummary := fs.String("write-summary", "", "write Markdown summary")
+	interval := fs.Duration("interval", 20*time.Minute, "expected App heartbeat interval")
+	missedAfter := fs.Duration("missed-after", 45*time.Minute, "missed heartbeat threshold")
+	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale task threshold")
+	failOnWarning := fs.Bool("fail-on-warning", false, "return an error when preflight status is warning")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *interval < 0 {
+		return errors.New("preflight --interval cannot be negative")
+	}
+	if *missedAfter < 0 {
+		return errors.New("preflight --missed-after cannot be negative")
+	}
+	if *staleAfter < 0 {
+		return errors.New("preflight --stale-after cannot be negative")
+	}
+	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
+	ledger, err := loadLedger(resolvedLedger)
+	if err != nil {
+		return err
+	}
+	summary, err := observeWithOptions(resolvedLedger, *staleAfter)
+	if err != nil {
+		return err
+	}
+	report := buildPreflightReportFromSummary(resolvedLedger, eventsPathForLedger(resolvedLedger), ledger, summary, *interval, *missedAfter)
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *writeSummary != "" {
+		if err := writeText(*writeSummary, renderPreflightMarkdown(*report)); err != nil {
+			return err
+		}
+	}
+	if *jsonOut {
+		return printJSON(report)
+	}
+	printPreflightReport(report)
+	if *writeReport != "" {
+		fmt.Printf("Preflight JSON: %s\n", *writeReport)
+	}
+	if *writeSummary != "" {
+		fmt.Printf("Preflight summary: %s\n", *writeSummary)
+	}
+	if report.Status == "blocked" {
+		return errors.New("preflight blocked")
+	}
+	if report.Status == "warning" && *failOnWarning {
+		return errors.New("preflight warning")
 	}
 	return nil
 }
@@ -2732,6 +2870,10 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	}
 	fmt.Fprintf(&b, "</section>\n")
 
+	renderPreflightHTML(&b, summary.Preflight)
+	renderPackageLaneGuardHTML(&b, summary.PackageLaneGuard)
+	renderTimelineHTML(&b, summary.Timeline)
+
 	fmt.Fprintf(&b, "<section class=\"section\"><h2>证据标签 / Evidence Labels</h2><div class=\"evidence\">")
 	for _, item := range []struct {
 		label string
@@ -2739,6 +2881,8 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	}{
 		{"runtime", summary.RuntimeStatus.EvidenceLabel},
 		{"jobs", summary.JobSummary.EvidenceLabel},
+		{"laneGuard", summary.PackageLaneGuard.EvidenceLabel},
+		{"preflight", preflightEvidenceLabel(summary.Preflight)},
 		{"budget", summary.BudgetPressure.EvidenceLabel},
 		{"projectMap", summary.ProjectMap.EvidenceLabel},
 	} {
@@ -2809,6 +2953,84 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	}
 	fmt.Fprintf(&b, "</main>\n</body>\n</html>\n")
 	return b.String()
+}
+
+func renderPreflightHTML(b *strings.Builder, report *PreflightReport) {
+	if report == nil {
+		return
+	}
+	fmt.Fprintf(b, "<section class=\"section\"><h2>使用前预检 / Preflight</h2>")
+	fmt.Fprintf(b, "<p><span class=\"hero-status %s\">%s</span> %s</p>", escapeHTML(statusClass(report.Status)), escapeHTML(report.Status), escapeHTML(report.Summary))
+	fmt.Fprintf(b, "<p class=\"muted\">%s</p>", escapeHTML(report.Boundary))
+	if len(report.Checks) > 0 {
+		fmt.Fprintf(b, "<div class=\"sections\">")
+		for _, check := range report.Checks {
+			fmt.Fprintf(b, "<div class=\"item\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(check.Name), escapeHTML(check.Status))
+			fmt.Fprintf(b, "<div>%s</div>", escapeHTML(check.Detail))
+			if check.Action != "" {
+				fmt.Fprintf(b, "<div class=\"action\">%s</div>", escapeHTML(check.Action))
+			}
+			fmt.Fprintf(b, "</div>")
+		}
+		fmt.Fprintf(b, "</div>")
+	}
+	fmt.Fprintf(b, "</section>\n")
+}
+
+func renderPackageLaneGuardHTML(b *strings.Builder, guard PackageLaneGuard) {
+	if guard.Status == "" {
+		return
+	}
+	fmt.Fprintf(b, "<section class=\"section\"><h2>主线保护 / Lane Guard</h2>")
+	fmt.Fprintf(b, "<p><span class=\"hero-status %s\">%s</span> %s</p>", escapeHTML(statusClass(guard.Status)), escapeHTML(guard.Status), escapeHTML(guard.RecommendedAction))
+	if guard.CurrentPackageID != "" {
+		fmt.Fprintf(b, "<p>当前主线：<span class=\"pill\">%s</span></p>", escapeHTML(guard.CurrentPackageID))
+	}
+	if guard.DoNotDispatchReason != "" {
+		fmt.Fprintf(b, "<p class=\"warn\">%s</p>", escapeHTML(guard.DoNotDispatchReason))
+	}
+	if len(guard.Warnings) > 0 {
+		fmt.Fprintf(b, "<ul>")
+		for _, warning := range guard.Warnings {
+			fmt.Fprintf(b, "<li>%s</li>", escapeHTML(warning))
+		}
+		fmt.Fprintf(b, "</ul>")
+	}
+	fmt.Fprintf(b, "</section>\n")
+}
+
+func renderTimelineHTML(b *strings.Builder, items []TimelineItem) {
+	if len(items) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "<section class=\"section\"><h2>时间线 / Timeline</h2>")
+	for _, item := range items {
+		title := humanTaskName(item.Title, item.ID)
+		if item.Kind == "routine" {
+			title = humanIdentifier(item.ID)
+		}
+		fmt.Fprintf(b, "<div class=\"item\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(title), escapeHTML(firstNonEmpty(item.Status, item.Kind)))
+		fmt.Fprintf(b, "<div class=\"meta\">kind=%s", escapeHTML(item.Kind))
+		if item.PackageID != "" {
+			fmt.Fprintf(b, " · package=%s", escapeHTML(item.PackageID))
+		}
+		if item.At != "" {
+			fmt.Fprintf(b, " · at=%s", escapeHTML(item.At))
+		}
+		fmt.Fprintf(b, "</div>")
+		if item.Note != "" {
+			fmt.Fprintf(b, "<div class=\"action\">%s</div>", escapeHTML(item.Note))
+		}
+		fmt.Fprintf(b, "</div>")
+	}
+	fmt.Fprintf(b, "</section>\n")
+}
+
+func preflightEvidenceLabel(report *PreflightReport) string {
+	if report == nil {
+		return ""
+	}
+	return report.EvidenceLabel
 }
 
 type humanProgressSummary struct {
@@ -2930,6 +3152,16 @@ func renderPackageSummaryHTML(b *strings.Builder, summary PackageSummary) {
 		if row.ReviewStatus != "" {
 			fmt.Fprintf(b, "<div class=\"meta\">external review: %s</div>", escapeHTML(row.ReviewStatus))
 		}
+		if row.ReviewDecision != "" {
+			fmt.Fprintf(b, "<div class=\"meta\">review decision: %s", escapeHTML(row.ReviewDecision))
+			if row.ReviewRequired {
+				fmt.Fprintf(b, " · required")
+			}
+			fmt.Fprintf(b, "</div>")
+		}
+		if row.ReviewNextAction != "" {
+			fmt.Fprintf(b, "<div class=\"action warn\">%s</div>", escapeHTML(row.ReviewNextAction))
+		}
 		if row.NextSuggestedAction != "" {
 			fmt.Fprintf(b, "<div class=\"action\">%s</div>", escapeHTML(row.NextSuggestedAction))
 		}
@@ -3004,9 +3236,9 @@ func statusClass(status string) string {
 	switch status {
 	case "blocked":
 		return "bad"
-	case "stale", "review-needed", "cleanup-needed":
+	case "stale", "review-needed", "cleanup-needed", "warning":
 		return "warn"
-	case "dispatch-possible", "active":
+	case "dispatch-possible", "active", "ready", "passed":
 		return "ok"
 	default:
 		return ""
@@ -7919,9 +8151,11 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	runtimeStatus := buildRuntimeStatusReport(ledger.Tasks, observations, pressure, observedAt)
 	jobSummary := buildJobSummary(ledger.Tasks, observations, counts)
 	packageSummary := buildPackageSummary(ledger.Tasks, observations, ledger.RoutineRuns)
+	laneGuard := buildPackageLaneGuard(packageSummary, jobSummary, pressure, normalizedDispatchMode(ledger.DispatchMode))
 	projectMap := inspectProjectMap(ledger.ProjectRoot)
+	timeline := buildTimeline(ledger.Tasks, observations, ledger.RoutineRuns, 12)
 	overall, actions := summarizeObservations(ledger, integration, counts, pressure)
-	return ObserveSummary{
+	summary := ObserveSummary{
 		Ledger:             ledgerPath,
 		Version:            ledger.Version,
 		ProjectRoot:        ledger.ProjectRoot,
@@ -7939,10 +8173,366 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		RuntimeStatus:      runtimeStatus,
 		JobSummary:         jobSummary,
 		PackageSummary:     packageSummary,
+		PackageLaneGuard:   laneGuard,
 		ProjectMap:         projectMap,
+		Timeline:           timeline,
 		Observations:       observations,
 		RecentRoutineRuns:  recentRoutineRuns(ledger.RoutineRuns, 5),
-	}, nil
+	}
+	return summary, nil
+}
+
+func buildPreflightReportFromSummary(ledgerPath string, eventsPath string, ledger Ledger, summary ObserveSummary, interval time.Duration, missedAfter time.Duration) *PreflightReport {
+	report := &PreflightReport{
+		SchemaVersion: 1,
+		Command:       "preflight",
+		GeneratedAt:   nowISO(),
+		Status:        "ready",
+		EvidenceLabel: "local/static",
+		Boundary:      "Preflight is local/static readiness evidence only. It does not prove Codex App heartbeat delivery, OS wake behavior, remote CI, production, device, payment, or provider state.",
+		RepoPath:      ledger.ProjectRoot,
+		LedgerPath:    ledgerPath,
+		Evidence: map[string][]string{
+			"direct":  {},
+			"proxy":   {},
+			"local":   {},
+			"blocked": {},
+		},
+		NextSuggestedAction: "If ready, leave the continuous Codex App heartbeat in place; if warning, fix or consciously accept the local/static risk before going hands-off.",
+	}
+	addPreflightCheck(report, preflightRepoCheck(summary))
+	addPreflightCheck(report, preflightLedgerCheck(ledger))
+	addPreflightCheck(report, preflightDispatchModeCheck(summary))
+	addPreflightCheck(report, preflightHeartbeatCheck(eventsPath, interval, missedAfter, summary.ObservedAt))
+	addPreflightCheck(report, preflightWatchdogCheck(ledger.ProjectRoot))
+	addPreflightCheck(report, preflightProjectMapCheck(summary.ProjectMap))
+	addPreflightCheck(report, preflightPackageLaneCheck(summary.PackageLaneGuard))
+	addPreflightCheck(report, preflightReviewPolicyCheck(summary.PackageSummary))
+	report.Summary = preflightSummary(report)
+	return report
+}
+
+func addPreflightCheck(report *PreflightReport, check PreflightCheck) {
+	report.Checks = append(report.Checks, check)
+	target := "local"
+	if check.Status == "blocked" {
+		target = "blocked"
+		report.Status = "blocked"
+		report.NeedsHuman = true
+	} else if check.Status == "warning" && report.Status != "blocked" {
+		report.Status = "warning"
+	}
+	if check.Action != "" {
+		report.RecommendedActions = append(report.RecommendedActions, check.Action)
+	}
+	report.Evidence[target] = append(report.Evidence[target], fmt.Sprintf("%s: %s", check.Name, check.Detail))
+}
+
+func preflightRepoCheck(summary ObserveSummary) PreflightCheck {
+	check := PreflightCheck{Name: "repo-git", Status: "passed", EvidenceLabel: "local/static", Detail: "git integration area is clean enough for local orchestration."}
+	if summary.Integration.Error != "" {
+		check.Status = "blocked"
+		check.Detail = "git status could not be inspected: " + summary.Integration.Error
+		check.Action = "Fix local git status inspection before dispatching or accepting workers."
+		return check
+	}
+	if summary.Integration.Dirty {
+		check.Status = "warning"
+		check.Detail = "integration checkout has uncommitted changes."
+		check.Action = "Classify dirty files before leaving the orchestrator unattended."
+		return check
+	}
+	if summary.Integration.StateDirOnly {
+		check.Detail = defaultStateDir + "/ has local orchestration state changes, but business files are clean."
+	}
+	return check
+}
+
+func preflightLedgerCheck(ledger Ledger) PreflightCheck {
+	check := PreflightCheck{Name: "ledger", Status: "passed", EvidenceLabel: "local/static", Detail: fmt.Sprintf("ledger version=%d tasks=%d.", ledger.Version, len(ledger.Tasks))}
+	if ledger.Version == 0 {
+		check.Status = "blocked"
+		check.Detail = "ledger is missing or has schemaVersion/version 0."
+		check.Action = "Run codex-orchestrator init or repair the ledger before dispatching workers."
+		return check
+	}
+	if len(ledger.Tasks) == 0 {
+		check.Status = "warning"
+		check.Detail = "ledger has no tasks yet; first dispatch must record package/task metadata immediately."
+		check.Action = "Record package lane and dispatch metadata before relying on heartbeat recovery."
+	}
+	return check
+}
+
+func preflightDispatchModeCheck(summary ObserveSummary) PreflightCheck {
+	mode := normalizedDispatchMode(summary.DispatchMode)
+	check := PreflightCheck{Name: "dispatch-mode", Status: "passed", EvidenceLabel: "local/static", Detail: "dispatch mode is active."}
+	switch mode {
+	case "drain", "paused":
+		check.Status = "warning"
+		check.Detail = "dispatch mode is " + mode + "; the orchestrator should not start new workers."
+		check.Action = "Switch run-mode to active only when you want unattended dispatch to continue."
+	default:
+		check.Detail = "dispatch mode is " + mode + "."
+	}
+	return check
+}
+
+func preflightHeartbeatCheck(eventsPath string, interval time.Duration, missedAfter time.Duration, observedAt string) PreflightCheck {
+	status := inspectHeartbeatGap(eventsPath, interval, missedAfter, observedAt)
+	check := PreflightCheck{Name: "heartbeat-gap", Status: "passed", EvidenceLabel: "local/static", Detail: "recent heartbeat events are within the configured missed threshold."}
+	if status.Status == "unknown" {
+		check.Status = "warning"
+		check.Detail = "no prior heartbeat event was found in the local events log."
+		check.Action = "After creating an App heartbeat, let one cycle run or append one heartbeat event before depending on missed-wakeup detection."
+		return check
+	}
+	if status.Status == "missed" {
+		check.Status = "warning"
+		check.Detail = fmt.Sprintf("heartbeat gap=%s estimatedMissedRuns=%d.", status.Gap, status.EstimatedMissedRuns)
+		check.Action = "Surface missed heartbeat risk before normal dispatch/review work; inspect App automation and OS sleep state."
+		return check
+	}
+	if status.Gap != "" {
+		check.Detail = "heartbeat gap=" + status.Gap + "."
+	}
+	return check
+}
+
+func preflightWatchdogCheck(repoPath string) PreflightCheck {
+	check := PreflightCheck{Name: "watchdog", Status: "passed", EvidenceLabel: "local/static", Detail: "macOS watchdog local/static status has no immediate warning."}
+	watchdog, err := inspectWatchdogStatus(repoPath, "")
+	if err != nil {
+		check.Status = "warning"
+		check.Detail = "watchdog status could not be inspected: " + err.Error()
+		check.Action = "Inspect watchdog setup manually if missed wakeups matter."
+		return check
+	}
+	if !watchdog.Installed {
+		check.Status = "warning"
+		check.Detail = "watchdog LaunchAgent is not installed for this repo."
+		check.Action = "Install the local macOS watchdog if OS sleep or missed App heartbeat gaps matter."
+		return check
+	}
+	if watchdog.LoadedStatus != "loaded" {
+		check.Status = "warning"
+		check.Detail = "watchdog plist exists but loaded status is " + watchdog.LoadedStatus + "."
+		check.Action = "Load or reinstall the watchdog before relying on external missed-wakeup checks."
+		return check
+	}
+	if !watchdog.ReportExists {
+		check.Status = "warning"
+		check.Detail = "watchdog is installed but no heartbeat report exists yet."
+		check.Action = "Wait for launchd or run the watchdog once before relying on its status."
+		return check
+	}
+	if watchdog.HeartbeatStatus != nil && watchdog.HeartbeatStatus.Status == "missed" {
+		check.Status = "warning"
+		check.Detail = "watchdog report indicates a missed heartbeat."
+		check.Action = "Treat missed heartbeat as a local/static alert before dispatching more work."
+		return check
+	}
+	return check
+}
+
+func preflightProjectMapCheck(status ProjectMapStatus) PreflightCheck {
+	check := PreflightCheck{Name: "project-map", Status: "passed", EvidenceLabel: "local/static", Detail: "project map is present."}
+	if status.Status == "missing" {
+		check.Status = "warning"
+		check.Detail = "project map is missing."
+		check.Action = "Create or point to a project map before a long first orchestration run."
+	} else if status.Path != "" {
+		check.Detail = "project map path=" + status.Path + "."
+	}
+	return check
+}
+
+func preflightPackageLaneCheck(guard PackageLaneGuard) PreflightCheck {
+	check := PreflightCheck{Name: "package-lane", Status: "passed", EvidenceLabel: "local/static", Detail: "package lane guard is passed."}
+	if guard.Status == "" {
+		return check
+	}
+	check.Status = guard.Status
+	check.Detail = guard.RecommendedAction
+	if len(guard.Warnings) > 0 {
+		check.Detail = strings.Join(guard.Warnings, " ")
+	}
+	if guard.Status == "warning" || guard.Status == "blocked" {
+		check.Action = guard.RecommendedAction
+	}
+	return check
+}
+
+func preflightReviewPolicyCheck(summary PackageSummary) PreflightCheck {
+	missing := []string{}
+	for _, row := range summary.Rows {
+		if row.ReviewRequired && packageExternalReviewMissing(row.ReviewStatus) {
+			missing = append(missing, row.ID)
+		}
+	}
+	check := PreflightCheck{Name: "external-review-policy", Status: "passed", EvidenceLabel: "local/static", Detail: "no package currently requires missing external review evidence."}
+	if len(missing) > 0 {
+		check.Status = "warning"
+		check.Detail = "package(s) require external review evidence: " + strings.Join(missing, ", ")
+		check.Action = "Generate review pack(s), run/import reviewer output, and keep proxy/advisory review status explicit before package closeout."
+	}
+	return check
+}
+
+func preflightSummary(report *PreflightReport) string {
+	counts := map[string]int{}
+	for _, check := range report.Checks {
+		counts[check.Status]++
+	}
+	switch report.Status {
+	case "blocked":
+		return fmt.Sprintf("blocked: %d check(s) blocked, %d warning(s).", counts["blocked"], counts["warning"])
+	case "warning":
+		return fmt.Sprintf("warning: %d warning(s), no blocked checks.", counts["warning"])
+	default:
+		return "ready: all local/static preflight checks passed."
+	}
+}
+
+func renderPreflightMarkdown(report PreflightReport) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# codex-orchestrator preflight\n\n")
+	fmt.Fprintf(&b, "- generatedAt: `%s`\n", report.GeneratedAt)
+	fmt.Fprintf(&b, "- status: `%s`\n", report.Status)
+	fmt.Fprintf(&b, "- evidenceLabel: `%s`\n", report.EvidenceLabel)
+	fmt.Fprintf(&b, "- repoPath: `%s`\n", report.RepoPath)
+	fmt.Fprintf(&b, "- ledgerPath: `%s`\n", report.LedgerPath)
+	fmt.Fprintf(&b, "- summary: %s\n", report.Summary)
+	fmt.Fprintf(&b, "- boundary: %s\n", report.Boundary)
+	fmt.Fprintf(&b, "\n## Checks\n\n")
+	for _, check := range report.Checks {
+		fmt.Fprintf(&b, "- `%s`: `%s` (%s) - %s\n", check.Name, check.Status, check.EvidenceLabel, check.Detail)
+		if check.Action != "" {
+			fmt.Fprintf(&b, "  - action: %s\n", check.Action)
+		}
+	}
+	if len(report.RecommendedActions) > 0 {
+		fmt.Fprintf(&b, "\n## Recommended Actions\n\n")
+		for _, action := range uniqueSortedStrings(report.RecommendedActions) {
+			fmt.Fprintf(&b, "- %s\n", action)
+		}
+	}
+	fmt.Fprintf(&b, "\n## Next\n\n%s\n", report.NextSuggestedAction)
+	return b.String()
+}
+
+func printPreflightReport(report *PreflightReport) {
+	fmt.Printf("Preflight: %s (%s)\n", report.Status, report.Summary)
+	fmt.Printf("Evidence: %s\n", report.EvidenceLabel)
+	fmt.Printf("Boundary: %s\n", report.Boundary)
+	for _, check := range report.Checks {
+		fmt.Printf("- %s: %s - %s\n", check.Name, check.Status, check.Detail)
+		if check.Action != "" {
+			fmt.Printf("  action: %s\n", check.Action)
+		}
+	}
+	fmt.Printf("Next: %s\n", report.NextSuggestedAction)
+}
+
+func buildPackageLaneGuard(summary PackageSummary, jobs JobSummary, pressure ReviewPressure, dispatchMode string) PackageLaneGuard {
+	guard := PackageLaneGuard{
+		EvidenceLabel:     "local/static",
+		Status:            "passed",
+		RecommendedAction: "Continue the current package lane; do not dispatch unrelated filler work.",
+	}
+	mode := normalizedDispatchMode(dispatchMode)
+	if mode == "drain" || mode == "paused" {
+		guard.DoNotDispatchReason = "run-mode=" + mode
+		guard.RecommendedAction = "Do not dispatch new workers while run-mode is " + mode + "."
+	}
+	for _, row := range summary.Rows {
+		if packageLaneActive(row.Status) {
+			guard.ActivePackageIDs = append(guard.ActivePackageIDs, row.ID)
+		}
+	}
+	sort.Strings(guard.ActivePackageIDs)
+	if len(guard.ActivePackageIDs) > 0 {
+		guard.CurrentPackageID = guard.ActivePackageIDs[0]
+	}
+	if jobs.Total > 0 && summary.Total == 0 {
+		guard.Status = "warning"
+		guard.Warnings = append(guard.Warnings, "workers exist but no packageId is recorded, so progress will look scattered.")
+		guard.RecommendedAction = "Assign related worker tasks to a packageId before continuing unattended orchestration."
+		return guard
+	}
+	if len(guard.ActivePackageIDs) > 1 {
+		guard.Status = "warning"
+		guard.Warnings = append(guard.Warnings, "multiple active package lanes: "+strings.Join(guard.ActivePackageIDs, ", "))
+		guard.RecommendedAction = "Finish or explicitly block one package lane before dispatching across another lane."
+		return guard
+	}
+	if mode == "active" && pressure.AvailableSlots > 0 && guard.CurrentPackageID != "" {
+		guard.Status = "warning"
+		guard.Warnings = append(guard.Warnings, "available dispatch slots exist, but a package lane is already active.")
+		guard.RecommendedAction = "Only fill an available slot with work that belongs to package `" + guard.CurrentPackageID + "`."
+	}
+	if mode == "drain" || mode == "paused" {
+		guard.Status = "passed"
+	}
+	return guard
+}
+
+func packageLaneActive(status string) bool {
+	switch status {
+	case "blocked", "review-needed", "cleanup-needed", "attention-needed", "active":
+		return true
+	default:
+		return false
+	}
+}
+
+func buildTimeline(tasks []Task, observations []Observation, routineRuns []RoutineRun, limit int) []TimelineItem {
+	items := []TimelineItem{}
+	for index, observation := range observations {
+		task := tasks[index]
+		title := task.Title
+		if title == task.ID {
+			title = ""
+		}
+		items = append(items, TimelineItem{
+			At:        observation.LastUpdatedAt,
+			Kind:      "task",
+			ID:        task.ID,
+			PackageID: task.PackageID,
+			Status:    observation.Status,
+			Title:     title,
+			Note:      firstNonEmpty(observation.Action, observation.Note),
+		})
+	}
+	for _, run := range routineRuns {
+		items = append(items, TimelineItem{
+			At:        run.At,
+			Kind:      "routine",
+			ID:        run.RoutineID,
+			PackageID: run.PackageID,
+			Status:    run.Status,
+			Note:      firstNonEmpty(run.NextSuggestedAction, run.BlockedReason),
+		})
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].At == "" && items[j].At != "" {
+			return false
+		}
+		if items[i].At != "" && items[j].At == "" {
+			return true
+		}
+		if items[i].At != items[j].At {
+			return items[i].At > items[j].At
+		}
+		if items[i].Kind != items[j].Kind {
+			return items[i].Kind < items[j].Kind
+		}
+		return items[i].ID < items[j].ID
+	})
+	if limit > 0 && len(items) > limit {
+		items = items[:limit]
+	}
+	return items
 }
 
 func taskBudgetFromFlags(maxRuntimeMinutes int, reviewBudgetMinutes int, note string) *BudgetMetadata {
@@ -8191,6 +8781,7 @@ func buildPackageSummary(tasks []Task, observations []Observation, routineRuns [
 		if row.ReviewStatus == "" {
 			row.ReviewStatus = "external-review-not-recorded"
 		}
+		applyPackageReviewPolicy(row)
 		rows = append(rows, *row)
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -8228,6 +8819,104 @@ func packageReviewStatus(current string, run RoutineRun) string {
 		return strings.Join(parts, ", ")
 	}
 	return current + ", " + status
+}
+
+func applyPackageReviewPolicy(row *PackageStatusItem) {
+	risk := packageReviewRisk(*row)
+	decision := reviewDecisionForRisk(defaultReviewPolicy(), risk, row.TaskCount)
+	row.ReviewDecision = decision
+	row.ReviewRequired = decision == "one-reviewer" || decision == "two-reviewers"
+	if !row.ReviewRequired {
+		return
+	}
+	if !packageExternalReviewMissing(row.ReviewStatus) {
+		return
+	}
+	row.ReviewNextAction = fmt.Sprintf("Generate a package review pack and run/import the required reviewer evidence before treating `%s` as fully closed.", row.ID)
+	if row.Status == "cleaned" || row.Status == "review-only" {
+		row.Status = "review-needed"
+		row.NextSuggestedAction = row.ReviewNextAction
+	}
+}
+
+func packageExternalReviewMissing(reviewStatus string) bool {
+	reviewStatus = strings.TrimSpace(strings.ToLower(reviewStatus))
+	return reviewStatus == "" || reviewStatus == "external-review-not-recorded"
+}
+
+func packageReviewRisk(row PackageStatusItem) string {
+	return packageReviewRiskWithPolicy(row, defaultReviewPolicy())
+}
+
+func packageReviewRiskWithPolicy(row PackageStatusItem, policy ReviewPolicy) string {
+	id := normalizedRiskText(row.ID)
+	for _, requirement := range policy.Trigger.RequireForRisk {
+		if riskRequirementMatchesPackageID(requirement, id) {
+			return "high"
+		}
+	}
+	// Domain aliases intentionally stay narrower than arbitrary substring
+	// matching. In particular, do not match bare "pre"; it would catch
+	// unrelated words such as preview or preflight.
+	for _, alias := range []string{
+		"protocol", "proto", "schema", "permission", "rbac", "pax", "printer",
+		"device", "sms", "email", "webhook", "prod",
+	} {
+		if riskRequirementMatchesPackageID(alias, id) {
+			return "high"
+		}
+	}
+	if row.TaskCount >= policy.Trigger.MinTasksInPackage {
+		return "medium"
+	}
+	return "low"
+}
+
+func riskRequirementMatchesPackageID(requirement string, normalizedID string) bool {
+	requirement = normalizedRiskText(requirement)
+	if requirement == "" || normalizedID == "" {
+		return false
+	}
+	if strings.Contains(normalizedID, requirement) {
+		return true
+	}
+	parts := strings.Fields(requirement)
+	if len(parts) <= 1 {
+		return riskTokenPresent(normalizedID, requirement)
+	}
+	for _, part := range parts {
+		if !riskTokenPresent(normalizedID, part) {
+			return false
+		}
+	}
+	return true
+}
+
+func riskTokenPresent(normalizedID string, token string) bool {
+	for _, part := range strings.Fields(normalizedID) {
+		if part == token {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizedRiskText(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var b strings.Builder
+	lastSpace := true
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastSpace = false
+			continue
+		}
+		if !lastSpace {
+			b.WriteByte(' ')
+			lastSpace = true
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func packageProgressLabel(row PackageStatusItem) string {
@@ -9406,6 +10095,13 @@ func humanRiskLines(summary ObserveSummary) []string {
 	if summary.ProjectMap.Status == "missing" {
 		lines = append(lines, "缺少 project map；首次编排前最好补一份项目地图。")
 	}
+	if summary.PackageLaneGuard.Status == "warning" || summary.PackageLaneGuard.Status == "blocked" {
+		lines = append(lines, "主线保护提示："+summary.PackageLaneGuard.RecommendedAction)
+		lines = append(lines, summary.PackageLaneGuard.Warnings...)
+	}
+	if summary.Preflight != nil && summary.Preflight.Status != "ready" {
+		lines = append(lines, "preflight="+summary.Preflight.Status+"："+summary.Preflight.Summary)
+	}
 	if summary.Integration.Dirty {
 		lines = append(lines, "集成区有未提交变化，派发/合并前需要分类。")
 	}
@@ -9524,6 +10220,14 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- runtimeStatus: `%s`\n", summary.RuntimeStatus.Summary)
 	fmt.Fprintf(&b, "- jobs: `total=%d %s`\n", summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
 	fmt.Fprintf(&b, "- packages: `total=%d`\n", summary.PackageSummary.Total)
+	fmt.Fprintf(&b, "- packageLaneGuard: `%s`", summary.PackageLaneGuard.Status)
+	if summary.PackageLaneGuard.CurrentPackageID != "" {
+		fmt.Fprintf(&b, " currentPackage=`%s`", summary.PackageLaneGuard.CurrentPackageID)
+	}
+	fmt.Fprintf(&b, "\n")
+	if summary.Preflight != nil {
+		fmt.Fprintf(&b, "- preflight: `%s` - %s\n", summary.Preflight.Status, summary.Preflight.Summary)
+	}
 	fmt.Fprintf(&b, "- projectMap: `%s`", summary.ProjectMap.Status)
 	if summary.ProjectMap.Path != "" {
 		fmt.Fprintf(&b, " path=`%s`", summary.ProjectMap.Path)
@@ -9559,6 +10263,9 @@ func renderSummary(summary ObserveSummary) string {
 		}
 	}
 	renderRuntimeStatusMarkdown(&b, summary.RuntimeStatus)
+	renderPackageLaneGuardMarkdown(&b, summary.PackageLaneGuard)
+	renderPreflightMarkdownInto(&b, summary.Preflight)
+	renderTimelineMarkdown(&b, summary.Timeline)
 	renderPackageSummaryMarkdown(&b, summary.PackageSummary)
 	renderJobSummaryMarkdown(&b, summary.JobSummary)
 	renderProjectMapMarkdown(&b, summary.ProjectMap)
@@ -9663,6 +10370,64 @@ func renderRuntimeStatusCategoryMarkdown(b *strings.Builder, title string, items
 	}
 }
 
+func renderPackageLaneGuardMarkdown(b *strings.Builder, guard PackageLaneGuard) {
+	if guard.Status == "" {
+		return
+	}
+	fmt.Fprintf(b, "\n## Package Lane Guard\n\n")
+	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", guard.EvidenceLabel)
+	fmt.Fprintf(b, "- status: `%s`\n", guard.Status)
+	if guard.CurrentPackageID != "" {
+		fmt.Fprintf(b, "- currentPackageId: `%s`\n", guard.CurrentPackageID)
+	}
+	if len(guard.ActivePackageIDs) > 0 {
+		fmt.Fprintf(b, "- activePackageIds: `%s`\n", strings.Join(guard.ActivePackageIDs, ", "))
+	}
+	if guard.DoNotDispatchReason != "" {
+		fmt.Fprintf(b, "- doNotDispatchReason: `%s`\n", guard.DoNotDispatchReason)
+	}
+	fmt.Fprintf(b, "- recommendedAction: %s\n", guard.RecommendedAction)
+	for _, warning := range guard.Warnings {
+		fmt.Fprintf(b, "- warning: %s\n", warning)
+	}
+}
+
+func renderPreflightMarkdownInto(b *strings.Builder, report *PreflightReport) {
+	if report == nil {
+		return
+	}
+	fmt.Fprintf(b, "\n## Preflight\n\n")
+	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", report.EvidenceLabel)
+	fmt.Fprintf(b, "- status: `%s`\n", report.Status)
+	fmt.Fprintf(b, "- summary: %s\n", report.Summary)
+	for _, check := range report.Checks {
+		fmt.Fprintf(b, "- `%s`: `%s` - %s\n", check.Name, check.Status, check.Detail)
+		if check.Action != "" {
+			fmt.Fprintf(b, "  - action: %s\n", check.Action)
+		}
+	}
+}
+
+func renderTimelineMarkdown(b *strings.Builder, items []TimelineItem) {
+	if len(items) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n## Timeline\n\n")
+	for _, item := range items {
+		fmt.Fprintf(b, "- `%s` `%s` `%s`", item.At, item.Kind, item.ID)
+		if item.PackageID != "" {
+			fmt.Fprintf(b, " package=`%s`", item.PackageID)
+		}
+		if item.Status != "" {
+			fmt.Fprintf(b, " status=`%s`", item.Status)
+		}
+		if item.Note != "" {
+			fmt.Fprintf(b, " - %s", item.Note)
+		}
+		fmt.Fprintf(b, "\n")
+	}
+}
+
 func renderPackageSummaryMarkdown(b *strings.Builder, summary PackageSummary) {
 	fmt.Fprintf(b, "\n## Package Summary\n\n")
 	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", summary.EvidenceLabel)
@@ -9671,17 +10436,19 @@ func renderPackageSummaryMarkdown(b *strings.Builder, summary PackageSummary) {
 		fmt.Fprintf(b, "- no packageId recorded yet; use `--package-id` when recording related worker tasks.\n")
 		return
 	}
-	fmt.Fprintf(b, "\n| Package | Status | Progress | External Review | Counts | Updated | Next |\n")
-	fmt.Fprintf(b, "|---|---|---|---|---|---|---|\n")
+	fmt.Fprintf(b, "\n| Package | Status | Progress | External Review | Review Decision | Counts | Updated | Next |\n")
+	fmt.Fprintf(b, "|---|---|---|---|---|---|---|---|\n")
 	for _, row := range summary.Rows {
-		fmt.Fprintf(b, "| `%s` | `%s` | %s | `%s` | `%s` | `%s` | %s |\n",
+		next := firstNonEmpty(row.ReviewNextAction, row.NextSuggestedAction)
+		fmt.Fprintf(b, "| `%s` | `%s` | %s | `%s` | `%s` | `%s` | `%s` | %s |\n",
 			row.ID,
 			row.Status,
 			escapeMarkdownTable(firstNonEmpty(row.HumanSummary, row.ProgressLabel)),
 			escapeMarkdownTable(row.ReviewStatus),
+			escapeMarkdownTable(row.ReviewDecision),
 			escapeMarkdownTable(formatIntMap(row.Counts)),
 			row.LatestUpdatedAt,
-			escapeMarkdownTable(row.NextSuggestedAction),
+			escapeMarkdownTable(next),
 		)
 	}
 }
@@ -9736,6 +10503,12 @@ func printPackageSummary(summary PackageSummary) {
 	fmt.Println("Packages:")
 	for _, row := range summary.Rows {
 		fmt.Printf("- %s: %s tasks=%d counts=%s\n", row.ID, row.Status, row.TaskCount, formatIntMap(row.Counts))
+		if row.ReviewDecision != "" {
+			fmt.Printf("  review: decision=%s required=%t status=%s\n", row.ReviewDecision, row.ReviewRequired, row.ReviewStatus)
+		}
+		if row.ReviewNextAction != "" {
+			fmt.Printf("  review-next: %s\n", row.ReviewNextAction)
+		}
 		if row.NextSuggestedAction != "" {
 			fmt.Printf("  next: %s\n", row.NextSuggestedAction)
 		}

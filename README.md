@@ -376,6 +376,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
+./codex-orchestrator preflight --repo . --write-summary .codex-orchestrator/preflight.md
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
 ./codex-orchestrator watchdog status --repo .
@@ -415,7 +416,16 @@ package-level active/review/blocked/cleanup state, completion progress, external
 review status, and the next suggested package action. This is the project
 dashboard layer: a human can see which product lane is active, how many workers
 are already closed, what is waiting for review, and why the next action still
-belongs to the same package. `observe`, `status`, and heartbeat summaries also expose a read-only
+belongs to the same package. `packageSummary` also applies the local/static
+review policy: when a package has enough workers or matches higher-risk
+keywords such as contract, DB, auth/security, payment, provider, hardware, or
+pre/prod work, the status output marks whether an external package review is
+required and what review pack/import action is next. `observe`, `status`, and
+heartbeat summaries also expose a `packageLaneGuard` block that warns when
+workers are ungrouped, multiple package lanes are active, or an available slot
+should only be filled with work from the current lane. They also include a
+compact `timeline` so a project owner can see the recent task/routine sequence
+without reading raw ledger events. `observe`, `status`, and heartbeat summaries also expose a read-only
 `projectMap` signal. The helper checks for common project-map files such as
 `docs/CODEBASE_MAP.md`; when none exists, it asks Codex App to generate or read
 a concise map before first orchestration.
@@ -432,7 +442,11 @@ a human-readable `当前进度` panel that summarizes current status, the active
 feature package, recently completed work, running or waiting work, required
 human action, next step, and risk/evidence boundaries before listing detailed
 task tables. The package section now renders product-lane cards with progress,
-review status, member task queues, and package-specific next actions. It
+review status, member task queues, package-specific next actions, and review
+policy requirements. Status pages also show a `Preflight` block, a `Lane Guard`
+block, and a short `Timeline` block before the raw job tables, so a human can
+answer "can I walk away?", "are we still in one product module?", and "what
+just happened?" from the same page. It
 intentionally keeps dispatch-slot and raw ledger jargon below the first screen.
 When `run-mode` is `drain` or `paused`, the status page labels dispatch slots
 as non-dispatchable even if raw capacity is available, so the page does not
@@ -457,10 +471,23 @@ files instead of the automation prompt, and run the helper heartbeat with
 missed-run detection on every wakeup:
 
 ```bash
+./codex-orchestrator preflight --repo . \
+  --write-summary .codex-orchestrator/preflight.md \
+  --write-report .codex-orchestrator/preflight.json
+
 ./codex-orchestrator heartbeat --count 1 --interval 20m --missed-after 45m \
   --write-report .codex-orchestrator/heartbeat-report.json \
   --write-summary .codex-orchestrator/heartbeat-summary.md
 ```
+
+`preflight` is the one-shot "can I leave this running?" check. It inspects
+repo cleanliness, ledger shape, dispatch mode, last heartbeat gap, macOS
+watchdog status, project map presence, package-lane health, and missing
+external review evidence. It is local/static only; warnings should be surfaced
+before leaving the orchestrator unattended, but they do not prove Codex App,
+OS, or runtime behavior. By default warnings print and exit successfully so the
+command can be used for status snapshots; add `--fail-on-warning` when using it
+as a shell gate. Defaults are `--interval 20m` and `--missed-after 45m`.
 
 If a missed heartbeat is reported, surface it before continuing normal
 review/dispatch work. This is local/static evidence only: it can show that

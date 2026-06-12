@@ -1307,6 +1307,146 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	}
 }
 
+func TestPreflightReportsHandsOffReadinessWarnings(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStdout(t, func() error {
+		return cmdPreflight([]string{"--ledger", ledger, "--json"})
+	})
+	var report PreflightReport
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatalf("expected preflight JSON, got %q: %v", out, err)
+	}
+	if report.Status != "warning" || report.EvidenceLabel != "local/static" {
+		t.Fatalf("expected local/static warning preflight, got %#v", report)
+	}
+	checks := map[string]PreflightCheck{}
+	for _, check := range report.Checks {
+		checks[check.Name] = check
+	}
+	for _, name := range []string{"repo-git", "ledger", "heartbeat-gap", "watchdog", "project-map", "package-lane", "external-review-policy"} {
+		if _, ok := checks[name]; !ok {
+			t.Fatalf("expected preflight check %q in %#v", name, report.Checks)
+		}
+	}
+	if checks["watchdog"].Status != "warning" || checks["heartbeat-gap"].Status != "warning" {
+		t.Fatalf("expected watchdog and heartbeat warnings, got watchdog=%#v heartbeat=%#v", checks["watchdog"], checks["heartbeat-gap"])
+	}
+
+	reportPath := filepath.Join(root, "preflight.json")
+	summaryPath := filepath.Join(root, "preflight.md")
+	if err := cmdPreflight([]string{"--ledger", ledger, "--write-report", reportPath, "--write-summary", summaryPath}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(reportPath); err != nil {
+		t.Fatalf("expected preflight JSON report: %v", err)
+	}
+	data, err := os.ReadFile(summaryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "codex-orchestrator preflight") || !strings.Contains(string(data), "watchdog") {
+		t.Fatalf("expected preflight summary, got:\n%s", string(data))
+	}
+	if err := cmdPreflight([]string{"--ledger", ledger, "--fail-on-warning"}); err == nil {
+		t.Fatal("expected --fail-on-warning to fail on warning status")
+	}
+	if err := cmdPreflight([]string{"--ledger", ledger, "--stale-after", "-1s"}); err == nil {
+		t.Fatal("expected negative --stale-after to fail")
+	}
+}
+
+func TestPackageSummaryReviewPolicyLaneGuardAndTimeline(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"PKG-A", "PKG-B", "PKG-C"} {
+		if err := cmdRecordTask([]string{
+			"--ledger", ledger,
+			"--id", id,
+			"--package-id", "PKG-CHECKOUT",
+			"--pending-worktree-id", "pwt_" + strings.ToLower(id),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "cleanup", "--task-id", id, "--status", "cleaned", "--note", "package task cleaned"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summary.PackageSummary.Rows) != 1 {
+		t.Fatalf("expected one package row, got %#v", summary.PackageSummary.Rows)
+	}
+	row := summary.PackageSummary.Rows[0]
+	if !row.ReviewRequired || row.ReviewDecision != "one-reviewer" || row.ReviewNextAction == "" {
+		t.Fatalf("expected package review requirement, got %#v", row)
+	}
+	if row.Status != "review-needed" {
+		t.Fatalf("expected cleaned package to remain review-needed until external review is recorded, got %#v", row)
+	}
+	if summary.PackageLaneGuard.Status != "warning" || !strings.Contains(summary.PackageLaneGuard.RecommendedAction, "PKG-CHECKOUT") {
+		t.Fatalf("expected lane guard warning for current package slot discipline, got %#v", summary.PackageLaneGuard)
+	}
+	if len(summary.Timeline) == 0 {
+		t.Fatalf("expected timeline items, got %#v", summary.Timeline)
+	}
+	rendered := renderSummary(summary)
+	for _, want := range []string{"## Package Lane Guard", "## Timeline", "one-reviewer", "Generate a package review pack"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected rendered summary to include %q:\n%s", want, rendered)
+		}
+	}
+	statusSummaryPath := filepath.Join(root, "status.md")
+	if err := cmdStatus([]string{"--ledger", ledger, "--write-summary", statusSummaryPath}); err != nil {
+		t.Fatal(err)
+	}
+	statusSummaryData, err := os.ReadFile(statusSummaryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(statusSummaryData), "## Preflight") {
+		t.Fatalf("expected status summary to include preflight:\n%s", string(statusSummaryData))
+	}
+
+	statusJSON := captureStdout(t, func() error {
+		return cmdStatus([]string{"--ledger", ledger, "--json"})
+	})
+	var payload struct {
+		PackageSummary   PackageSummary   `json:"packageSummary"`
+		PackageLaneGuard PackageLaneGuard `json:"packageLaneGuard"`
+		Preflight        *PreflightReport `json:"preflight"`
+		Timeline         []TimelineItem   `json:"timeline"`
+	}
+	if err := json.Unmarshal([]byte(statusJSON), &payload); err != nil {
+		t.Fatalf("expected status JSON, got %q: %v", statusJSON, err)
+	}
+	if payload.Preflight == nil || len(payload.Timeline) == 0 || payload.PackageLaneGuard.Status == "" || !payload.PackageSummary.Rows[0].ReviewRequired {
+		t.Fatalf("expected status JSON to expose new surfaces, got %#v", payload)
+	}
+
+	if packageReviewRisk(PackageStatusItem{ID: "preview-dashboard", TaskCount: 1}) != "low" {
+		t.Fatal("expected preview package not to be promoted by bare pre substring")
+	}
+	if packageReviewRisk(PackageStatusItem{ID: "pre-prod-readback", TaskCount: 1}) != "high" {
+		t.Fatal("expected pre-prod package to be high risk")
+	}
+	if statusClass("ready") != "ok" || statusClass("passed") != "ok" || statusClass("warning") != "warn" {
+		t.Fatalf("expected status class mappings, got ready=%q passed=%q warning=%q", statusClass("ready"), statusClass("passed"), statusClass("warning"))
+	}
+}
+
 func TestStatusAtAGlanceLinesCoverAttentionBranches(t *testing.T) {
 	dirty := ObserveSummary{
 		Integration: IntegrationState{Dirty: true},

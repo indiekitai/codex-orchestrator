@@ -150,8 +150,16 @@ active/review/blocked/cleanup state, member task counts, completion progress,
 external review status, and the next suggested package action. This is the
 dashboard layer for "one feature package at a time": it should show whether a
 lane is still running, waiting for review, blocked, or ready to close before
-the orchestrator fills capacity with unrelated work. This is still local/static
-ledger and git evidence; it does not attach to live Codex App sessions.
+the orchestrator fills capacity with unrelated work. Package rows also expose
+the local/static review policy decision. When a package has enough related
+workers or matches higher-risk package keywords, `packageSummary` tells the
+orchestrator that a package review pack and imported reviewer evidence are
+needed before closeout. Reports also include `packageLaneGuard`, which warns
+about ungrouped workers, multiple active package lanes, and available slots that
+should only be used for the current package. A compact `timeline` gives the
+recent task/routine sequence without reading raw ledger events. This is still
+local/static ledger and git evidence; it does not attach to live Codex App
+sessions.
 
 Markdown and HTML status outputs start with a human-first `当前进度` section,
 not raw ledger fields. It answers the questions a project owner usually has:
@@ -161,7 +169,10 @@ next safe step, and the evidence boundary. Detailed runtime, package, and job
 tables remain below that summary for the orchestrator or reviewer. The package
 section is deliberately closer to a product dashboard than a raw job table: it
 shows progress like `3/5 worker 已收口`, external review status, waiting queues,
-and a package-specific next action.
+and a package-specific next action. The HTML and Markdown surfaces also include
+Preflight, Lane Guard, and Timeline sections so the owner can quickly answer
+"can I walk away?", "are we still in one product module?", and "what happened
+recently?"
 When the ledger run mode is `drain` or `paused`, HTML status renders dispatch
 slots as "do not dispatch" even when the raw available slot count is greater
 than zero. Untracked `.codex-orchestrator/` files are separated as local
@@ -305,6 +316,24 @@ unknown timing evidence, but dispatch, pause, merge, cleanup, or worker-control
 decisions remain with the Codex App orchestrator and human reviewer.
 
 ## macOS External Watchdog
+
+Before leaving a project unattended, run the one-shot local/static preflight:
+
+```bash
+codex-orchestrator preflight --repo /path/to/project
+codex-orchestrator preflight --repo /path/to/project \
+  --write-report .codex-orchestrator/preflight.json \
+  --write-summary .codex-orchestrator/preflight.md
+```
+
+`preflight` checks repo cleanliness, ledger shape, dispatch mode, recent
+heartbeat gap, watchdog status, project-map presence, package-lane health, and
+missing external-review evidence. A warning does not prove Codex App or OS
+failure; it is a local/static signal to surface before an unattended run.
+Warnings exit successfully by default so preflight can write status artifacts
+without failing the monitor turn. Add `--fail-on-warning` when using it as a
+shell gate. The default heartbeat assumptions are `--interval 20m` and
+`--missed-after 45m`.
 
 For hands-off runs, Codex App heartbeat is still the primary orchestrator
 wakeup. The helper can add an OS-level warning layer so a missed App heartbeat
