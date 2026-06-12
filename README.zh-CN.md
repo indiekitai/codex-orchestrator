@@ -374,6 +374,23 @@ server、daemon、scheduler，也不会 merge、push、cleanup 或监控 runtime
 --write-summary .codex-orchestrator/status.md`，把固定状态页和摘要刷新出来，并在中文
 汇报里带上路径。这样用户不需要自己记命令，也不用猜“现在到底跑到哪一步”。
 
+无人看守不只是晚上。只要用户安排完任务就离开，比如午饭、开会、出门、下班，
+都要按同一套 readiness 检查：确认电脑/会话不太可能睡眠，或者把睡眠/电源状态标成
+blocked reliability risk；确认通用 Codex App heartbeat automation 绑定到正确的
+thread/repo/ledger；动态 worker 状态写进 ledger/status 文件，不写进 automation prompt；
+每次唤醒都跑一次带 missed-run 检测的 helper heartbeat：
+
+```bash
+./codex-orchestrator heartbeat --count 1 --interval 20m --missed-after 45m \
+  --write-report .codex-orchestrator/heartbeat-report.json \
+  --write-summary .codex-orchestrator/heartbeat-summary.md
+```
+
+如果检测到 missed heartbeat，先在状态汇报里说清楚，再继续正常 review/dispatch。这只
+是 local/static 证据：它能说明计划检查漏跑了，但不能证明原因到底是 Codex App
+automation 投递、电脑睡眠、系统省电还是 thread 调度。长时间无人看守且很在意漏跑时，
+应额外使用 OS 级 watchdog 或通知。
+
 `dispatch record` 和 `dispatch reconcile` 是 App-first 的派发闭环命令。Codex
 App 返回 `pendingWorktreeId` 后，先用 `dispatch record` 立即写入 task ID、可选
 thread ID、预期 branch、base commit、allowed/forbidden paths 和 gates。等本地

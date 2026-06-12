@@ -155,6 +155,34 @@ creating a duplicate. A helper command such as `codex-orchestrator observe` or
 Codex App automation, daemon, or permission to keep the current turn open with
 long sleeps while waiting for workers.
 
+## Hands-Off Run Readiness
+
+Apply this section whenever the user will not watch the thread continuously:
+overnight, lunch, commute, meetings, errands, or any "start it and I will come
+back later" workflow.
+
+Before dispatching hands-off work:
+
+- verify the machine/session is likely to stay awake, or record that sleep/power
+  state is a `blocked` reliability risk;
+- create or verify one generic Codex App heartbeat automation for the current
+  thread/repo/ledger; do not create duplicate watchdogs;
+- keep the heartbeat prompt generic: read repo truth, ledger, worktrees,
+  automations, status artifacts, and roadmap; do not embed the current worker
+  list as persistent prompt state;
+- refresh fixed status artifacts before leaving and on every later wakeup:
+  `.codex-orchestrator/status.html` and `.codex-orchestrator/status.md`;
+- run a single-count helper heartbeat with missed-run detection on each wakeup,
+  for example `codex-orchestrator heartbeat --count 1 --interval 20m
+  --missed-after 45m --write-report .codex-orchestrator/heartbeat-report.json
+  --write-summary .codex-orchestrator/heartbeat-summary.md`;
+- if the helper reports a missed heartbeat, say so in the next status update
+  before continuing normal task processing; label the cause `blocked` unless
+  there is direct evidence from the App/OS layer;
+- for long hands-off runs where missed wakeups matter, recommend an external
+  OS-level watchdog or notification, because the helper cannot run when Codex
+  App does not wake the thread.
+
 ## Orchestrator State Ledger
 
 After dispatching or discovering a delegated session, keep a compact ledger in the orchestrator thread or current status note. Do not rely on memory or stale automation text.
@@ -168,7 +196,7 @@ codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch c
 codex-orchestrator observe --json
 codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
 codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch; do not dispatch new workers"
-codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json --write-summary .codex-orchestrator/heartbeat-summary.md
+codex-orchestrator heartbeat --count 1 --interval 20m --missed-after 45m --write-report .codex-orchestrator/heartbeat-report.json --write-summary .codex-orchestrator/heartbeat-summary.md
 codex-orchestrator append-event --task-id TASK --type review --status completed-unreviewed --note "Ready for orchestrator review."
 ```
 

@@ -275,6 +275,7 @@ type ObserveSummary struct {
 	DefaultBranch      string                `json:"defaultBranch"`
 	DispatchMode       string                `json:"dispatchMode,omitempty"`
 	DispatchNote       string                `json:"dispatchNote,omitempty"`
+	HeartbeatStatus    *HeartbeatStatus      `json:"heartbeatStatus,omitempty"`
 	ObservedAt         string                `json:"observedAt"`
 	OverallStatus      string                `json:"overallStatus"`
 	RecommendedActions []string              `json:"recommendedActions"`
@@ -288,6 +289,19 @@ type ObserveSummary struct {
 	ProjectMap         ProjectMapStatus      `json:"projectMap"`
 	Observations       []Observation         `json:"observations"`
 	RecentRoutineRuns  []RoutineRun          `json:"recentRoutineRuns,omitempty"`
+}
+
+type HeartbeatStatus struct {
+	EvidenceLabel       string `json:"evidenceLabel"`
+	Status              string `json:"status"`
+	LastHeartbeatAt     string `json:"lastHeartbeatAt,omitempty"`
+	CurrentHeartbeatAt  string `json:"currentHeartbeatAt"`
+	ExpectedInterval    string `json:"expectedInterval"`
+	MissedAfter         string `json:"missedAfter"`
+	Gap                 string `json:"gap,omitempty"`
+	GapMinutes          int    `json:"gapMinutes,omitempty"`
+	EstimatedMissedRuns int    `json:"estimatedMissedRuns,omitempty"`
+	Note                string `json:"note"`
 }
 
 type RoutineSpec struct {
@@ -801,7 +815,7 @@ Usage:
   codex-orchestrator record-task --id ID (--worktree PATH --branch BRANCH | --pending-worktree-id ID) [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N]
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
-  codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
+  codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--missed-after 15m] [--count 0] [--write-report PATH]
   codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--write-html PATH] [--write-summary PATH] [--stale-after 15m]
   codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack consultation --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
@@ -950,7 +964,7 @@ _codex_orchestrator()
       fi
       ;;
     heartbeat)
-      COMPREPLY=( $(compgen -W "--repo --ledger --interval --count --write-report --write-summary --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--repo --ledger --interval --missed-after --count --write-report --write-summary --help" -- "$cur") )
       ;;
     validate-routines)
       COMPREPLY=( $(compgen -W "--dir --json --help" -- "$cur") )
@@ -1136,7 +1150,7 @@ case $state in
         _values 'options' --repo --ledger --json --html --write-html --write-summary --stale-after --help
         ;;
       heartbeat)
-        _values 'options' --repo --ledger --interval --count --write-report --write-summary --help
+        _values 'options' --repo --ledger --interval --missed-after --count --write-report --write-summary --help
         ;;
       validate-routines)
         _values 'options' --dir --json --help
@@ -1194,6 +1208,7 @@ complete -c codex-orchestrator -l repo -d 'Repository path'
 complete -c codex-orchestrator -l tag -d 'Release tag'
 complete -c codex-orchestrator -l expected-asset -d 'Expected release asset'
 complete -c codex-orchestrator -l heartbeat-report -d 'Optional heartbeat report path'
+complete -c codex-orchestrator -l missed-after -d 'Missed heartbeat threshold'
 complete -c codex-orchestrator -l package-id -d 'Feature package id'
 complete -c codex-orchestrator -l reviewer -d 'External reviewer name'
 complete -c codex-orchestrator -l pack -d 'Review pack directory'
@@ -1809,6 +1824,7 @@ func cmdHeartbeat(args []string) error {
 	writeReport := fs.String("write-report", "", "write latest JSON report")
 	writeSummary := fs.String("write-summary", "", "write latest Markdown summary")
 	interval := fs.Duration("interval", 5*time.Minute, "heartbeat interval")
+	missedAfter := fs.Duration("missed-after", 0, "missed heartbeat threshold; defaults to 3x interval")
 	count := fs.Int("count", 1, "number of checks; 0 runs forever")
 	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale threshold")
 	if err := fs.Parse(args); err != nil {
@@ -1819,6 +1835,9 @@ func cmdHeartbeat(args []string) error {
 	}
 	if *interval < 0 {
 		return errors.New("heartbeat --interval cannot be negative")
+	}
+	if *missedAfter < 0 {
+		return errors.New("heartbeat --missed-after cannot be negative")
 	}
 	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
 	resolvedEvents := *eventsPath
@@ -1832,6 +1851,7 @@ func cmdHeartbeat(args []string) error {
 		if err != nil {
 			return err
 		}
+		summary.HeartbeatStatus = inspectHeartbeatGap(resolvedEvents, *interval, *missedAfter, summary.ObservedAt)
 		if *writeReport != "" {
 			if err := writeJSON(*writeReport, summary); err != nil {
 				return err
@@ -1842,12 +1862,16 @@ func cmdHeartbeat(args []string) error {
 				return err
 			}
 		}
-		if err := appendEvent(resolvedEvents, map[string]any{
+		event := map[string]any{
 			"at":     summary.ObservedAt,
 			"type":   "heartbeat",
 			"status": summary.OverallStatus,
 			"note":   strings.Join(summary.RecommendedActions, " | "),
-		}); err != nil {
+		}
+		if summary.HeartbeatStatus != nil && summary.HeartbeatStatus.Status == "missed" {
+			event["missedHeartbeat"] = summary.HeartbeatStatus
+		}
+		if err := appendEvent(resolvedEvents, event); err != nil {
 			return err
 		}
 		if *jsonOut {
@@ -8218,6 +8242,87 @@ func appendEvent(path string, event map[string]any) error {
 	return err
 }
 
+func inspectHeartbeatGap(eventsPath string, interval time.Duration, missedAfter time.Duration, currentAt string) *HeartbeatStatus {
+	current, err := time.Parse(time.RFC3339, currentAt)
+	if err != nil {
+		current = time.Now()
+		currentAt = current.Format(time.RFC3339)
+	}
+	if interval <= 0 {
+		interval = 5 * time.Minute
+	}
+	if missedAfter <= 0 {
+		missedAfter = interval * 3
+	}
+	status := &HeartbeatStatus{
+		EvidenceLabel:      "local/static",
+		Status:             "unknown",
+		CurrentHeartbeatAt: currentAt,
+		ExpectedInterval:   interval.String(),
+		MissedAfter:        missedAfter.String(),
+		Note:               "No previous heartbeat event was found; missed wakeup detection starts from this run.",
+	}
+	previous, ok := latestHeartbeatEventAt(eventsPath)
+	if !ok {
+		return status
+	}
+	gap := current.Sub(previous)
+	if gap < 0 {
+		gap = 0
+	}
+	status.LastHeartbeatAt = previous.Format(time.RFC3339)
+	status.Gap = gap.String()
+	status.GapMinutes = int(gap.Minutes())
+	status.Status = "ok"
+	status.Note = "Previous heartbeat is within the local/static missed heartbeat threshold."
+	if gap > missedAfter {
+		status.Status = "missed"
+		if interval > 0 {
+			status.EstimatedMissedRuns = int(gap/interval) - 1
+			if status.EstimatedMissedRuns < 1 {
+				status.EstimatedMissedRuns = 1
+			}
+		}
+		status.Note = fmt.Sprintf("Possible missed heartbeat: gap %s exceeded threshold %s. This is local/static evidence only; it does not prove why Codex App did not wake the thread.", gap, missedAfter)
+	}
+	return status
+}
+
+func latestHeartbeatEventAt(eventsPath string) (time.Time, bool) {
+	data, err := os.ReadFile(expandPath(eventsPath))
+	if err != nil {
+		return time.Time{}, false
+	}
+	var latest time.Time
+	found := false
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var event map[string]any
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue
+		}
+		if fmt.Sprint(event["type"]) != "heartbeat" {
+			continue
+		}
+		atText := strings.TrimSpace(fmt.Sprint(event["at"]))
+		if atText == "" || atText == "<nil>" {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339, atText)
+		if err != nil {
+			continue
+		}
+		if !found || at.After(latest) {
+			latest = at
+			found = true
+		}
+	}
+	return latest, found
+}
+
 func renderSummary(summary ObserveSummary) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# codex-orchestrator heartbeat\n\n")
@@ -8229,6 +8334,19 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- dispatchMode: `%s`\n", summary.DispatchMode)
 	if summary.DispatchNote != "" {
 		fmt.Fprintf(&b, "- dispatchNote: `%s`\n", summary.DispatchNote)
+	}
+	if summary.HeartbeatStatus != nil {
+		fmt.Fprintf(&b, "- heartbeatStatus: `%s`", summary.HeartbeatStatus.Status)
+		if summary.HeartbeatStatus.Gap != "" {
+			fmt.Fprintf(&b, " gap=`%s`", summary.HeartbeatStatus.Gap)
+		}
+		if summary.HeartbeatStatus.EstimatedMissedRuns > 0 {
+			fmt.Fprintf(&b, " estimatedMissedRuns=`%d`", summary.HeartbeatStatus.EstimatedMissedRuns)
+		}
+		fmt.Fprintf(&b, "\n")
+		if summary.HeartbeatStatus.Note != "" {
+			fmt.Fprintf(&b, "- heartbeatNote: %s\n", summary.HeartbeatStatus.Note)
+		}
 	}
 	fmt.Fprintf(&b, "- integrationDirty: `%t`\n", summary.Integration.Dirty)
 	fmt.Fprintf(&b, "- active: `%d`\n", summary.ReviewPressure.Active)
@@ -8713,6 +8831,19 @@ func printObservations(summary ObserveSummary) {
 		fmt.Printf(" note=%q", summary.DispatchNote)
 	}
 	fmt.Println()
+	if summary.HeartbeatStatus != nil {
+		fmt.Printf("Heartbeat status (%s): %s", summary.HeartbeatStatus.EvidenceLabel, summary.HeartbeatStatus.Status)
+		if summary.HeartbeatStatus.Gap != "" {
+			fmt.Printf(" gap=%s", summary.HeartbeatStatus.Gap)
+		}
+		if summary.HeartbeatStatus.EstimatedMissedRuns > 0 {
+			fmt.Printf(" estimatedMissedRuns=%d", summary.HeartbeatStatus.EstimatedMissedRuns)
+		}
+		fmt.Println()
+		if summary.HeartbeatStatus.Note != "" {
+			fmt.Printf("Heartbeat note: %s\n", summary.HeartbeatStatus.Note)
+		}
+	}
 	fmt.Printf("Overall: %s\n", summary.OverallStatus)
 	fmt.Printf("Runtime status (%s): %s\n", summary.RuntimeStatus.EvidenceLabel, summary.RuntimeStatus.Summary)
 	fmt.Printf("Jobs (%s): total=%d counts=%s\n", summary.JobSummary.EvidenceLabel, summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))

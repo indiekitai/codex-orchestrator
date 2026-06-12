@@ -430,6 +430,27 @@ Codex App orchestrator: refresh it during every monitor/review/dispatch turn and
 include the paths in the user-facing status update so humans do not need to run
 helper commands manually.
 
+Hands-off runs are not only overnight. Use the same readiness checks whenever a
+human starts work and walks away for lunch, meetings, errands, or the end of the
+day: verify the machine is unlikely to sleep or record that as a blocked
+reliability risk, verify the generic Codex App heartbeat automation is bound to
+the right thread/repo/ledger, keep dynamic worker state in the ledger/status
+files instead of the automation prompt, and run the helper heartbeat with
+missed-run detection on every wakeup:
+
+```bash
+./codex-orchestrator heartbeat --count 1 --interval 20m --missed-after 45m \
+  --write-report .codex-orchestrator/heartbeat-report.json \
+  --write-summary .codex-orchestrator/heartbeat-summary.md
+```
+
+If a missed heartbeat is reported, surface it before continuing normal
+review/dispatch work. This is local/static evidence only: it can show that
+scheduled checks were missed, but it cannot prove whether the cause was Codex
+App automation delivery, machine sleep, OS power state, or thread scheduling.
+For long hands-off runs where this matters, use an external OS-level watchdog or
+notification in addition to Codex App heartbeat.
+
 `dispatch record` and `dispatch reconcile` are the App-first dispatch closure
 commands. Use `dispatch record` immediately after Codex App returns a
 `pendingWorktreeId`, along with the task ID, optional thread ID, expected branch,

@@ -1170,6 +1170,53 @@ func TestObserveBlockedPendingSetupAndDrainMode(t *testing.T) {
 	}
 }
 
+func TestHeartbeatReportsMissedWakeupGap(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	events := eventsPathForLedger(ledger)
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := appendEvent(events, map[string]any{
+		"at":     time.Now().Add(-5 * time.Hour).Format(time.RFC3339),
+		"type":   "heartbeat",
+		"status": "quiet",
+		"note":   "old heartbeat",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reportPath := filepath.Join(root, "heartbeat-report.json")
+	if err := cmdHeartbeat([]string{
+		"--ledger", ledger,
+		"--events", events,
+		"--interval", "20m",
+		"--missed-after", "45m",
+		"--count", "1",
+		"--write-report", reportPath,
+		"--json",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var summary ObserveSummary
+	if err := json.Unmarshal(data, &summary); err != nil {
+		t.Fatal(err)
+	}
+	if summary.HeartbeatStatus == nil {
+		t.Fatal("expected heartbeat status in report")
+	}
+	if summary.HeartbeatStatus.Status != "missed" {
+		t.Fatalf("expected missed heartbeat status, got %#v", summary.HeartbeatStatus)
+	}
+	if summary.HeartbeatStatus.EstimatedMissedRuns < 1 {
+		t.Fatalf("expected estimated missed runs, got %#v", summary.HeartbeatStatus)
+	}
+}
+
 func TestObserveJobSummaryAndProjectMap(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
