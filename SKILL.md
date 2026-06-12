@@ -184,10 +184,13 @@ Before dispatching hands-off work:
   App does not wake the thread. On macOS, use
   `REPO=/path/to/project scripts/install-macos-watchdog.sh` from this repository
   to install a user LaunchAgent that runs
-  `scripts/macos-watchdog-run.sh` periodically. This external watchdog is still
-  local/static evidence: it can notify about missed Codex App heartbeats while
-  the Mac is awake, but it does not create sessions, review, merge, push,
-  cleanup, or prove why the App heartbeat was missed.
+  `scripts/macos-watchdog-run.sh` periodically. Check the installed watchdog
+  with `codex-orchestrator watchdog status --repo /path/to/project`; the command
+  only reads the LaunchAgent plist, local report/summary/log files, and
+  best-effort `launchctl` status. This external watchdog is still local/static
+  evidence: it can notify about missed Codex App heartbeats while the Mac is
+  awake, but it does not create sessions, review, merge, push, cleanup, keep the
+  Mac awake, or prove why the App heartbeat was missed.
 
 ## Orchestrator State Ledger
 
