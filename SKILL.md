@@ -209,7 +209,7 @@ If the repository has the v2 helper installed, prefer a durable project-local
 ledger over chat-only state:
 
 ```bash
-codex-orchestrator init
+codex-orchestrator init --write-templates
 codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 codex-orchestrator observe --json
 codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
@@ -218,6 +218,11 @@ codex-orchestrator run-mode set --dispatch-mode drain --note "finish current bat
 codex-orchestrator heartbeat --count 1 --interval 20m --missed-after 45m --write-report .codex-orchestrator/heartbeat-report.json --write-summary .codex-orchestrator/heartbeat-summary.md
 codex-orchestrator append-event --task-id TASK --type review --status completed-unreviewed --note "Ready for orchestrator review."
 ```
+
+`init --write-templates` writes starter local planning files under
+`.codex-orchestrator/` without overwriting existing files: an orchestration
+policy, package plan, and project map. Use them to keep the current product
+lane, worker queue, blocked proof, and source-of-truth docs out of chat memory.
 
 The helper is not a session launcher and must not be treated as one. It is a
 state and heartbeat tool. The Codex App orchestrator still owns worker dispatch,
@@ -763,6 +768,7 @@ Use helper reports when available:
 codex-orchestrator pack merge-readiness --task-id TASK --json
 codex-orchestrator pack consultation --task-id TASK --json
 codex-orchestrator pack review --package-id PKG --task-id TASK --json
+codex-orchestrator pack status --package-id PKG --json
 codex-orchestrator review policy check --package-id PKG --risk medium --task-count 4 --json
 codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --dry-run
 codex-orchestrator review import --package-id PKG --reviewer deepseek --file /tmp/deepseek-review.md --status passed
@@ -800,6 +806,14 @@ Also check the package row in `status` / `observe`. Package rows now expose
 local/static review policy. If a package has enough related workers or matches a
 high-risk lane, generate/import the review evidence before calling the package
 fully closed.
+
+Use `pack status` as the package closeout checkpoint after related workers have
+clean commits and before the orchestrator claims the feature package is done. It
+embeds package acceptance and package-summary state, and can report
+`ready-for-orchestrator-acceptance`, `external-review-needed`, `not-ready`,
+`blocked`, or `reject-for-fixup`. It is still local/static guidance only; the
+orchestrator must separately decide and execute merge, push, cleanup, release,
+deploy, and any direct proof.
 
 ## Dynamic Heartbeat Prompt Pattern
 

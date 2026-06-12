@@ -55,6 +55,25 @@ This creates:
 Keep those files untracked for private local runs. Commit an example/template
 only when the team intentionally wants shared state shape.
 
+For a first project setup, ask Codex App to create starter planning files too:
+
+```bash
+codex-orchestrator init --write-templates
+```
+
+This adds non-overwriting templates under `.codex-orchestrator/`:
+
+```text
+.codex-orchestrator/orchestration-policy.md
+.codex-orchestrator/package-plan.md
+.codex-orchestrator/project-map.md
+```
+
+Use them to record the current product lane, feature package outcome, safe
+worker queue, blocked external proof, and project map before the first
+hands-off run. Existing files are preserved unless `--force` is explicitly
+used.
+
 ## Record Dispatch Setup
 
 After the Codex App orchestrator starts worker setup, record the dispatch fact
@@ -185,6 +204,20 @@ recommended action is to ask Codex App to generate or read a concise project map
 before first orchestration: module boundaries, owner docs, test commands,
 shared contracts, and high-risk paths.
 
+Older ledgers may contain completed tasks that were recorded before
+`packageId` existed. Those terminal ungrouped tasks remain available in JSON
+`jobSummary.rows`, but `status` also exposes:
+
+- `legacyTerminalUngrouped`: old cleaned/merged/rejected/abandoned tasks with
+  no package id.
+- `visibleRows`: current-action rows that still matter for the next decision.
+- `ungroupedNonTerminal`: still-active or still-unreviewed tasks with no
+  package id.
+
+Only `ungroupedNonTerminal` should trip the package-lane guard. This keeps
+legacy history from making a fresh status page look scattered while preserving
+the full ledger for audit.
+
 Each observation and runtime status item also includes a structured `state`
 object so callers do not need to parse notes. The fields are local/static:
 
@@ -220,6 +253,33 @@ codex-orchestrator observe \
   --write-report .codex-orchestrator/heartbeat-report.json \
   --write-summary .codex-orchestrator/heartbeat-summary.md
 ```
+
+## Package Closeout Status
+
+Use `pack status` when a feature package has several worker commits and the
+orchestrator needs a compact answer to "can this package close?"
+
+```bash
+codex-orchestrator pack status --package-id CHECKOUT-COUPONS --json
+codex-orchestrator pack status \
+  --package-id CHECKOUT-COUPONS \
+  --write-report .codex-orchestrator/reviews/CHECKOUT-COUPONS-status.json
+```
+
+`pack status` embeds the existing `pack acceptance` report and package summary.
+It can say:
+
+- `ready-for-orchestrator-acceptance`: local/static package evidence is ready
+  for the Codex App orchestrator's separate accept/reject/block decision.
+- `external-review-needed`: review policy requires an imported reviewer signal
+  before package closeout.
+- `not-ready`: active, blocked, attention-needed, or cleanup-needed work
+  remains.
+- `blocked` or `reject-for-fixup`: local/static acceptance inputs are missing
+  or failing.
+
+It still does not merge, push, cleanup, deploy, dispatch, or produce direct
+runtime/device/provider proof.
 
 The report includes:
 

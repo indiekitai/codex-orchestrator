@@ -80,6 +80,17 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
    - 边界：local/static orchestration state；不自动派发、不自动 merge；routine-run
      只有 `packageId` 而没有 task 时会显示 review-only 包状态。
 
+2.5 Package closeout / legacy ledger polish：已补第一轮本地闭环。
+   - 目标：让功能包收口和旧 ledger 历史不再靠人读长 JSON 判断。
+   - 当前落地：新增 `codex-orchestrator pack status --package-id PKG`，嵌入
+     package acceptance 与 package summary，输出 ready / external-review-needed /
+     not-ready / blocked / reject-for-fixup 等收口判断；旧的 cleaned/merged/rejected/
+     abandoned 且没有 `packageId` 的历史任务仍保留在 `jobSummary.rows`，但从
+     当前行动列表隐藏，并通过 `legacyTerminalUngrouped` 计数说明，不再触发
+     package-lane warning。
+   - 边界：local/static closeout guidance；不自动 merge/push/cleanup，不产生直接
+     runtime/device/provider proof。
+
 3. Human-friendly status page：已补第二轮本地闭环。
    - 目标：让每轮 heartbeat/status 默认输出用户能看懂的一页摘要：当前功能包、
      当前 worker、未验收、blocked、missed heartbeat、下一步动作。
@@ -110,11 +121,19 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
    - 边界：local/static readiness evidence；不能证明 Codex App automation、OS sleep、
      runtime、pre/prod、device 或 provider 状态。
 
-5. v0.3.3 release closeout：已完成。
-   - 目标：在 Roadmap scorer v2 和 package/status polish 足够稳定后，发下一个
-     release，把 post-`v0.3.2` 的 watchdog/status/review 能力对外收口。
-   - 当前落地：`v0.3.3` tag 和 GitHub Release 已发布并验证，release assets 齐全，
-     darwin_arm64 下载 smoke 通过；release helper 已修正 stable/prerelease 判断。
+4.6 Project onboarding templates：已完成。
+   - 目标：让新项目第一次接入时不再全靠聊天 prompt 记住 project map、package
+     plan 和 orchestration policy。
+   - 当前落地：`codex-orchestrator init --write-templates` 会非破坏性写入
+     `.codex-orchestrator/orchestration-policy.md`、`package-plan.md` 和
+     `project-map.md`；已有文件默认不覆盖，只有显式 `--force` 才覆盖。
+   - 边界：这些模板是本地编排状态，不等于项目代码或 direct proof。
+
+5. v0.3.4 release closeout：待本轮验证后执行。
+   - 目标：在 preflight、watchdog、status UX、package closeout、legacy ledger 降噪、
+     onboarding templates 稳定后发下一个 release。
+   - 收口前检查：`go test ./...`、`policy check`、`eval run`、status/preflight smoke、
+     release assets smoke。
 
 ## 分层架构
 

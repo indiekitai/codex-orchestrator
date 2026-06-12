@@ -241,10 +241,14 @@ type RuntimeStatusReport struct {
 }
 
 type JobSummary struct {
-	EvidenceLabel string          `json:"evidenceLabel"`
-	Total         int             `json:"total"`
-	Counts        map[string]int  `json:"counts"`
-	Rows          []JobStatusItem `json:"rows,omitempty"`
+	EvidenceLabel            string          `json:"evidenceLabel"`
+	Total                    int             `json:"total"`
+	Counts                   map[string]int  `json:"counts"`
+	LegacyTerminalUngrouped  int             `json:"legacyTerminalUngrouped,omitempty"`
+	UngroupedNonTerminal     int             `json:"ungroupedNonTerminal,omitempty"`
+	Rows                     []JobStatusItem `json:"rows,omitempty"`
+	VisibleRows              []JobStatusItem `json:"visibleRows,omitempty"`
+	LegacyTerminalHiddenRows []JobStatusItem `json:"legacyTerminalHiddenRows,omitempty"`
 }
 
 type PackageSummary struct {
@@ -703,6 +707,27 @@ type PackageAcceptanceReport struct {
 	ActionsTaken        []string                    `json:"actionsTaken"`
 }
 
+type PackageCloseoutReport struct {
+	SchemaVersion       int                     `json:"schemaVersion"`
+	Command             string                  `json:"command"`
+	GeneratedAt         string                  `json:"generatedAt"`
+	Status              string                  `json:"status"`
+	EvidenceLabel       string                  `json:"evidenceLabel"`
+	Boundary            string                  `json:"boundary"`
+	PackageID           string                  `json:"packageId"`
+	LedgerPath          string                  `json:"ledgerPath"`
+	RepoPath            string                  `json:"repoPath"`
+	Package             *PackageStatusItem      `json:"package,omitempty"`
+	Acceptance          PackageAcceptanceReport `json:"acceptance"`
+	CloseoutDecision    string                  `json:"closeoutDecision"`
+	ReviewStatus        string                  `json:"reviewStatus,omitempty"`
+	NextSuggestedAction string                  `json:"nextSuggestedAction"`
+	NeedsHuman          bool                    `json:"needsHuman"`
+	BlockedReason       string                  `json:"blockedReason,omitempty"`
+	Evidence            map[string][]string     `json:"evidence"`
+	ActionsTaken        []string                `json:"actionsTaken"`
+}
+
 type ReviewPack struct {
 	SchemaVersion       int                         `json:"schemaVersion"`
 	Command             string                      `json:"command"`
@@ -954,7 +979,7 @@ func usage() {
 	fmt.Println(`codex-orchestrator v2 helper
 
 Usage:
-  codex-orchestrator init [--ledger PATH] [--project-root PATH]
+  codex-orchestrator init [--ledger PATH] [--project-root PATH] [--write-templates]
   codex-orchestrator dispatch record --task-id TASK --pending-worktree-id ID [--package-id PKG] [--branch BRANCH] [--allowed PATH] [--forbidden PATH] [--gate CMD] [--json]
   codex-orchestrator dispatch reconcile --task-id TASK [--branch BRANCH | --worktree PATH] [--json]
   codex-orchestrator run-mode set --dispatch-mode active|drain|paused [--note TEXT] [--json]
@@ -969,6 +994,7 @@ Usage:
   codex-orchestrator pack consultation --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack review --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--output DIR] [--write-report PATH] [--json]
   codex-orchestrator pack acceptance --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
+  codex-orchestrator pack status --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator review run --package-id PKG --reviewer pi|claude --pack DIR [--repo PATH] [--ledger PATH] [--write-report PATH] [--json] [--dry-run]
   codex-orchestrator review import --package-id PKG --reviewer NAME --file PATH [--ledger PATH] [--task-id TASK] [--status passed|failed|blocked] [--json]
   codex-orchestrator review policy show|check [--repo PATH] [--config PATH] [--risk low|medium|high] [--task-count N] [--package-id PKG] [--json]
@@ -1041,7 +1067,7 @@ _codex_orchestrator()
       return 0
       ;;
     pack)
-      COMPREPLY=( $(compgen -W "merge-readiness consultation review acceptance" -- "$cur") )
+      COMPREPLY=( $(compgen -W "merge-readiness consultation review acceptance status" -- "$cur") )
       return 0
       ;;
     watchdog)
@@ -1064,7 +1090,7 @@ _codex_orchestrator()
 
   case "${COMP_WORDS[1]}" in
     init)
-      COMPREPLY=( $(compgen -W "--ledger --project-root --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--ledger --project-root --default-branch --remote --push-policy --max-concurrency --force --write-templates --help" -- "$cur") )
       ;;
     dispatch)
       if [[ ${COMP_WORDS[2]} == "record" ]]; then
@@ -1111,8 +1137,10 @@ _codex_orchestrator()
         COMPREPLY=( $(compgen -W "--repo --ledger --task-id --write-report --json --help" -- "$cur") )
       elif [[ ${COMP_WORDS[2]} == "review" ]]; then
         COMPREPLY=( $(compgen -W "--repo --ledger --package-id --task-id --output --write-report --json --help" -- "$cur") )
+      elif [[ ${COMP_WORDS[2]} == "acceptance" || ${COMP_WORDS[2]} == "status" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --ledger --package-id --task-id --write-report --json --help" -- "$cur") )
       else
-        COMPREPLY=( $(compgen -W "merge-readiness consultation review acceptance" -- "$cur") )
+        COMPREPLY=( $(compgen -W "merge-readiness consultation review acceptance status" -- "$cur") )
       fi
       ;;
     review)
@@ -1264,7 +1292,7 @@ case $state in
         _values 'shell' bash zsh fish
         ;;
       init)
-        _values 'options' --ledger --project-root --help
+        _values 'options' --ledger --project-root --default-branch --remote --push-policy --max-concurrency --force --write-templates --help
         ;;
       dispatch)
         if (( CURRENT == 3 )); then
@@ -1284,9 +1312,11 @@ case $state in
         ;;
       pack)
         if (( CURRENT == 3 )); then
-          _values 'subcommand' merge-readiness consultation review acceptance
+          _values 'subcommand' merge-readiness consultation review acceptance status
         elif [[ $words[3] == "review" ]]; then
           _values 'options' --repo --ledger --package-id --task-id --output --write-report --json --help
+        elif [[ $words[3] == "acceptance" || $words[3] == "status" ]]; then
+          _values 'options' --repo --ledger --package-id --task-id --write-report --json --help
         else
           _values 'options' --repo --ledger --task-id --write-report --json --help
         fi
@@ -1365,7 +1395,7 @@ complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a '
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from dispatch' -a 'record reconcile'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-mode' -a 'set'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from watchdog' -a 'status'
-complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness consultation review acceptance'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness consultation review acceptance status'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from review' -a 'run import policy'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run add-failure'
@@ -1396,6 +1426,7 @@ complete -c codex-orchestrator -l pack -d 'Review pack directory'
 complete -c codex-orchestrator -l output -d 'Output directory'
 complete -c codex-orchestrator -l dry-run -d 'Print runner command without invoking reviewer'
 complete -c codex-orchestrator -l dispatch-mode -d 'Run-level dispatch mode: active, drain, or paused'
+complete -c codex-orchestrator -l write-templates -d 'Write starter project orchestration templates'
 `
 }
 
@@ -1409,6 +1440,7 @@ func cmdInit(args []string) error {
 	pushPolicy := fs.String("push-policy", "manual", "push policy")
 	maxConcurrency := fs.Int("max-concurrency", 2, "max concurrency")
 	force := fs.Bool("force", false, "overwrite existing ledger")
+	writeTemplates := fs.Bool("write-templates", false, "write starter orchestration templates under .codex-orchestrator/")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -1449,6 +1481,18 @@ func cmdInit(args []string) error {
 		"ledger": *ledgerPath,
 	}); err != nil {
 		return err
+	}
+	if *writeTemplates {
+		created, skipped, err := writeStarterTemplates(root, *force)
+		if err != nil {
+			return err
+		}
+		for _, path := range created {
+			fmt.Printf("Initialized template: %s\n", path)
+		}
+		for _, path := range skipped {
+			fmt.Printf("Skipped existing template: %s\n", path)
+		}
 	}
 	fmt.Printf("Initialized ledger: %s\n", *ledgerPath)
 	fmt.Printf("Initialized events: %s\n", resolvedEvents)
@@ -2423,7 +2467,7 @@ func printWatchdogStatus(report WatchdogStatusReport) {
 
 func cmdPack(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: codex-orchestrator pack merge-readiness|consultation|review|acceptance")
+		return errors.New("usage: codex-orchestrator pack merge-readiness|consultation|review|acceptance|status")
 	}
 	switch args[0] {
 	case "merge-readiness":
@@ -2434,8 +2478,10 @@ func cmdPack(args []string) error {
 		return cmdPackReview(args[1:])
 	case "acceptance":
 		return cmdPackAcceptance(args[1:])
+	case "status":
+		return cmdPackStatus(args[1:])
 	case "help", "-h", "--help":
-		fmt.Println("usage: codex-orchestrator pack merge-readiness|consultation|review|acceptance [--package-id PKG] [--task-id TASK] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]")
+		fmt.Println("usage: codex-orchestrator pack merge-readiness|consultation|review|acceptance|status [--package-id PKG] [--task-id TASK] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]")
 		return nil
 	default:
 		return fmt.Errorf("unknown pack subcommand: %s", args[0])
@@ -2593,6 +2639,46 @@ func cmdPackAcceptance(args []string) error {
 		return printJSON(report)
 	}
 	fmt.Printf("Wrote package acceptance report: %s\n", *writeReport)
+	return nil
+}
+
+func cmdPackStatus(args []string) error {
+	fs := flag.NewFlagSet("pack status", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	packageID := fs.String("package-id", "", "feature package id")
+	writeReport := fs.String("write-report", "", "write package closeout status JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	var taskIDs stringList
+	fs.Var(&taskIDs, "task-id", "task id to include; repeatable. Defaults to all tasks in --package-id")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *packageID == "" {
+		return errors.New("pack status requires --package-id")
+	}
+	resolvedRepo := expandPath(*repo)
+	if resolvedRepo == "" {
+		resolvedRepo = "."
+	}
+	resolvedLedger := resolveDefaultLedgerPath(resolvedRepo, *ledgerPath, flagProvided(fs, "ledger"))
+	selectedTaskIDs, err := selectPackageTaskIDs(resolvedLedger, *packageID, taskIDs)
+	if err != nil {
+		return err
+	}
+	report, err := buildPackageCloseoutReport(resolvedRepo, resolvedLedger, *packageID, selectedTaskIDs)
+	if err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote package closeout status: %s\n", *writeReport)
 	return nil
 }
 
@@ -2913,10 +2999,21 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 		fmt.Fprintf(&b, "</ul></section>\n")
 	}
 	fmt.Fprintf(&b, "<section class=\"section\"><h2>任务列表 / Jobs</h2><p class=\"muted\">%s</p>", escapeHTML(formatIntMap(summary.JobSummary.Counts)))
-	if len(summary.JobSummary.Rows) == 0 {
-		fmt.Fprintf(&b, "<p>No tasks recorded.</p>")
+	if summary.JobSummary.LegacyTerminalUngrouped > 0 {
+		fmt.Fprintf(&b, "<p class=\"muted\">已隐藏 %d 个未分包的历史终态任务；它们不参与当前派发决策。</p>", summary.JobSummary.LegacyTerminalUngrouped)
+	}
+	rows := summary.JobSummary.VisibleRows
+	if len(rows) == 0 && summary.JobSummary.LegacyTerminalUngrouped == 0 {
+		rows = summary.JobSummary.Rows
+	}
+	if len(rows) == 0 {
+		if summary.JobSummary.LegacyTerminalUngrouped > 0 {
+			fmt.Fprintf(&b, "<p>No current-action tasks.</p>")
+		} else {
+			fmt.Fprintf(&b, "<p>No tasks recorded.</p>")
+		}
 	} else {
-		for _, row := range summary.JobSummary.Rows {
+		for _, row := range rows {
 			fmt.Fprintf(&b, "<div class=\"item\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(humanTaskName(row.Title, row.ID)), escapeHTML(row.Status))
 			fmt.Fprintf(&b, "<div class=\"meta\">id=%s", escapeHTML(row.ID))
 			if row.Branch != "" {
@@ -4606,6 +4703,94 @@ func buildPackageAcceptanceReport(repoPath string, ledgerPath string, packageID 
 		}
 	}
 	report.AuthorizationMatrix = packageAcceptanceAuthorizationMatrix()
+	return report, nil
+}
+
+func buildPackageCloseoutReport(repoPath string, ledgerPath string, packageID string, taskIDs []string) (PackageCloseoutReport, error) {
+	report := PackageCloseoutReport{
+		SchemaVersion:    1,
+		Command:          "pack status",
+		GeneratedAt:      nowISO(),
+		Status:           "blocked",
+		EvidenceLabel:    "local/static",
+		Boundary:         "Package status is local/static closeout guidance only. It does not merge, push, cleanup, dispatch, deploy, or prove direct runtime/device/provider behavior.",
+		PackageID:        packageID,
+		LedgerPath:       ledgerPath,
+		RepoPath:         repoPath,
+		Evidence:         normalizedEvidence(map[string][]string{"local": {"Read local ledger, package summary, and package acceptance inputs."}}),
+		ActionsTaken:     []string{"Started package closeout status report generation"},
+		NeedsHuman:       true,
+		BlockedReason:    "package status could not be determined",
+		CloseoutDecision: "blocked",
+	}
+	acceptance, err := buildPackageAcceptanceReport(repoPath, ledgerPath, packageID, taskIDs)
+	if err != nil {
+		return report, err
+	}
+	report.Acceptance = acceptance
+	report.RepoPath = acceptance.RepoPath
+	mergeEvidence(report.Evidence, acceptance.Evidence)
+	report.Evidence = normalizedEvidence(report.Evidence)
+	report.ActionsTaken = append(report.ActionsTaken, acceptance.ActionsTaken...)
+
+	summary, err := observe(ledgerPath)
+	if err != nil {
+		return report, err
+	}
+	for _, row := range summary.PackageSummary.Rows {
+		if row.ID == packageID {
+			rowCopy := row
+			report.Package = &rowCopy
+			report.ReviewStatus = row.ReviewStatus
+			break
+		}
+	}
+	if report.Package == nil {
+		report.Status = "blocked"
+		report.CloseoutDecision = "blocked"
+		report.NeedsHuman = true
+		report.BlockedReason = "package was not found in ledger package summary"
+		report.NextSuggestedAction = "Record worker tasks with --package-id " + packageID + " or pass explicit --task-id values that belong to this package."
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "No package summary row exists for "+packageID+".")
+		return report, nil
+	}
+
+	report.BlockedReason = ""
+	report.Status = "passed"
+	report.CloseoutDecision = "ready-for-orchestrator-acceptance"
+	report.NeedsHuman = acceptance.NeedsHuman
+	report.NextSuggestedAction = "Codex App orchestrator should make the final accept/reject/block decision, then merge/push/cleanup only if accepted."
+	if acceptance.Status == "blocked" || acceptance.Decision == "blocked" {
+		report.Status = "blocked"
+		report.CloseoutDecision = "blocked"
+		report.NeedsHuman = true
+		report.BlockedReason = firstNonEmpty(acceptance.BlockedReason, "package acceptance report is blocked")
+		report.NextSuggestedAction = firstNonEmpty(acceptance.NextAction, "Resolve package acceptance blockers before closeout.")
+		return report, nil
+	}
+	if acceptance.Status == "failed" || acceptance.Decision == "reject-for-fixup" {
+		report.Status = "failed"
+		report.CloseoutDecision = "reject-for-fixup"
+		report.NeedsHuman = true
+		report.BlockedReason = "package has failed local/static acceptance checks"
+		report.NextSuggestedAction = firstNonEmpty(acceptance.NextAction, "Fix the failing worker(s), then rerun pack status.")
+		return report, nil
+	}
+	if report.Package.ReviewRequired && packageExternalReviewMissing(report.Package.ReviewStatus) {
+		report.Status = "warning"
+		report.CloseoutDecision = "external-review-needed"
+		report.NeedsHuman = true
+		report.NextSuggestedAction = firstNonEmpty(report.Package.ReviewNextAction, "Generate a package review pack and import external reviewer output before closeout.")
+		return report, nil
+	}
+	if report.Package.Status == "active" || report.Package.Status == "cleanup-needed" || report.Package.Status == "blocked" || report.Package.Status == "attention-needed" {
+		report.Status = "warning"
+		report.CloseoutDecision = "not-ready"
+		report.NeedsHuman = true
+		report.NextSuggestedAction = firstNonEmpty(report.Package.NextSuggestedAction, "Finish, block, or cleanup remaining package tasks before closeout.")
+		return report, nil
+	}
+	report.NextSuggestedAction = "Package is locally/static review-ready; orchestrator should rerun gates and record its own acceptance decision before merge/push/cleanup."
 	return report, nil
 }
 
@@ -8454,10 +8639,14 @@ func buildPackageLaneGuard(summary PackageSummary, jobs JobSummary, pressure Rev
 	if len(guard.ActivePackageIDs) > 0 {
 		guard.CurrentPackageID = guard.ActivePackageIDs[0]
 	}
-	if jobs.Total > 0 && summary.Total == 0 {
+	if jobs.UngroupedNonTerminal > 0 {
 		guard.Status = "warning"
-		guard.Warnings = append(guard.Warnings, "workers exist but no packageId is recorded, so progress will look scattered.")
+		guard.Warnings = append(guard.Warnings, fmt.Sprintf("%d non-terminal worker(s) have no packageId, so progress will look scattered.", jobs.UngroupedNonTerminal))
 		guard.RecommendedAction = "Assign related worker tasks to a packageId before continuing unattended orchestration."
+		return guard
+	}
+	if jobs.Total > 0 && summary.Total == 0 && jobs.LegacyTerminalUngrouped == jobs.Total {
+		guard.RecommendedAction = "No active package lane is recorded; legacy terminal ungrouped tasks are ignored for dispatch decisions."
 		return guard
 	}
 	if len(guard.ActivePackageIDs) > 1 {
@@ -8664,13 +8853,16 @@ func buildRuntimeStatusReport(tasks []Task, observations []Observation, pressure
 
 func buildJobSummary(tasks []Task, observations []Observation, counts map[string]int) JobSummary {
 	rows := make([]JobStatusItem, 0, len(observations))
+	visibleRows := []JobStatusItem{}
+	legacyRows := []JobStatusItem{}
+	ungroupedNonTerminal := 0
 	for index, observation := range observations {
 		task := tasks[index]
 		title := task.Title
 		if title == task.ID {
 			title = ""
 		}
-		rows = append(rows, JobStatusItem{
+		row := JobStatusItem{
 			ID:                task.ID,
 			Status:            observation.Status,
 			Signal:            observation.Signal,
@@ -8681,7 +8873,16 @@ func buildJobSummary(tasks []Task, observations []Observation, counts map[string
 			PendingWorktreeID: task.PendingWorktreeID,
 			LastUpdatedAt:     observation.LastUpdatedAt,
 			Action:            observation.Action,
-		})
+		}
+		rows = append(rows, row)
+		if row.PackageID == "" && isTerminalStatus(row.Status) {
+			legacyRows = append(legacyRows, row)
+			continue
+		}
+		if row.PackageID == "" && !isTerminalStatus(row.Status) {
+			ungroupedNonTerminal++
+		}
+		visibleRows = append(visibleRows, row)
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].Status == rows[j].Status {
@@ -8689,11 +8890,27 @@ func buildJobSummary(tasks []Task, observations []Observation, counts map[string
 		}
 		return jobStatusRank(rows[i].Status) < jobStatusRank(rows[j].Status)
 	})
+	sort.Slice(visibleRows, func(i, j int) bool {
+		if visibleRows[i].Status == visibleRows[j].Status {
+			return visibleRows[i].ID < visibleRows[j].ID
+		}
+		return jobStatusRank(visibleRows[i].Status) < jobStatusRank(visibleRows[j].Status)
+	})
+	sort.Slice(legacyRows, func(i, j int) bool {
+		if legacyRows[i].Status == legacyRows[j].Status {
+			return legacyRows[i].ID < legacyRows[j].ID
+		}
+		return jobStatusRank(legacyRows[i].Status) < jobStatusRank(legacyRows[j].Status)
+	})
 	return JobSummary{
-		EvidenceLabel: "local/static",
-		Total:         len(observations),
-		Counts:        copyStringIntMap(counts),
-		Rows:          rows,
+		EvidenceLabel:            "local/static",
+		Total:                    len(observations),
+		Counts:                   copyStringIntMap(counts),
+		LegacyTerminalUngrouped:  len(legacyRows),
+		UngroupedNonTerminal:     ungroupedNonTerminal,
+		Rows:                     rows,
+		VisibleRows:              visibleRows,
+		LegacyTerminalHiddenRows: legacyRows,
 	}
 }
 
@@ -9803,6 +10020,149 @@ func writeText(path string, value string) error {
 	return os.WriteFile(target, []byte(value), 0o644)
 }
 
+func writeTextIfMissing(path string, value string, force bool) (bool, error) {
+	target := expandPath(path)
+	if _, err := os.Stat(target); err == nil && !force {
+		return false, nil
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	if err := writeText(target, value); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func writeStarterTemplates(projectRoot string, force bool) ([]string, []string, error) {
+	stateDir := filepath.Join(projectRoot, defaultStateDir)
+	templates := map[string]string{
+		filepath.Join(stateDir, "orchestration-policy.md"): starterOrchestrationPolicyTemplate(),
+		filepath.Join(stateDir, "package-plan.md"):         starterPackagePlanTemplate(),
+		filepath.Join(stateDir, "project-map.md"):          starterProjectMapTemplate(),
+	}
+	paths := make([]string, 0, len(templates))
+	for path := range templates {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	created := []string{}
+	skipped := []string{}
+	for _, path := range paths {
+		ok, err := writeTextIfMissing(path, templates[path], force)
+		if err != nil {
+			return created, skipped, err
+		}
+		if ok {
+			created = append(created, path)
+		} else {
+			skipped = append(skipped, path)
+		}
+	}
+	return created, skipped, nil
+}
+
+func starterOrchestrationPolicyTemplate() string {
+	return `# codex-orchestrator Project Policy
+
+Evidence label: local/static until direct runtime evidence is explicitly collected.
+
+## Operating Mode
+
+- dispatchMode: active | drain | paused
+- maxConcurrency: 2 by default
+- continuous monitor: use one generic Codex App heartbeat; do not rewrite it for every worker
+- no foreground sleep/long polling in the orchestrator turn
+
+## Product Lane
+
+Current package lane:
+
+Reason this package matters:
+
+Do not dispatch unrelated filler work just because a concurrency slot is free.
+
+## Boundaries
+
+Never treat local/static/proxy evidence as direct runtime, production, device, payment, provider, or hardware proof.
+
+List project-specific no-go zones here:
+
+- TBD
+
+## Closeout
+
+For each worker, review diff, allowed/forbidden paths, gates, docs/reviews, evidence labels, and self-review before merge.
+After a package closes, run pack status / pack acceptance and record whether external review was required, imported, skipped, or blocked.
+`
+}
+
+func starterPackagePlanTemplate() string {
+	return `# Feature Package Plan
+
+Use this file to keep orchestration readable as a product/module lane instead of a pile of unrelated tasks.
+
+## Package
+
+- packageId:
+- outcome:
+- current evidence: local | proxy | direct | blocked
+- blockers:
+- unattended-safe work:
+- human-required work:
+- shared contract / DB / proto / API risk:
+
+## Worker Queue
+
+| Order | Worker | Purpose | Allowed paths | Forbidden paths | Gates | Evidence label |
+|---|---|---|---|---|---|---|
+| 1 |  |  |  |  |  | local/static |
+
+## Closeout Criteria
+
+- TBD
+
+## External Review
+
+- review required: yes/no
+- reviewer:
+- imported report:
+- decision:
+`
+}
+
+func starterProjectMapTemplate() string {
+	return `# Project Map
+
+This is a local/static orientation map for Codex App-first orchestration.
+
+## Source Of Truth
+
+- progress / roadmap:
+- architecture docs:
+- module rules:
+- review artifacts:
+
+## Main Modules
+
+| Module | Path | Owner / boundary | Common gates |
+|---|---|---|---|
+|  |  |  |  |
+
+## External Dependencies
+
+- hardware:
+- payment/provider:
+- deploy/pre/prod:
+- human-operated steps:
+
+## Notes For Workers
+
+- Workers submit commits only on their branch.
+- Workers do not merge, push, cleanup, or launch subagents.
+- Workers record evidence labels honestly.
+`
+}
+
 func appendEvent(path string, event map[string]any) error {
 	target := expandPath(path)
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -10520,12 +10880,22 @@ func renderJobSummaryMarkdown(b *strings.Builder, summary JobSummary) {
 	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", summary.EvidenceLabel)
 	fmt.Fprintf(b, "- total: `%d`\n", summary.Total)
 	fmt.Fprintf(b, "- counts: `%s`\n", formatIntMap(summary.Counts))
-	if len(summary.Rows) == 0 {
+	if summary.LegacyTerminalUngrouped > 0 {
+		fmt.Fprintf(b, "- legacyTerminalUngrouped: `%d` hidden from current-action rows\n", summary.LegacyTerminalUngrouped)
+	}
+	if summary.UngroupedNonTerminal > 0 {
+		fmt.Fprintf(b, "- ungroupedNonTerminal: `%d`\n", summary.UngroupedNonTerminal)
+	}
+	rows := summary.VisibleRows
+	if len(rows) == 0 && summary.LegacyTerminalUngrouped == 0 {
+		rows = summary.Rows
+	}
+	if len(rows) == 0 {
 		return
 	}
 	fmt.Fprintf(b, "\n| Job | Package | Status | Signal | Branch | Updated | Action |\n")
 	fmt.Fprintf(b, "|---|---|---|---|---|---|---|\n")
-	for _, row := range summary.Rows {
+	for _, row := range rows {
 		fmt.Fprintf(b, "| `%s` | `%s` | `%s` | `%s` | `%s` | `%s` | %s |\n",
 			row.ID,
 			row.PackageID,

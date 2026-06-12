@@ -20,7 +20,11 @@ What it gives you:
 - isolated Codex App worktree sessions instead of one sprawling chat;
 - durable local ledger and heartbeat reports for status, review pressure, and
   stale-session recovery;
+- starter project templates for package planning, orchestration policy, and a
+  lightweight project map;
 - review/merge/push/cleanup discipline before completed branches are trusted;
+- package closeout reports that say whether a feature package is review-ready,
+  blocked, still active, or waiting for external review;
 - explicit `direct`, `proxy`, `local`, and `blocked` evidence labels, so local
   checks are not overstated as production, device, payment, or runtime proof;
 - a continuation guard that checks the broader queue before declaring the loop
@@ -83,6 +87,9 @@ If you are evaluating the workflow for the first time, use this order:
    and routines, not something you must learn before the trial.
 6. If you want a real-project example first, read
    [docs/case-studies/tastyfuture-orchestration.md](docs/case-studies/tastyfuture-orchestration.md).
+7. When the project is ready for durable state, Codex can run
+   `codex-orchestrator init --write-templates` to create starter local files
+   for the project map, package plan, and orchestration policy.
 
 Naming note: **codex-orchestrator** is the product name, repository name,
 Codex App skill name, and helper CLI name.
@@ -176,6 +183,8 @@ flowchart TD
 | **Self-review enforcement** | Every session must review its own diff before handoff. The orchestrator re-reviews before merging |
 | **Feature-package planning** | When a domain has multiple partial closures, promotes work to a coherent milestone instead of more tiny slices |
 | **Package continuity for unattended runs** | Keeps overnight/continuous dispatch focused on one product module instead of filling slots with unrelated safe backlog items |
+| **Package closeout status** | `pack status` combines package summary and acceptance inputs so the orchestrator can tell whether a package is ready, blocked, still active, or waiting for external review |
+| **Legacy ledger noise control** | Old cleaned/merged ungrouped tasks stay auditable in JSON but no longer make the current status page look scattered |
 | **Continuous operation** | Doesn't stop after one feature — reads roadmap, picks the next buildable feature, dispatches, repeats. Designed for overnight/unattended multi-feature runs |
 | **Continuation guard** | A task-specific heartbeat can stop only after the orchestrator checks whether the broader queue should continue |
 
@@ -230,7 +239,7 @@ cp -r codex-orchestrator ~/.codex/skills/codex-orchestrator
 
 # Optionally install the helper when durable state is useful.
 scripts/install.sh
-codex-orchestrator init
+codex-orchestrator init --write-templates
 ```
 
 You can also download a prebuilt `codex-orchestrator_<os>_<arch>` binary from

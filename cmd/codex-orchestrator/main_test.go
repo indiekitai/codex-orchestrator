@@ -1307,6 +1307,136 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	}
 }
 
+func TestLegacyTerminalUngroupedTasksDoNotTripLaneGuard(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "LEGACY-CLEANED",
+		"--title", "Legacy cleaned task",
+		"--pending-worktree-id", "pwt_legacy",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "cleanup", "--task-id", "LEGACY-CLEANED", "--status", "cleaned", "--note", "old task cleaned before package ids existed"}); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.PackageLaneGuard.Status != "passed" || len(summary.PackageLaneGuard.Warnings) != 0 {
+		t.Fatalf("expected legacy terminal task to be ignored by lane guard, got %#v", summary.PackageLaneGuard)
+	}
+	if summary.JobSummary.LegacyTerminalUngrouped != 1 || len(summary.JobSummary.VisibleRows) != 0 {
+		t.Fatalf("expected legacy task to be hidden from visible rows, got %#v", summary.JobSummary)
+	}
+	rendered := renderSummary(summary)
+	if !strings.Contains(rendered, "legacyTerminalUngrouped") {
+		t.Fatalf("expected rendered status to explain hidden legacy rows:\n%s", rendered)
+	}
+
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "UNGROUPED-ACTIVE",
+		"--title", "Ungrouped active task",
+		"--pending-worktree-id", "pwt_active",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	summary, err = observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.PackageLaneGuard.Status != "warning" || summary.JobSummary.UngroupedNonTerminal != 1 {
+		t.Fatalf("expected active ungrouped task to warn, got guard=%#v jobs=%#v", summary.PackageLaneGuard, summary.JobSummary)
+	}
+}
+
+func TestInitCanWriteStarterTemplates(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project, "--write-templates"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"orchestration-policy.md", "package-plan.md", "project-map.md"} {
+		path := filepath.Join(project, ".codex-orchestrator", name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("expected starter template %s: %v", name, err)
+		}
+		if !strings.Contains(string(data), "codex-orchestrator") && name == "orchestration-policy.md" {
+			t.Fatalf("expected policy template to name codex-orchestrator, got:\n%s", string(data))
+		}
+	}
+	policy := filepath.Join(project, ".codex-orchestrator", "orchestration-policy.md")
+	if err := os.WriteFile(policy, []byte("custom\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	created, skipped, err := writeStarterTemplates(project, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created) != 0 || len(skipped) != 3 {
+		t.Fatalf("expected all templates skipped, got created=%#v skipped=%#v", created, skipped)
+	}
+	data, err := os.ReadFile(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "custom\n" {
+		t.Fatalf("expected template not to overwrite without force, got:\n%s", string(data))
+	}
+}
+
+func TestPackStatusReportsPackageCloseoutReadiness(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/package-worker", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "PKG-WORKER",
+		"--title", "Package worker",
+		"--package-id", "PKG-CHECKOUT",
+		"--worktree", worker,
+		"--branch", "codex/package-worker",
+		"--allowed", "README.md",
+		"--gate", "go test ./...",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "README.md"), []byte("base\nworker\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "README.md")
+	git(t, worker, "commit", "-q", "-m", "package worker")
+
+	out := captureStdout(t, func() error {
+		return cmdPackStatus([]string{"--ledger", ledger, "--package-id", "PKG-CHECKOUT", "--json"})
+	})
+	var report PackageCloseoutReport
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatalf("expected package status JSON, got %q: %v", out, err)
+	}
+	if report.Status != "passed" || report.CloseoutDecision != "ready-for-orchestrator-acceptance" || report.Package == nil {
+		t.Fatalf("expected package to be locally ready, got %#v", report)
+	}
+	if report.Acceptance.Command != "pack acceptance" || report.Acceptance.Status != "passed" {
+		t.Fatalf("expected embedded acceptance report, got %#v", report.Acceptance)
+	}
+}
+
 func TestPreflightReportsHandsOffReadinessWarnings(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
