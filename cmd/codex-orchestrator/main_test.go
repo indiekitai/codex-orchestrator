@@ -1900,6 +1900,55 @@ func TestReviewRunDryRunAndImportRecordExternalReviewer(t *testing.T) {
 	}
 }
 
+func TestReviewPolicyDefaultAndConfiguredRecommendations(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	report := runReviewPolicy(project, "", "PKG-POLICY", "medium", 4)
+	if report.Status != "passed" || !report.ReviewRequired || report.ReviewDecision != "one-reviewer" {
+		t.Fatalf("expected default medium package to require one reviewer, got %#v", report)
+	}
+	if len(report.RecommendedReviewers) != 1 || report.RecommendedReviewers[0].Name != "pi" {
+		t.Fatalf("expected default primary pi recommendation, got %#v", report.RecommendedReviewers)
+	}
+	if report.EvidenceLabel != "local/static" || !strings.Contains(report.Boundary, "does not run reviewers") {
+		t.Fatalf("expected local/static policy boundary, got label=%q boundary=%q", report.EvidenceLabel, report.Boundary)
+	}
+
+	configPath := filepath.Join(project, ".codex-orchestrator", "review-policy.json")
+	policy := `{
+  "reviewPolicyVersion": 1,
+  "defaultMode": "package-boundary",
+  "primaryReviewer": "go-reviewer",
+  "secondaryReviewer": "missing-reviewer",
+  "manualReviewers": ["deepseek", "human"],
+  "trigger": {"minTasksInPackage": 3, "maxTasksBeforeReview": 5},
+  "decision": {"lowRisk": "optional", "mediumRisk": "one-reviewer", "highRisk": "two-reviewers", "externalReviewEvidence": "proxy/advisory"},
+  "reviewers": {
+    "go-reviewer": {"enabled": true, "command": "go", "timeoutMinutes": 3},
+    "missing-reviewer": {"enabled": true, "command": "definitely-missing-codex-orchestrator-reviewer", "timeoutMinutes": 3}
+  }
+}`
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(policy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configured := runReviewPolicy(project, "", "PKG-HIGH", "high", 5)
+	if configured.Status != "passed" || !configured.ReviewRequired || configured.ReviewDecision != "two-reviewers" {
+		t.Fatalf("expected high risk package to require two reviewers, got %#v", configured)
+	}
+	if len(configured.RecommendedReviewers) != 2 {
+		t.Fatalf("expected two reviewer decisions, got %#v", configured.RecommendedReviewers)
+	}
+	if configured.RecommendedReviewers[0].Status != "available" || configured.RecommendedReviewers[1].Status != "missing" {
+		t.Fatalf("expected one available and one missing reviewer, got %#v", configured.RecommendedReviewers)
+	}
+	if !configured.NeedsHuman || !containsString(configured.MissingReviewers, "missing-reviewer") {
+		t.Fatalf("expected missing reviewer to need human/import path, got missing=%#v needsHuman=%v", configured.MissingReviewers, configured.NeedsHuman)
+	}
+}
+
 func TestPackConsultationSummarizesBlockedLedgerTask(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

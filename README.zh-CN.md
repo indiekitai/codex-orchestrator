@@ -329,6 +329,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
 ./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
 ./codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
+./codex-orchestrator review policy check --package-id PKG --risk medium --task-count 4 --json
 ./codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --write-report /tmp/pi-review-run.json
 ./codex-orchestrator review import --package-id PKG --reviewer deepseek --file /tmp/deepseek-review.md --status passed
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
@@ -400,7 +401,9 @@ pack 外部的 `blocked` 项。
 `pack review` 是功能包级别的异模型审查交接包。它适合在 3-5 个相关小切片组成一个
 feature package 之后使用，不适合每个小 worker 都跑一遍。它会把 task contract、
 diff、changed files、gates、evidence labels、residual risks、授权边界和 reviewer
-prompt 打成一个可携带的 local/static 目录。`review run` 可以用只读方式调用本机
+prompt 打成一个可携带的 local/static 目录。`review policy check` 会优先读取
+`.codex-orchestrator/review-policy.json`，没有配置时使用内置默认规则，并根据 package
+risk 判断该跑 0 个、1 个还是 2 个 reviewer。`review run` 可以用只读方式调用本机
 `pi` 或 `claude -p`；默认不使用 `claude ultrareview`。如果你用 DeepSeek、Claude、
 Pi 或人工审查得到了结果，可以用 `review import` 写回 ledger。所有异模型审查输出都
 只是 `proxy/advisory` evidence：它可以帮助拦截问题或影响验收判断，但不能单独授权

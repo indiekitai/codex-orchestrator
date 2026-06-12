@@ -233,6 +233,7 @@ codex-orchestrator eval run --write-report /tmp/eval-run-report.json
 codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
 codex-orchestrator rules propose --from-review docs/reviews/example.md --write-report /tmp/rules-proposal-report.json
 codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
+codex-orchestrator review policy check --package-id PKG --risk medium --task-count 4 --json
 codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --write-report /tmp/pi-review-run.json
 codex-orchestrator review import --package-id PKG --reviewer deepseek --file /tmp/deepseek-review.md --status passed
 ```
@@ -675,6 +676,7 @@ Use helper reports when available:
 codex-orchestrator pack merge-readiness --task-id TASK --json
 codex-orchestrator pack consultation --task-id TASK --json
 codex-orchestrator pack review --package-id PKG --task-id TASK --json
+codex-orchestrator review policy check --package-id PKG --risk medium --task-count 4 --json
 codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --dry-run
 codex-orchestrator review import --package-id PKG --reviewer deepseek --file /tmp/deepseek-review.md --status passed
 ```
@@ -699,6 +701,12 @@ ledger records which package was reviewed, by whom, and with what status. Treat
 all external review output as `proxy/advisory`: it can block acceptance or inform
 the orchestrator, but it cannot authorize implementation, merge, push, cleanup,
 release, deploy, or direct runtime/device/provider proof.
+
+Use `review policy check` before deciding which external reviewer(s) to run. It
+reads `.codex-orchestrator/review-policy.json` when present and otherwise uses
+built-in defaults. The command is local/static planning evidence only: it checks
+reviewer command availability and recommends zero, one, or two reviewers for the
+package risk level. It does not run reviewers or decide acceptance.
 
 ## Dynamic Heartbeat Prompt Pattern
 
