@@ -422,11 +422,12 @@ only when a review-ready timestamp is recorded. Missing or indeterminate budget
 data is labeled as local/static helper evidence. The helper does not kill
 processes, schedule sessions, or enforce budgets.
 
-`status --html` writes a local/static HTML status page to stdout. It is meant
-for a quick human scan of integration cleanliness, active and pending work,
-review/blocked/cleanup queues, dispatch slots, budget pressure, next suggested
-action, and evidence labels without reading raw JSON. It does not start a
-server, daemon, scheduler, merge, push, cleanup, or runtime monitor.
+`status --html` writes a local/static HTML status page to stdout. It starts with
+an "At a Glance" section that summarizes the current package lane, integration
+cleanliness, active/review/blocked/cleanup pressure, dispatch slots, and the
+next suggested action before listing detailed task tables. It is meant for a
+quick human scan without reading raw JSON. It does not start a server, daemon,
+scheduler, merge, push, cleanup, or runtime monitor.
 `status --write-html .codex-orchestrator/status.html --write-summary
 .codex-orchestrator/status.md` is the recommended per-cycle snapshot for a
 Codex App orchestrator: refresh it during every monitor/review/dispatch turn and

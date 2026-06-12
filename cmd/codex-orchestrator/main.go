@@ -2381,6 +2381,7 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	fmt.Fprintf(&b, ":root{color-scheme:light dark;--bg:#f7f7f4;--panel:#ffffff;--text:#1e2428;--muted:#667075;--line:#d9dedb;--accent:#126a5a;--warn:#a35b00;--bad:#a83232;--ok:#2f6f3e}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}main{max-width:1180px;margin:0 auto;padding:28px 20px 44px}h1{font-size:28px;margin:0 0 6px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0}.muted,small{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}.card,.section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}.metric{font-size:26px;font-weight:700}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin:2px 4px 2px 0;background:rgba(18,106,90,.08)}.bad{color:var(--bad)}.warn{color:var(--warn)}.ok{color:var(--ok)}.sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}ul{padding-left:18px;margin:8px 0 0}.item{border-top:1px solid var(--line);padding:10px 0}.item:first-child{border-top:0;padding-top:0}.item-title{font-weight:650}.meta{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted);word-break:break-word}.action{margin-top:6px}.evidence{display:flex;flex-wrap:wrap;gap:8px}.evidence span{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:rgba(0,0,0,.03)}pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.04);border-radius:6px;padding:8px}@media (prefers-color-scheme:dark){:root{--bg:#111412;--panel:#171c19;--text:#e8ece9;--muted:#a2aaa5;--line:#303832;--accent:#61c6ad}}@media(max-width:720px){main{padding:20px 12px}.sections{grid-template-columns:1fr}}\n")
 	fmt.Fprintf(&b, "</style>\n</head>\n<body>\n<main>\n")
 	fmt.Fprintf(&b, "<header><h1>%s</h1><div class=\"muted\">local/static evidence only · observed %s</div></header>\n", escapeHTML(title), escapeHTML(summary.ObservedAt))
+	renderAtAGlanceHTML(&b, summary)
 	fmt.Fprintf(&b, "<section class=\"grid\" aria-label=\"status overview\">\n")
 	renderMetricHTML(&b, "总体状态", summary.OverallStatus, statusClass(summary.OverallStatus))
 	renderMetricHTML(&b, "派发模式", summary.DispatchMode, statusClass(summary.OverallStatus))
@@ -2503,6 +2504,20 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	}
 	fmt.Fprintf(&b, "</main>\n</body>\n</html>\n")
 	return b.String()
+}
+
+func renderAtAGlanceHTML(b *strings.Builder, summary ObserveSummary) {
+	lines := statusAtAGlanceLines(summary)
+	fmt.Fprintf(b, "<section class=\"section\"><h2>一眼看懂 / At a Glance</h2>")
+	if len(lines) == 0 {
+		fmt.Fprintf(b, "<p class=\"muted\">No current status lines.</p></section>\n")
+		return
+	}
+	fmt.Fprintf(b, "<ul>")
+	for _, line := range lines {
+		fmt.Fprintf(b, "<li>%s</li>", escapeHTML(line))
+	}
+	fmt.Fprintf(b, "</ul></section>\n")
 }
 
 func renderMetricHTML(b *strings.Builder, label string, value string, className string) {
@@ -8560,9 +8575,60 @@ func latestHeartbeatEventAt(eventsPath string) (time.Time, bool) {
 	return latest, found
 }
 
+func statusAtAGlanceLines(summary ObserveSummary) []string {
+	lines := []string{}
+	if summary.Integration.Error != "" {
+		lines = append(lines, "集成区检查失败，需要先处理本地 repo 状态。")
+	} else if summary.Integration.Dirty {
+		lines = append(lines, "集成区有未提交变化，先分类这些变化，再派发或合并。")
+	} else {
+		lines = append(lines, "集成区干净，可以作为本地编排和验收基线。")
+	}
+	if summary.HeartbeatStatus != nil && summary.HeartbeatStatus.Status == "missed" {
+		lines = append(lines, fmt.Sprintf("heartbeat 可能漏跑：gap=%s，estimatedMissedRuns=%d。", summary.HeartbeatStatus.Gap, summary.HeartbeatStatus.EstimatedMissedRuns))
+	}
+	if len(summary.PackageSummary.Rows) > 0 {
+		row := summary.PackageSummary.Rows[0]
+		parts := []string{
+			fmt.Sprintf("当前功能包: %s", row.ID),
+			fmt.Sprintf("状态: %s", row.Status),
+			fmt.Sprintf("任务数: %d", row.TaskCount),
+		}
+		if row.NextSuggestedAction != "" {
+			parts = append(parts, "下一步: "+row.NextSuggestedAction)
+		}
+		lines = append(lines, strings.Join(parts, "；"))
+	} else if summary.JobSummary.Total > 0 {
+		lines = append(lines, "当前没有 packageId；只能看到单个 task，建议后续按功能包记录。")
+	} else {
+		lines = append(lines, "当前没有记录中的 worker task。")
+	}
+	if summary.ReviewPressure.ReviewNeeded > 0 || summary.ReviewPressure.Blocked > 0 || summary.ReviewPressure.CleanupNeeded > 0 {
+		lines = append(lines, fmt.Sprintf("需要关注: 待审=%d，阻塞=%d，待清理=%d。", summary.ReviewPressure.ReviewNeeded, summary.ReviewPressure.Blocked, summary.ReviewPressure.CleanupNeeded))
+	} else if summary.ReviewPressure.Active > 0 || summary.ReviewPressure.PendingSetup > 0 {
+		lines = append(lines, fmt.Sprintf("正在推进: active=%d，pending setup=%d；等待下一次状态刷新。", summary.ReviewPressure.Active, summary.ReviewPressure.PendingSetup))
+	} else {
+		lines = append(lines, "没有待审、阻塞或待清理 worker。")
+	}
+	if summary.RuntimeStatus.AvailableDispatchSlots > 0 {
+		lines = append(lines, fmt.Sprintf("可用并发槽: %d/%d；是否派发仍由 orchestrator 根据 roadmap/package lane 决定。", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency))
+	} else {
+		lines = append(lines, "并发槽已满，不应再派发新 worker。")
+	}
+	if len(summary.RecommendedActions) > 0 {
+		lines = append(lines, "建议动作: "+summary.RecommendedActions[0])
+	}
+	return lines
+}
+
 func renderSummary(summary ObserveSummary) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# codex-orchestrator heartbeat\n\n")
+	fmt.Fprintf(&b, "## 一眼看懂 / At a Glance\n\n")
+	for _, line := range statusAtAGlanceLines(summary) {
+		fmt.Fprintf(&b, "- %s\n", line)
+	}
+	fmt.Fprintf(&b, "\n## Machine Summary\n\n")
 	fmt.Fprintf(&b, "- observedAt: `%s`\n", summary.ObservedAt)
 	fmt.Fprintf(&b, "- overallStatus: `%s`\n", summary.OverallStatus)
 	fmt.Fprintf(&b, "- ledger: `%s`\n", summary.Ledger)

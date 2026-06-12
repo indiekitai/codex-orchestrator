@@ -78,10 +78,15 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
    - 边界：local/static orchestration state；不自动派发、不自动 merge；routine-run
      只有 `packageId` 而没有 task 时会显示 review-only 包状态。
 
-3. Human-friendly status page：待做。
+3. Human-friendly status page：已补第一轮本地闭环。
    - 目标：让每轮 heartbeat/status 默认输出用户能看懂的一页摘要：当前功能包、
      当前 worker、未验收、blocked、missed heartbeat、下一步动作。
    - 价值：用户不用记命令，也不用从英文 task id 判断进度。
+   - 当前落地：`status --html` 和 `status --write-summary` 顶部会先输出
+     “一眼看懂 / At a Glance”，用中文短句说明集成区状态、当前功能包、待审/阻塞/清理
+     压力、可用并发槽和第一条建议动作；详细 runtime/package/job 表保留在下方。
+   - 边界：local/static status evidence；不启动 server/daemon，不调度、不 merge、不
+     push、不清理 worker。
 
 4. Watchdog install/status polish：待做。
    - 目标：把 macOS watchdog fallback 的安装、状态检查、last wake/missed count

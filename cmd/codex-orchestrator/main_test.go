@@ -1176,12 +1176,18 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	}
 
 	rendered := renderSummary(summary)
+	if !strings.Contains(rendered, "## 一眼看懂 / At a Glance") || !strings.Contains(rendered, "当前功能包: PKG-CHECKOUT") {
+		t.Fatalf("expected at-a-glance package status in Markdown:\n%s", rendered)
+	}
 	if !strings.Contains(rendered, "## Package Summary") || !strings.Contains(rendered, "PKG-CHECKOUT") {
 		t.Fatalf("expected package summary in Markdown:\n%s", rendered)
 	}
 	statusHTML := captureStdout(t, func() error {
 		return cmdStatus([]string{"--ledger", ledger, "--html"})
 	})
+	if !strings.Contains(statusHTML, "一眼看懂 / At a Glance") || !strings.Contains(statusHTML, "当前功能包: PKG-CHECKOUT") {
+		t.Fatalf("expected at-a-glance package status in HTML:\n%s", statusHTML)
+	}
 	if !strings.Contains(statusHTML, "功能包 / Packages") || !strings.Contains(statusHTML, "PKG-CHECKOUT") {
 		t.Fatalf("expected package summary in HTML:\n%s", statusHTML)
 	}
@@ -1193,6 +1199,45 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	)
 	if len(unknownSummary.Rows) != 1 || unknownSummary.Rows[0].Status != "attention-needed" || !containsString(unknownSummary.Rows[0].OtherTaskIDs, "PKG-REJECTED") {
 		t.Fatalf("expected unknown package task status to need attention, got %#v", unknownSummary.Rows)
+	}
+}
+
+func TestStatusAtAGlanceLinesCoverAttentionBranches(t *testing.T) {
+	dirty := ObserveSummary{
+		Integration: IntegrationState{Dirty: true},
+		JobSummary:  JobSummary{Total: 1},
+		RuntimeStatus: RuntimeStatusReport{
+			AvailableDispatchSlots: 1,
+			MaxConcurrency:         2,
+		},
+	}
+	dirtyLines := strings.Join(statusAtAGlanceLines(dirty), "\n")
+	if !strings.Contains(dirtyLines, "集成区有未提交变化") || strings.Contains(dirtyLines, "建议动作:") {
+		t.Fatalf("expected dirty status without recommendation line, got:\n%s", dirtyLines)
+	}
+
+	activeMissed := ObserveSummary{
+		Integration: IntegrationState{},
+		HeartbeatStatus: &HeartbeatStatus{
+			Status:              "missed",
+			Gap:                 "5h0m0s",
+			EstimatedMissedRuns: 14,
+		},
+		ReviewPressure: ReviewPressure{
+			Active:       1,
+			PendingSetup: 1,
+		},
+		RuntimeStatus: RuntimeStatusReport{
+			AvailableDispatchSlots: 0,
+			MaxConcurrency:         2,
+		},
+		RecommendedActions: []string{"Active tasks are within concurrency limit; continue monitoring."},
+	}
+	activeLines := strings.Join(statusAtAGlanceLines(activeMissed), "\n")
+	for _, want := range []string{"heartbeat 可能漏跑", "正在推进: active=1，pending setup=1", "等待下一次状态刷新", "并发槽已满", "建议动作:"} {
+		if !strings.Contains(activeLines, want) {
+			t.Fatalf("expected at-a-glance lines to include %q, got:\n%s", want, activeLines)
+		}
 	}
 }
 
