@@ -693,9 +693,13 @@ codex-orchestrator roadmap score --repo .
 codex-orchestrator roadmap score --repo . --config roadmap-score.json --ledger .codex-orchestrator/ledger.json --json
 ```
 
-By default it reads `docs/roadmap.md`, `PROGRESS.md`,
-`docs/TastyFuture-整体开发计划与进度.md`, and `docs/reviews/*.md` when those files
-exist. A config file may provide a simple JSON `sources` list:
+By default it reads explicit project planning surfaces such as
+`docs/roadmap.md`, `PROGRESS.md`, and
+`docs/TastyFuture-整体开发计划与进度.md` when those files exist. It does not scan
+all review docs by default, because review notes often contain risks and
+postmortem wording that should not become dispatchable work. A config file may
+provide a simple JSON `sources` list when a project wants to include selected
+review docs:
 
 ```json
 {"sources":["PROGRESS.md","docs/roadmap.md","docs/reviews/accepted.md"]}
@@ -705,7 +709,9 @@ It scores candidate lines as `vertical-completion`, `runtime-proof`,
 `blocked-removal`, `owner-gated`, or `shallow-risk`, with local write-set and
 external-dependency hints. When a repo-local `.codex-orchestrator/ledger.json`
 exists, or `--ledger PATH` is supplied, it reads that ledger read-only and
-demotes review-doc candidates that match completed/merged/cleaned ledger tasks.
+demotes candidates that match completed/merged/cleaned ledger tasks. Feature
+package / package status candidates are ranked ahead of unrelated safe task
+fillers so the loop can keep a coherent module lane.
 It does not dispatch sessions, mutate git or the ledger, call the network, or
 claim direct runtime/product proof; human review still decides whether a scored
 candidate is worth dispatching.

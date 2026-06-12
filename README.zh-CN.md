@@ -587,9 +587,10 @@ codex-orchestrator roadmap score --repo .
 codex-orchestrator roadmap score --repo . --config roadmap-score.json --ledger .codex-orchestrator/ledger.json --json
 ```
 
-默认会读取存在的 `docs/roadmap.md`、`PROGRESS.md`、
-`docs/TastyFuture-整体开发计划与进度.md` 和 `docs/reviews/*.md`。配置文件可以用
-简单 JSON `sources` 列表指定 source-of-truth docs：
+默认会读取明确的项目规划面，例如存在的 `docs/roadmap.md`、`PROGRESS.md` 和
+`docs/TastyFuture-整体开发计划与进度.md`。它不会默认扫描所有 review 文档，因为
+review 里经常有风险、复盘和 postmortem 描述，不应该自动变成可派发任务。
+如果项目确实要纳入某些 review 文档，可以用简单 JSON `sources` 列表显式指定：
 
 ```json
 {"sources":["PROGRESS.md","docs/roadmap.md","docs/reviews/accepted.md"]}
@@ -599,8 +600,10 @@ codex-orchestrator roadmap score --repo . --config roadmap-score.json --ledger .
 `blocked-removal`、`owner-gated` 或 `shallow-risk`，并给出本地可推断的
 write-set / external dependency hints。如果 repo-local `.codex-orchestrator/ledger.json`
 存在，或显式传入 `--ledger PATH`，它会只读加载 ledger，并把匹配
-completed/merged/cleaned ledger task 的旧 review-doc 候选降权。它不会派发
-session、修改 git/ledger、联网或声称 direct runtime/product proof；是否值得派发仍需要人工 review。
+completed/merged/cleaned ledger task 的旧候选降权。feature package / package status
+类候选会优先排在互不相关的安全小任务前面，帮助 loop 保持同一个模块闭环。
+它不会派发 session、修改 git/ledger、联网或声称 direct runtime/product proof；
+是否值得派发仍需要人工 review。
 
 一个 delegated task 完成 merge、push、release、cleanup，并不等于整个 loop
 结束。删除任务专属 heartbeat 前，编排器必须先检查 ledger / repo truth 和 roadmap

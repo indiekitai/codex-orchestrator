@@ -6505,14 +6505,6 @@ func roadmapScoreSources(repo string, configPath string) ([]string, error) {
 		return cleanRoadmapScoreSources(config.Sources), nil
 	}
 	sources := []string{"docs/roadmap.md", "PROGRESS.md", "docs/TastyFuture-整体开发计划与进度.md"}
-	reviewMatches, _ := filepath.Glob(filepath.Join(repo, "docs", "reviews", "*.md"))
-	sort.Strings(reviewMatches)
-	for _, match := range reviewMatches {
-		rel, err := filepath.Rel(repo, match)
-		if err == nil {
-			sources = append(sources, rel)
-		}
-	}
 	return cleanRoadmapScoreSources(sources), nil
 }
 
@@ -6555,6 +6547,10 @@ func parseRoadmapScoreCandidates(source string, text string) []RoadmapScoreCandi
 			currentSection = strings.TrimSpace(strings.TrimLeft(trimmed, "# "))
 			continue
 		}
+		if roadmapScoreLooksLikeSectionLabel(trimmed) {
+			currentSection = strings.TrimSuffix(strings.TrimSuffix(trimmed, ":"), "：")
+			continue
+		}
 		if raw != trimmed && (strings.HasPrefix(trimmed, "- ") || hasNumberedListPrefix(trimmed)) {
 			continue
 		}
@@ -6571,6 +6567,16 @@ func parseRoadmapScoreCandidates(source string, text string) []RoadmapScoreCandi
 		candidates = append(candidates, classifyRoadmapScoreCandidate(title, source, index+1, trimmed))
 	}
 	return candidates
+}
+
+func roadmapScoreLooksLikeSectionLabel(line string) bool {
+	if line == "" || strings.HasPrefix(line, "- ") || hasNumberedListPrefix(line) {
+		return false
+	}
+	if !(strings.HasSuffix(line, ":") || strings.HasSuffix(line, "：")) {
+		return false
+	}
+	return len([]rune(line)) <= 80
 }
 
 func roadmapScoreCandidateTitle(line string) (string, bool) {
@@ -6601,7 +6607,32 @@ func roadmapScoreLooksActionable(title string, section string) bool {
 
 func roadmapScoreSectionLooksPlanning(section string) bool {
 	lower := strings.ToLower(section)
-	for _, marker := range []string{"next", "residual", "risk", "recommend", "follow", "remaining", "candidate", "blocker", "plan", "todo", "下一", "剩余", "风险", "建议", "候选", "阻塞", "计划"} {
+	for _, marker := range []string{
+		"next action",
+		"next work",
+		"next task",
+		"next stage",
+		"backlog",
+		"roadmap",
+		"candidate",
+		"task queue",
+		"remaining",
+		"remaining work",
+		"plan",
+		"todo",
+		"priority",
+		"priorities",
+		"下一",
+		"下阶段",
+		"下一阶段",
+		"后续任务",
+		"任务队列",
+		"待办",
+		"候选",
+		"路线图",
+		"计划",
+		"优先级",
+	} {
 		if strings.Contains(lower, marker) {
 			return true
 		}
@@ -6658,6 +6689,10 @@ func classifyRoadmapScoreCandidate(title string, source string, line int, snippe
 	}
 	if classification == "vertical-completion" && containsAny(lower, []string{"待做", "todo", "follow-up", "next"}) {
 		score = 88
+	}
+	if classification == "vertical-completion" && containsAny(lower, []string{"feature package", "package ledger", "package status", "package lane", "功能包", "模块闭环", "功能闭环", "产品包"}) {
+		score = 96
+		action = "dispatch as one feature-package lane, not as unrelated task filler"
 	}
 
 	writeHints := roadmapWriteSetHints(lower)

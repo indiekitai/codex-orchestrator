@@ -159,7 +159,9 @@ codex-orchestrator roadmap score --repo .
 Expected inputs:
 
 - configurable project source-of-truth docs, such as `PROGRESS.md`,
-  roadmap files, review docs, or project-specific planning docs;
+  roadmap files, package plans, or project-specific planning docs;
+- selected review docs only when explicitly configured, because review notes
+  often contain risks and postmortems rather than dispatchable backlog;
 - existing ledger state;
 - recent cleaned/merged/blocked tasks;
 - forbidden external/hardware/provider/pre/prod boundaries.
@@ -185,6 +187,8 @@ Why it matters:
 - In TastyFuture, many local readiness pages were valid but could hide the
   higher-value blocked work that actually moves the product forward.
 - The tool should help the orchestrator avoid "safe but shallow" task churn.
+- Feature-package candidates should rank ahead of unrelated safe task fillers,
+  so the orchestrator keeps pushing one module to closure.
 - This makes roadmap-next-task selection project-aware instead of hard-coded to
   `docs/roadmap.md`.
 
