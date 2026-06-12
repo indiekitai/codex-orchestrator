@@ -1,6 +1,10 @@
 ---
 name: codex-orchestrator
-description: Use when the user wants Codex App to run a supervised outer loop for multi-session development: plan bounded work, dispatch isolated worktree sessions, monitor with heartbeat and ledger truth, review/merge/push/cleanup, rescue stale tasks, and keep direct/proxy/local/blocked evidence honest.
+description: |
+  Use when the user wants Codex App to run a supervised outer loop for
+  multi-session development: plan bounded work, dispatch isolated worktree
+  sessions, monitor with heartbeat and ledger truth, review/merge/push/cleanup,
+  rescue stale tasks, and keep direct/proxy/local/blocked evidence honest.
 ---
 
 # codex-orchestrator
