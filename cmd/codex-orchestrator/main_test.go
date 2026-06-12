@@ -1271,8 +1271,8 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	}
 
 	rendered := renderSummary(summary)
-	if !strings.Contains(rendered, "## 一眼看懂 / At a Glance") || !strings.Contains(rendered, "当前功能包: PKG-CHECKOUT") {
-		t.Fatalf("expected at-a-glance package status in Markdown:\n%s", rendered)
+	if !strings.Contains(rendered, "## 当前进度") || !strings.Contains(rendered, "当前主线: Pkg Checkout") || !strings.Contains(rendered, "需要你处理: 有 1 个阻塞项") {
+		t.Fatalf("expected human-readable package progress in Markdown:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "## Package Summary") || !strings.Contains(rendered, "PKG-CHECKOUT") {
 		t.Fatalf("expected package summary in Markdown:\n%s", rendered)
@@ -1280,8 +1280,8 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	statusHTML := captureStdout(t, func() error {
 		return cmdStatus([]string{"--ledger", ledger, "--html"})
 	})
-	if !strings.Contains(statusHTML, "一眼看懂 / At a Glance") || !strings.Contains(statusHTML, "当前功能包: PKG-CHECKOUT") {
-		t.Fatalf("expected at-a-glance package status in HTML:\n%s", statusHTML)
+	if !strings.Contains(statusHTML, "当前进度") || !strings.Contains(statusHTML, "Pkg Checkout") || !strings.Contains(statusHTML, "需要你处理") {
+		t.Fatalf("expected human-readable package progress in HTML:\n%s", statusHTML)
 	}
 	if !strings.Contains(statusHTML, "功能包 / Packages") || !strings.Contains(statusHTML, "PKG-CHECKOUT") {
 		t.Fatalf("expected package summary in HTML:\n%s", statusHTML)
@@ -1329,10 +1329,60 @@ func TestStatusAtAGlanceLinesCoverAttentionBranches(t *testing.T) {
 		RecommendedActions: []string{"Active tasks are within concurrency limit; continue monitoring."},
 	}
 	activeLines := strings.Join(statusAtAGlanceLines(activeMissed), "\n")
-	for _, want := range []string{"heartbeat 可能漏跑", "正在推进: active=1，pending setup=1", "等待下一次状态刷新", "并发槽已满", "建议动作:"} {
+	for _, want := range []string{"heartbeat 可能漏跑", "正在跑: active=1，pending setup=1", "等待当前 worker", "不要为了填满并发槽派无关模块任务", "需要你处理: 无。"} {
 		if !strings.Contains(activeLines, want) {
 			t.Fatalf("expected at-a-glance lines to include %q, got:\n%s", want, activeLines)
 		}
+	}
+	if strings.Contains(activeLines, "建议动作:") || strings.Contains(activeLines, "并发槽已满") {
+		t.Fatalf("expected human-facing lines to hide machine dispatch-slot jargon, got:\n%s", activeLines)
+	}
+}
+
+func TestHumanProgressSummaryBranches(t *testing.T) {
+	if got := humanIdentifier("TF-PRE-STAFF_RBAC-API-LOCAL"); got != "Staff RBAC API" {
+		t.Fatalf("expected humanized identifier, got %q", got)
+	}
+	if got := humanIdentifier("TF-PRE-LOCAL"); got != "TF-PRE-LOCAL" {
+		t.Fatalf("expected all-filtered identifier to fall back to raw id, got %q", got)
+	}
+	if got := humanStatusLabel("cleanup-needed"); got != "待清理" {
+		t.Fatalf("expected cleanup label, got %q", got)
+	}
+	if got := humanObservationNote(RuntimeStatusItem{State: LocalTaskState{Diff: "clean-no-task-commit"}}); got != "worker 已创建，但还没有可验收 commit" {
+		t.Fatalf("expected clean-no-task-commit human note, got %q", got)
+	}
+
+	dirty := buildHumanProgressSummary(ObserveSummary{
+		Integration: IntegrationState{Dirty: true},
+		RuntimeStatus: RuntimeStatusReport{
+			EvidenceLabel: "local/static",
+		},
+	})
+	if dirty.Headline != "本地有未分类改动" || !strings.Contains(dirty.NextStep, "先区分业务代码改动") {
+		t.Fatalf("expected dirty repo branch, got %#v", dirty)
+	}
+
+	review := buildHumanProgressSummary(ObserveSummary{
+		ReviewPressure: ReviewPressure{ReviewNeeded: 1},
+		RuntimeStatus: RuntimeStatusReport{
+			EvidenceLabel: "proxy",
+		},
+	})
+	if review.Headline != "有 worker 等待验收" || !strings.Contains(strings.Join(review.Risks, "\n"), "不要自动把它当成 direct") {
+		t.Fatalf("expected review-needed branch and guarded non-local evidence wording, got %#v", review)
+	}
+
+	cleanup := buildHumanProgressSummary(ObserveSummary{
+		ReviewPressure: ReviewPressure{CleanupNeeded: 1},
+	})
+	if cleanup.Headline != "有已收口任务待清理" || !strings.Contains(cleanup.NextStep, "cleanup") {
+		t.Fatalf("expected cleanup branch, got %#v", cleanup)
+	}
+
+	empty := buildHumanProgressSummary(ObserveSummary{})
+	if empty.Headline != "当前空闲" || empty.CurrentLane != "暂无功能包" {
+		t.Fatalf("expected empty ledger branch, got %#v", empty)
 	}
 }
 

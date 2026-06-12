@@ -83,8 +83,9 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
      当前 worker、未验收、blocked、missed heartbeat、下一步动作。
    - 价值：用户不用记命令，也不用从英文 task id 判断进度。
    - 当前落地：`status --html` 和 `status --write-summary` 顶部会先输出
-     “一眼看懂 / At a Glance”，用中文短句说明集成区状态、当前功能包、待审/阻塞/清理
-     压力、可用并发槽和第一条建议动作；详细 runtime/package/job 表保留在下方。
+     “当前进度”，用人话回答当前状态、当前功能包、已经完成、正在跑、
+     是否需要用户处理、下一步和风险边界；详细 runtime/package/job 表保留在下方，
+     并把并发槽、pendingWorktreeId、baseCommit 等机器字段后置。
    - 边界：local/static status evidence；不启动 server/daemon，不调度、不 merge、不
      push、不清理 worker。
 

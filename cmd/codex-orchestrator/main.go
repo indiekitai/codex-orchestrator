@@ -2596,10 +2596,10 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	fmt.Fprintf(&b, "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n", escapeHTML(title))
 	fmt.Fprintf(&b, "<style>\n")
-	fmt.Fprintf(&b, ":root{color-scheme:light dark;--bg:#f7f7f4;--panel:#ffffff;--text:#1e2428;--muted:#667075;--line:#d9dedb;--accent:#126a5a;--warn:#a35b00;--bad:#a83232;--ok:#2f6f3e}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}main{max-width:1180px;margin:0 auto;padding:28px 20px 44px}h1{font-size:28px;margin:0 0 6px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0}.muted,small{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}.card,.section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}.metric{font-size:26px;font-weight:700}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin:2px 4px 2px 0;background:rgba(18,106,90,.08)}.bad{color:var(--bad)}.warn{color:var(--warn)}.ok{color:var(--ok)}.sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}ul{padding-left:18px;margin:8px 0 0}.item{border-top:1px solid var(--line);padding:10px 0}.item:first-child{border-top:0;padding-top:0}.item-title{font-weight:650}.meta{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted);word-break:break-word}.action{margin-top:6px}.evidence{display:flex;flex-wrap:wrap;gap:8px}.evidence span{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:rgba(0,0,0,.03)}pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.04);border-radius:6px;padding:8px}@media (prefers-color-scheme:dark){:root{--bg:#111412;--panel:#171c19;--text:#e8ece9;--muted:#a2aaa5;--line:#303832;--accent:#61c6ad}}@media(max-width:720px){main{padding:20px 12px}.sections{grid-template-columns:1fr}}\n")
+	fmt.Fprintf(&b, ":root{color-scheme:light dark;--bg:#f7f7f4;--panel:#ffffff;--text:#1e2428;--muted:#667075;--line:#d9dedb;--accent:#126a5a;--warn:#a35b00;--bad:#a83232;--ok:#2f6f3e}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}main{max-width:1180px;margin:0 auto;padding:28px 20px 44px}h1{font-size:28px;margin:0 0 6px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0}.muted,small{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}.card,.section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}.human{border-color:rgba(18,106,90,.35);box-shadow:0 8px 24px rgba(0,0,0,.06)}.hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}.hero-title{font-size:22px;font-weight:750}.hero-status{font-weight:700;border-radius:999px;padding:4px 10px;border:1px solid var(--line);white-space:nowrap}.human-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.human-block{border:1px solid var(--line);border-radius:8px;padding:12px;background:rgba(0,0,0,.02)}.human-block h3{margin-bottom:6px}.metric{font-size:26px;font-weight:700}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin:2px 4px 2px 0;background:rgba(18,106,90,.08)}.bad{color:var(--bad)}.warn{color:var(--warn)}.ok{color:var(--ok)}.sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}ul{padding-left:18px;margin:8px 0 0}.item{border-top:1px solid var(--line);padding:10px 0}.item:first-child{border-top:0;padding-top:0}.item-title{font-weight:650}.meta{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted);word-break:break-word}.action{margin-top:6px}.evidence{display:flex;flex-wrap:wrap;gap:8px}.evidence span{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:rgba(0,0,0,.03)}pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.04);border-radius:6px;padding:8px}@media (prefers-color-scheme:dark){:root{--bg:#111412;--panel:#171c19;--text:#e8ece9;--muted:#a2aaa5;--line:#303832;--accent:#61c6ad}.human-block{background:rgba(255,255,255,.03)}}@media(max-width:720px){main{padding:20px 12px}.sections{grid-template-columns:1fr}.hero{display:block}.hero-status{display:inline-block;margin-top:8px}}\n")
 	fmt.Fprintf(&b, "</style>\n</head>\n<body>\n<main>\n")
 	fmt.Fprintf(&b, "<header><h1>%s</h1><div class=\"muted\">local/static evidence only · observed %s</div></header>\n", escapeHTML(title), escapeHTML(summary.ObservedAt))
-	renderAtAGlanceHTML(&b, summary)
+	renderHumanProgressHTML(&b, summary)
 	fmt.Fprintf(&b, "<section class=\"grid\" aria-label=\"status overview\">\n")
 	renderMetricHTML(&b, "总体状态", summary.OverallStatus, statusClass(summary.OverallStatus))
 	renderMetricHTML(&b, "派发模式", summary.DispatchMode, statusClass(summary.OverallStatus))
@@ -2724,18 +2724,49 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	return b.String()
 }
 
-func renderAtAGlanceHTML(b *strings.Builder, summary ObserveSummary) {
-	lines := statusAtAGlanceLines(summary)
-	fmt.Fprintf(b, "<section class=\"section\"><h2>一眼看懂 / At a Glance</h2>")
+type humanProgressSummary struct {
+	Headline      string
+	StatusClass   string
+	CurrentLane   string
+	Completed     []string
+	CurrentWork   []string
+	HumanAction   string
+	Risks         []string
+	NextStep      string
+	HeartbeatNote string
+}
+
+func renderHumanProgressHTML(b *strings.Builder, summary ObserveSummary) {
+	progress := buildHumanProgressSummary(summary)
+	fmt.Fprintf(b, "<section class=\"section human\"><div class=\"hero\"><div><h2>当前进度</h2><div class=\"hero-title\">%s</div>", escapeHTML(progress.CurrentLane))
+	if progress.HeartbeatNote != "" {
+		fmt.Fprintf(b, "<div class=\"muted\">%s</div>", escapeHTML(progress.HeartbeatNote))
+	}
+	fmt.Fprintf(b, "</div><div class=\"hero-status %s\">%s</div></div>", escapeHTML(progress.StatusClass), escapeHTML(progress.Headline))
+	fmt.Fprintf(b, "<div class=\"human-grid\">")
+	renderHumanProgressBlockHTML(b, "已经完成", progress.Completed)
+	renderHumanProgressBlockHTML(b, "正在跑", progress.CurrentWork)
+	renderHumanProgressBlockHTML(b, "是否需要你处理", []string{progress.HumanAction})
+	renderHumanProgressBlockHTML(b, "风险边界", progress.Risks)
+	fmt.Fprintf(b, "</div><div class=\"human-block\" style=\"margin-top:12px\"><h3>下一步</h3><p>%s</p></div>", escapeHTML(progress.NextStep))
+	fmt.Fprintf(b, "</section>\n")
+}
+
+func renderHumanProgressBlockHTML(b *strings.Builder, title string, lines []string) {
+	fmt.Fprintf(b, "<div class=\"human-block\"><h3>%s</h3>", escapeHTML(title))
 	if len(lines) == 0 {
-		fmt.Fprintf(b, "<p class=\"muted\">No current status lines.</p></section>\n")
+		fmt.Fprintf(b, "<p class=\"muted\">无。</p></div>")
+		return
+	}
+	if len(lines) == 1 {
+		fmt.Fprintf(b, "<p>%s</p></div>", escapeHTML(lines[0]))
 		return
 	}
 	fmt.Fprintf(b, "<ul>")
 	for _, line := range lines {
 		fmt.Fprintf(b, "<li>%s</li>", escapeHTML(line))
 	}
-	fmt.Fprintf(b, "</ul></section>\n")
+	fmt.Fprintf(b, "</ul></div>")
 }
 
 func renderMetricHTML(b *strings.Builder, label string, value string, className string) {
@@ -2819,7 +2850,49 @@ func humanTaskName(title string, id string) string {
 	if title != "" {
 		return title
 	}
-	return id
+	return humanIdentifier(id)
+}
+
+func humanIdentifier(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "未命名任务"
+	}
+	parts := strings.FieldsFunc(id, func(r rune) bool {
+		return r == '-' || r == '_' || r == '/' || unicode.IsSpace(r)
+	})
+	filtered := []string{}
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		upper := strings.ToUpper(part)
+		switch upper {
+		case "TF", "P0", "P1", "P2", "P3", "PRE", "LOCAL", "PROOF", "MVP", "RUN":
+			continue
+		}
+		filtered = append(filtered, humanIdentifierToken(part))
+	}
+	if len(filtered) == 0 {
+		return id
+	}
+	return strings.Join(filtered, " ")
+}
+
+func humanIdentifierToken(token string) string {
+	upper := strings.ToUpper(token)
+	switch upper {
+	case "API", "BFF", "CI", "CLI", "DB", "DNS", "HTML", "HTTP", "JSON", "KDS", "MTLS", "PAX", "PII", "POS", "RBAC", "SAF", "SDK", "SMS", "SSL", "UI", "UX":
+		return upper
+	}
+	lower := strings.ToLower(token)
+	runes := []rune(lower)
+	if len(runes) == 0 {
+		return token
+	}
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }
 
 func statusClass(status string) string {
@@ -8794,57 +8867,269 @@ func latestHeartbeatEventAt(eventsPath string) (time.Time, bool) {
 }
 
 func statusAtAGlanceLines(summary ObserveSummary) []string {
+	progress := buildHumanProgressSummary(summary)
 	lines := []string{}
-	if summary.Integration.Error != "" {
-		lines = append(lines, "集成区检查失败，需要先处理本地 repo 状态。")
-	} else if summary.Integration.Dirty {
-		lines = append(lines, "集成区有未提交变化，先分类这些变化，再派发或合并。")
-	} else {
-		lines = append(lines, "集成区干净，可以作为本地编排和验收基线。")
+	lines = append(lines, "当前状态: "+progress.Headline)
+	lines = append(lines, "当前主线: "+progress.CurrentLane)
+	if len(progress.CurrentWork) > 0 {
+		lines = append(lines, "正在跑: "+strings.Join(progress.CurrentWork, "；"))
 	}
-	if summary.HeartbeatStatus != nil && summary.HeartbeatStatus.Status == "missed" {
-		lines = append(lines, fmt.Sprintf("heartbeat 可能漏跑：gap=%s，estimatedMissedRuns=%d。", summary.HeartbeatStatus.Gap, summary.HeartbeatStatus.EstimatedMissedRuns))
+	if len(progress.Completed) > 0 {
+		lines = append(lines, "最近完成: "+strings.Join(progress.Completed, "；"))
 	}
-	if len(summary.PackageSummary.Rows) > 0 {
-		row := summary.PackageSummary.Rows[0]
-		parts := []string{
-			fmt.Sprintf("当前功能包: %s", row.ID),
-			fmt.Sprintf("状态: %s", row.Status),
-			fmt.Sprintf("任务数: %d", row.TaskCount),
-		}
-		if row.NextSuggestedAction != "" {
-			parts = append(parts, "下一步: "+row.NextSuggestedAction)
-		}
-		lines = append(lines, strings.Join(parts, "；"))
-	} else if summary.JobSummary.Total > 0 {
-		lines = append(lines, "当前没有 packageId；只能看到单个 task，建议后续按功能包记录。")
-	} else {
-		lines = append(lines, "当前没有记录中的 worker task。")
+	lines = append(lines, "需要你处理: "+progress.HumanAction)
+	lines = append(lines, "下一步: "+progress.NextStep)
+	if progress.HeartbeatNote != "" {
+		lines = append(lines, progress.HeartbeatNote)
 	}
-	if summary.ReviewPressure.ReviewNeeded > 0 || summary.ReviewPressure.Blocked > 0 || summary.ReviewPressure.CleanupNeeded > 0 {
-		lines = append(lines, fmt.Sprintf("需要关注: 待审=%d，阻塞=%d，待清理=%d。", summary.ReviewPressure.ReviewNeeded, summary.ReviewPressure.Blocked, summary.ReviewPressure.CleanupNeeded))
-	} else if summary.ReviewPressure.Active > 0 || summary.ReviewPressure.PendingSetup > 0 {
-		lines = append(lines, fmt.Sprintf("正在推进: active=%d，pending setup=%d；等待下一次状态刷新。", summary.ReviewPressure.Active, summary.ReviewPressure.PendingSetup))
-	} else {
-		lines = append(lines, "没有待审、阻塞或待清理 worker。")
-	}
-	if summary.RuntimeStatus.AvailableDispatchSlots > 0 {
-		lines = append(lines, fmt.Sprintf("可用并发槽: %d/%d；是否派发仍由 orchestrator 根据 roadmap/package lane 决定。", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency))
-	} else {
-		lines = append(lines, "并发槽已满，不应再派发新 worker。")
-	}
-	if len(summary.RecommendedActions) > 0 {
-		lines = append(lines, "建议动作: "+summary.RecommendedActions[0])
+	if len(progress.Risks) > 0 {
+		lines = append(lines, "边界: "+strings.Join(progress.Risks, "；"))
 	}
 	return lines
+}
+
+func buildHumanProgressSummary(summary ObserveSummary) humanProgressSummary {
+	progress := humanProgressSummary{
+		Headline:    "正常运行，不需要你操作",
+		StatusClass: "ok",
+		CurrentLane: currentLaneName(summary),
+		HumanAction: "无。",
+		NextStep:    "等待下一次状态刷新；统领会按当前功能包继续处理。",
+	}
+	// Attention priority: local repo state, missed heartbeat, blocked/review/cleanup
+	// pressure, active work, then idle states. Later critical states intentionally
+	// override earlier informational states.
+	hasRepoAttention := summary.Integration.Error != "" ||
+		summary.Integration.Dirty ||
+		(summary.HeartbeatStatus != nil && summary.HeartbeatStatus.Status == "missed")
+	hasWorkerPressure := summary.ReviewPressure.Blocked > 0 ||
+		summary.ReviewPressure.ReviewNeeded > 0 ||
+		summary.ReviewPressure.CleanupNeeded > 0 ||
+		summary.ReviewPressure.Active > 0 ||
+		summary.ReviewPressure.PendingSetup > 0
+	if summary.Integration.Error != "" {
+		progress.Headline = "需要先处理本地状态"
+		progress.StatusClass = "bad"
+		progress.HumanAction = "需要统领先确认 repo 状态；不要派发或合并。"
+		progress.NextStep = "修复或解释 git 状态检查失败，再恢复编排。"
+	} else if summary.Integration.Dirty {
+		progress.Headline = "本地有未分类改动"
+		progress.StatusClass = "warn"
+		progress.HumanAction = "通常不需要你；统领应先分类未提交变化。"
+		progress.NextStep = "先区分业务代码改动、本地编排状态和生成文件，再决定是否继续。"
+	}
+	if summary.HeartbeatStatus != nil && summary.HeartbeatStatus.Status == "missed" {
+		progress.Headline = "heartbeat 可能漏跑"
+		progress.StatusClass = "warn"
+		progress.HeartbeatNote = fmt.Sprintf("heartbeat 可能漏跑：gap=%s，estimatedMissedRuns=%d。", summary.HeartbeatStatus.Gap, summary.HeartbeatStatus.EstimatedMissedRuns)
+		progress.Risks = append(progress.Risks, "heartbeat 漏跑只是 local/static 监控信号，不能证明 Codex App 具体失败原因。")
+	}
+	if summary.ReviewPressure.Blocked > 0 {
+		progress.Headline = "有阻塞需要处理"
+		progress.StatusClass = "bad"
+		progress.HumanAction = fmt.Sprintf("有 %d 个阻塞项；如果涉及设备、账号、部署或产品决策，需要你处理。", summary.ReviewPressure.Blocked)
+		progress.NextStep = "先处理阻塞项，不要派发无关任务。"
+	} else if summary.ReviewPressure.ReviewNeeded > 0 {
+		progress.Headline = "有 worker 等待验收"
+		progress.StatusClass = "warn"
+		progress.HumanAction = "不需要你；统领应验收 completed worker 的 diff、gates、docs 和 evidence label。"
+		progress.NextStep = "验收通过后 merge/push/cleanup；失败则标 blocked。"
+	} else if summary.ReviewPressure.CleanupNeeded > 0 {
+		progress.Headline = "有已收口任务待清理"
+		progress.StatusClass = "warn"
+		progress.HumanAction = "不需要你；统领应清理已验收的 worktree/branch。"
+		progress.NextStep = "完成 cleanup 后刷新 ledger/status。"
+	} else if summary.ReviewPressure.Active > 0 || summary.ReviewPressure.PendingSetup > 0 {
+		progress.NextStep = "等待当前 worker 产出或下一次 heartbeat 刷新；不要为了填满并发槽派无关模块任务。"
+	} else if !hasRepoAttention && !hasWorkerPressure && summary.JobSummary.Total == 0 {
+		progress.Headline = "当前空闲"
+		progress.StatusClass = ""
+		progress.NextStep = "没有记录中的 worker；需要先建立 feature package 和任务队列。"
+	} else if !hasRepoAttention && !hasWorkerPressure {
+		progress.Headline = "当前没有活动 worker"
+		progress.StatusClass = "ok"
+		progress.NextStep = humanNextAction(summary)
+	}
+	progress.Completed = humanCompletedLines(summary)
+	progress.CurrentWork = humanCurrentWorkLines(summary)
+	if len(progress.CurrentWork) == 0 && (summary.ReviewPressure.Active > 0 || summary.ReviewPressure.PendingSetup > 0) {
+		progress.CurrentWork = append(progress.CurrentWork, fmt.Sprintf("active=%d，pending setup=%d，等待下一次状态刷新。", summary.ReviewPressure.Active, summary.ReviewPressure.PendingSetup))
+	}
+	progress.Risks = append(progress.Risks, humanRiskLines(summary)...)
+	progress.Risks = uniqueSortedStrings(progress.Risks)
+	return progress
+}
+
+func currentLaneName(summary ObserveSummary) string {
+	if len(summary.PackageSummary.Rows) > 0 {
+		row := summary.PackageSummary.Rows[0]
+		name := humanIdentifier(row.ID)
+		if row.TaskCount > 0 {
+			return fmt.Sprintf("%s（%d 个任务，%s）", name, row.TaskCount, humanStatusLabel(row.Status))
+		}
+		return name
+	}
+	if summary.JobSummary.Total > 0 {
+		return "未归入功能包的任务队列"
+	}
+	return "暂无功能包"
+}
+
+func humanCompletedLines(summary ObserveSummary) []string {
+	lines := []string{}
+	for _, item := range summary.RuntimeStatus.RecentMergedOrCleaned {
+		if len(lines) >= 5 {
+			break
+		}
+		name := humanTaskName(item.Title, item.ID)
+		status := humanStatusLabel(item.ObservedStatus)
+		lines = append(lines, fmt.Sprintf("%s：%s", name, status))
+	}
+	if len(lines) == 0 && summary.JobSummary.Total > 0 {
+		lines = append(lines, "本轮状态页里没有最近合并或清理的 worker。")
+	}
+	return lines
+}
+
+func humanCurrentWorkLines(summary ObserveSummary) []string {
+	lines := []string{}
+	for _, item := range summary.RuntimeStatus.ActiveWorkers {
+		lines = append(lines, humanWorkLine(item))
+	}
+	for _, item := range summary.RuntimeStatus.PendingSetup {
+		lines = append(lines, humanWorkLine(item))
+	}
+	for _, item := range summary.RuntimeStatus.CompletedUnreviewed {
+		lines = append(lines, humanWorkLine(item))
+	}
+	for _, item := range summary.RuntimeStatus.Blockers {
+		lines = append(lines, humanWorkLine(item))
+	}
+	for _, item := range summary.RuntimeStatus.CleanupNeeded {
+		lines = append(lines, humanWorkLine(item))
+	}
+	if len(lines) > 6 {
+		lines = append(lines[:6], fmt.Sprintf("还有 %d 个状态项在机器详情里。", len(lines)-6))
+	}
+	return lines
+}
+
+func humanWorkLine(item RuntimeStatusItem) string {
+	name := humanTaskName(item.Title, item.ID)
+	status := humanStatusLabel(item.ObservedStatus)
+	note := humanObservationNote(item)
+	if note != "" {
+		return fmt.Sprintf("%s：%s，%s", name, status, note)
+	}
+	return fmt.Sprintf("%s：%s", name, status)
+}
+
+func humanObservationNote(item RuntimeStatusItem) string {
+	if item.State.Diff == "clean-no-task-commit" || strings.Contains(strings.ToLower(item.Note), "no commits after basecommit") {
+		return "worker 已创建，但还没有可验收 commit"
+	}
+	if item.Note != "" {
+		return item.Note
+	}
+	if item.Action != "" && item.Action != "quiet" {
+		return item.Action
+	}
+	return ""
+}
+
+func humanRiskLines(summary ObserveSummary) []string {
+	lines := []string{}
+	if summary.RuntimeStatus.EvidenceLabel != "" {
+		if summary.RuntimeStatus.EvidenceLabel == "local/static" {
+			lines = append(lines, "当前状态页证据是 local/static，不是 direct/pre/prod/device proof。")
+		} else {
+			lines = append(lines, fmt.Sprintf("当前状态页证据标签是 %s；不要自动把它当成 direct/pre/prod/device proof。", summary.RuntimeStatus.EvidenceLabel))
+		}
+	}
+	if summary.ProjectMap.Status == "missing" {
+		lines = append(lines, "缺少 project map；首次编排前最好补一份项目地图。")
+	}
+	if summary.Integration.Dirty {
+		lines = append(lines, "集成区有未提交变化，派发/合并前需要分类。")
+	}
+	if summary.BudgetPressure.TasksExceeded > 0 || summary.BudgetPressure.TasksNearLimit > 0 {
+		lines = append(lines, fmt.Sprintf("有任务接近或超过预算：near=%d exceeded=%d。", summary.BudgetPressure.TasksNearLimit, summary.BudgetPressure.TasksExceeded))
+	}
+	return lines
+}
+
+func humanNextAction(summary ObserveSummary) string {
+	if len(summary.PackageSummary.Rows) > 0 {
+		row := summary.PackageSummary.Rows[0]
+		if row.NextSuggestedAction != "" {
+			return row.NextSuggestedAction
+		}
+	}
+	if len(summary.RecommendedActions) > 0 {
+		return summary.RecommendedActions[0]
+	}
+	return "根据当前产品包选择下一步，不要从全局 backlog 随机抓无关任务。"
+}
+
+func humanStatusLabel(status string) string {
+	switch status {
+	case "active":
+		return "进行中"
+	case "pending-setup":
+		return "等待 worktree 创建"
+	case "completed-unreviewed", "review-needed":
+		return "等待验收"
+	case "blocked":
+		return "阻塞"
+	case "cleanup-needed":
+		return "待清理"
+	case "merged":
+		return "已合并"
+	case "cleaned", "released":
+		return "已收口"
+	case "stale-needs-inspection", "stale":
+		return "停滞待查"
+	case "attention-needed":
+		return "需要关注"
+	case "quiet":
+		return "安静等待"
+	default:
+		if status == "" {
+			return "状态未知"
+		}
+		return status
+	}
 }
 
 func renderSummary(summary ObserveSummary) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# codex-orchestrator heartbeat\n\n")
-	fmt.Fprintf(&b, "## 一眼看懂 / At a Glance\n\n")
-	for _, line := range statusAtAGlanceLines(summary) {
-		fmt.Fprintf(&b, "- %s\n", line)
+	fmt.Fprintf(&b, "## 当前进度\n\n")
+	progress := buildHumanProgressSummary(summary)
+	fmt.Fprintf(&b, "- 当前状态: %s\n", progress.Headline)
+	fmt.Fprintf(&b, "- 当前主线: %s\n", progress.CurrentLane)
+	fmt.Fprintf(&b, "- 需要你处理: %s\n", progress.HumanAction)
+	fmt.Fprintf(&b, "- 下一步: %s\n", progress.NextStep)
+	if progress.HeartbeatNote != "" {
+		fmt.Fprintf(&b, "- heartbeat: %s\n", progress.HeartbeatNote)
+	}
+	if len(progress.Completed) > 0 {
+		fmt.Fprintf(&b, "\n### 已经完成\n\n")
+		for _, line := range progress.Completed {
+			fmt.Fprintf(&b, "- %s\n", line)
+		}
+	}
+	if len(progress.CurrentWork) > 0 {
+		fmt.Fprintf(&b, "\n### 正在跑 / 待处理\n\n")
+		for _, line := range progress.CurrentWork {
+			fmt.Fprintf(&b, "- %s\n", line)
+		}
+	}
+	if len(progress.Risks) > 0 {
+		fmt.Fprintf(&b, "\n### 风险边界\n\n")
+		for _, line := range progress.Risks {
+			fmt.Fprintf(&b, "- %s\n", line)
+		}
 	}
 	fmt.Fprintf(&b, "\n## Machine Summary\n\n")
 	fmt.Fprintf(&b, "- observedAt: `%s`\n", summary.ObservedAt)

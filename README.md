@@ -424,11 +424,13 @@ data is labeled as local/static helper evidence. The helper does not kill
 processes, schedule sessions, or enforce budgets.
 
 `status --html` writes a local/static HTML status page to stdout. It starts with
-an "At a Glance" section that summarizes the current package lane, integration
-cleanliness, active/review/blocked/cleanup pressure, dispatch slots, and the
-next suggested action before listing detailed task tables. It is meant for a
-quick human scan without reading raw JSON. It does not start a server, daemon,
-scheduler, merge, push, cleanup, or runtime monitor.
+a human-readable `当前进度` panel that summarizes current status, the active
+feature package, recently completed work, running or waiting work, required
+human action, next step, and risk/evidence boundaries before listing detailed
+task tables. It intentionally keeps dispatch-slot and raw ledger jargon below
+the first screen. It is meant for a quick human scan without reading raw JSON.
+It does not start a server, daemon, scheduler, merge, push, cleanup, or runtime
+monitor.
 `status --write-html .codex-orchestrator/status.html --write-summary
 .codex-orchestrator/status.md` is the recommended per-cycle snapshot for a
 Codex App orchestrator: refresh it during every monitor/review/dispatch turn and

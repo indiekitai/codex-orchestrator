@@ -150,10 +150,12 @@ active/review/blocked/cleanup state, member task counts, and the next suggested
 package action. This is still local/static ledger and git evidence; it does not
 attach to live Codex App sessions.
 
-Markdown and HTML status outputs start with an "At a Glance" section for humans:
-integration cleanliness, current package lane, review/blocker/cleanup pressure,
-dispatch slots, and the first suggested action. Detailed runtime and job tables
-remain below that summary.
+Markdown and HTML status outputs start with a human-first `当前进度` section,
+not raw ledger fields. It answers the questions a project owner usually has:
+whether the run is healthy, which feature package is the current lane, what was
+recently completed, what is running now, whether the human needs to act, the
+next safe step, and the evidence boundary. Detailed runtime, package, and job
+tables remain below that summary for the orchestrator or reviewer.
 
 Reports include a `projectMap` block as a lightweight onboarding signal. The
 helper checks common files such as `docs/CODEBASE_MAP.md`,
