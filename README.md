@@ -169,7 +169,7 @@ flowchart TD
 |---------|-------------|
 | **Bounded task contracts** | Each session gets a precise scope: allowed paths, forbidden paths, base commit, acceptance gates, evidence labels |
 | **Automatic concurrency control** | Default 2 sessions, up to 3 when write sets are disjoint. Serializes shared contracts (protos, migrations, APIs) |
-| **5-minute heartbeat** | Periodic check reconciles thread status with actual git state — no silent overnight stalls |
+| **Configurable heartbeat** | Periodic check reconciles thread status with actual git state — no silent overnight stalls; the interval is project-specific |
 | **Stuck session recovery** | If a session is idle >15 min: has a clean commit → review and merge directly; has uncommitted useful changes → send a targeted nudge to continue; no useful diff → mark abandoned |
 | **Anti-shallow-slice gate** | Rejects "another placeholder page" tasks. Forces vertical completion, runtime proof, or blocker removal |
 | **Evidence discipline** | Labels proof as `direct`, `proxy`, `local`, or `blocked`. No upgrading unit tests into production proof |
@@ -268,7 +268,7 @@ sessions overnight.
 The orchestrator will:
 1. Decompose the work into bounded task contracts
 2. Dispatch sessions into separate worktrees
-3. Run a heartbeat loop every 5 minutes
+3. Run a configurable heartbeat loop
 4. Review and merge completed sessions
 5. Rescue stuck sessions by harvesting their commits
 6. Dispatch the next batch when slots open up
@@ -752,7 +752,7 @@ dispatch → active → completed-unreviewed → merged
 **Key components:**
 
 - **State Ledger**: Tracks task ID, thread ID, worktree, branch, base commit, write set, status, and gates for every session
-- **Heartbeat Loop**: Every 5 minutes, reconciles Codex thread status with actual git state
+- **Heartbeat Loop**: At the configured interval, reconciles Codex thread status with actual git state
 - **Review Pipeline**: Diff boundary check, self-review verification, contract conflict detection, evidence label validation
 - **Anti-Shallow-Slice Gate**: Classifies every task as `vertical-completion`, `runtime-proof`, `blocked-removal`, or `owner-gated`
 
@@ -760,7 +760,7 @@ dispatch → active → completed-unreviewed → merged
 
 | | Manual | codex-orchestrator |
 |---|--------|-------------------|
-| **Session monitoring** | You check each session tab manually | 5-min heartbeat auto-reconciles |
+| **Session monitoring** | You check each session tab manually | Configured heartbeat auto-reconciles |
 | **Stuck sessions** | You notice (eventually) and intervene | Auto-detected at 15 min, commit harvested |
 | **Merge conflicts** | Discovered at merge time | Prevented by disjoint write-set enforcement |
 | **Shallow work** | Sessions produce placeholder pages | Anti-shallow-slice gate rejects or rewrites |
@@ -776,7 +776,7 @@ These parameters are tunable in the skill or per-dispatch:
 |-----------|---------|-------------|
 | Max concurrency | 2 | Active sessions. Raise to 3 only when write sets are disjoint and no shared contracts are active |
 | Stale threshold | 15 min | Time without progress before a session is flagged for inspection |
-| Heartbeat interval | 5 min | How often the orchestrator checks all sessions |
+| Heartbeat interval | Project-specific | How often the orchestrator checks all sessions; examples may use 20 minutes for hands-off runs or tighter intervals for active monitoring |
 | Branch prefix | `codex/` | Namespace for task branches |
 | Push policy | Project-specific | Push only when normal for the repository or explicitly requested |
 | Evidence labels | `direct`, `proxy`, `local`, `blocked` | Required classification for local, hardware, deploy, or payment proof |
