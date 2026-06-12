@@ -1281,7 +1281,7 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	}
 
 	rendered := renderSummary(summary)
-	if !strings.Contains(rendered, "## 当前进度") || !strings.Contains(rendered, "当前主线: Pkg Checkout") || !strings.Contains(rendered, "需要你处理: 有 1 个阻塞项") {
+	if !strings.Contains(rendered, "## 当前进度") || !strings.Contains(rendered, "当前主线: Pkg Checkout") || !strings.Contains(rendered, "派发模式: active：可以") || !strings.Contains(rendered, "需要你处理: 有 1 个阻塞项") {
 		t.Fatalf("expected human-readable package progress in Markdown:\n%s", rendered)
 	}
 	if !strings.Contains(rendered, "## Package Summary") || !strings.Contains(rendered, "PKG-CHECKOUT") || !strings.Contains(rendered, "0/2 worker 已收口") || !strings.Contains(rendered, "pi:passed") {
@@ -1290,7 +1290,7 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	statusHTML := captureStdout(t, func() error {
 		return cmdStatus([]string{"--ledger", ledger, "--html"})
 	})
-	if !strings.Contains(statusHTML, "当前进度") || !strings.Contains(statusHTML, "Pkg Checkout") || !strings.Contains(statusHTML, "需要你处理") {
+	if !strings.Contains(statusHTML, "当前进度") || !strings.Contains(statusHTML, "Pkg Checkout") || !strings.Contains(statusHTML, "派发模式") || !strings.Contains(statusHTML, "active：可以") || !strings.Contains(statusHTML, "需要你处理") {
 		t.Fatalf("expected human-readable package progress in HTML:\n%s", statusHTML)
 	}
 	if !strings.Contains(statusHTML, "功能包 / Packages") || !strings.Contains(statusHTML, "PKG-CHECKOUT") || !strings.Contains(statusHTML, "0/2 worker 已收口") || !strings.Contains(statusHTML, "external review: pi:passed") {
@@ -1609,7 +1609,7 @@ func TestStatusAtAGlanceLinesCoverAttentionBranches(t *testing.T) {
 		RecommendedActions: []string{"Active tasks are within concurrency limit; continue monitoring."},
 	}
 	activeLines := strings.Join(statusAtAGlanceLines(activeMissed), "\n")
-	for _, want := range []string{"heartbeat 可能漏跑", "正在跑: active=1，pending setup=1", "等待当前 worker", "不要为了填满并发槽派无关模块任务", "需要你处理: 无。"} {
+	for _, want := range []string{"heartbeat 可能漏跑", "派发模式: active：可以", "正在跑: active=1，pending setup=1", "等待当前 worker", "不要为了填满并发槽派无关模块任务", "需要你处理: 无。"} {
 		if !strings.Contains(activeLines, want) {
 			t.Fatalf("expected at-a-glance lines to include %q, got:\n%s", want, activeLines)
 		}
@@ -1695,6 +1695,12 @@ func TestIntegrationStateDirOnlyAndDrainSlotDisplay(t *testing.T) {
 	label, className := dispatchSlotDisplay(summary)
 	if !strings.Contains(label, "排空中，不派发") || className != "warn" {
 		t.Fatalf("expected drain dispatch slot warning, got label=%q class=%q", label, className)
+	}
+	if got := humanDispatchModeLabel("drain"); got != "drain / 只收口，不派发" {
+		t.Fatalf("expected human drain label, got %q", got)
+	}
+	if got := humanDispatchModeExplanation("paused"); !strings.Contains(got, "暂停编排") || !strings.Contains(got, "不派发") {
+		t.Fatalf("expected human paused explanation, got %q", got)
 	}
 	risks := strings.Join(humanRiskLines(summary), "\n")
 	for _, want := range []string{defaultStateDir + "/ 有本地编排状态变化", "run-mode=drain", "不应该继续派发"} {

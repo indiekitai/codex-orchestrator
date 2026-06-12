@@ -1597,7 +1597,7 @@ func cmdRunModeSet(args []string) error {
 	if *jsonOut {
 		return printJSON(result)
 	}
-	fmt.Printf("Dispatch mode: %s\n", mode)
+	fmt.Printf("Dispatch mode: %s\n", humanDispatchModeLabel(mode))
 	if ledger.DispatchNote != "" {
 		fmt.Printf("Dispatch note: %s\n", ledger.DispatchNote)
 	}
@@ -2163,6 +2163,7 @@ func cmdStatus(args []string) error {
 		"projectRoot":       ledger.ProjectRoot,
 		"defaultBranch":     ledger.DefaultBranch,
 		"dispatchMode":      summary.DispatchMode,
+		"dispatchModeLabel": humanDispatchModeLabel(summary.DispatchMode),
 		"dispatchNote":      emptyToNil(summary.DispatchNote),
 		"taskCount":         len(ledger.Tasks),
 		"routineRunCount":   len(ledger.RoutineRuns),
@@ -2203,7 +2204,7 @@ func cmdStatus(args []string) error {
 	}
 	fmt.Printf("Ledger: %s\n", resolvedLedger)
 	fmt.Printf("Project: %s default=%s\n", ledger.ProjectRoot, ledger.DefaultBranch)
-	fmt.Printf("Dispatch mode: %s", summary.DispatchMode)
+	fmt.Printf("Dispatch mode: %s", humanDispatchModeLabel(summary.DispatchMode))
 	if summary.DispatchNote != "" {
 		fmt.Printf(" note=%q", summary.DispatchNote)
 	}
@@ -2898,13 +2899,13 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	fmt.Fprintf(&b, "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n", escapeHTML(title))
 	fmt.Fprintf(&b, "<style>\n")
-	fmt.Fprintf(&b, ":root{color-scheme:light dark;--bg:#f7f7f4;--panel:#ffffff;--text:#1e2428;--muted:#667075;--line:#d9dedb;--accent:#126a5a;--warn:#a35b00;--bad:#a83232;--ok:#2f6f3e}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}main{max-width:1180px;margin:0 auto;padding:28px 20px 44px}h1{font-size:28px;margin:0 0 6px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0}.muted,small{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}.card,.section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}.human{border-color:rgba(18,106,90,.35);box-shadow:0 8px 24px rgba(0,0,0,.06)}.hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}.hero-title{font-size:22px;font-weight:750}.hero-status{font-weight:700;border-radius:999px;padding:4px 10px;border:1px solid var(--line);white-space:nowrap}.human-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.human-block{border:1px solid var(--line);border-radius:8px;padding:12px;background:rgba(0,0,0,.02)}.human-block h3{margin-bottom:6px}.package-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}.package-card{border:1px solid var(--line);border-radius:8px;padding:12px;background:rgba(18,106,90,.035)}.progress{height:8px;background:rgba(0,0,0,.08);border-radius:999px;overflow:hidden;margin:8px 0}.progress span{display:block;height:100%%;background:var(--accent)}.metric{font-size:26px;font-weight:700}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin:2px 4px 2px 0;background:rgba(18,106,90,.08)}.bad{color:var(--bad)}.warn{color:var(--warn)}.ok{color:var(--ok)}.sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}ul{padding-left:18px;margin:8px 0 0}.item{border-top:1px solid var(--line);padding:10px 0}.item:first-child{border-top:0;padding-top:0}.item-title{font-weight:650}.meta{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted);word-break:break-word}.action{margin-top:6px}.evidence{display:flex;flex-wrap:wrap;gap:8px}.evidence span{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:rgba(0,0,0,.03)}pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.04);border-radius:6px;padding:8px}@media (prefers-color-scheme:dark){:root{--bg:#111412;--panel:#171c19;--text:#e8ece9;--muted:#a2aaa5;--line:#303832;--accent:#61c6ad}.human-block{background:rgba(255,255,255,.03)}.package-card{background:rgba(255,255,255,.03)}}@media(max-width:720px){main{padding:20px 12px}.sections{grid-template-columns:1fr}.hero{display:block}.hero-status{display:inline-block;margin-top:8px}}\n")
+	fmt.Fprintf(&b, ":root{color-scheme:light dark;--bg:#f7f7f4;--panel:#ffffff;--text:#1e2428;--muted:#667075;--line:#d9dedb;--accent:#126a5a;--warn:#a35b00;--bad:#a83232;--ok:#2f6f3e}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}main{max-width:1180px;margin:0 auto;padding:28px 20px 44px}h1{font-size:28px;margin:0 0 6px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0}.muted,small{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}.card,.section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}.human{border-color:rgba(18,106,90,.35);box-shadow:0 8px 24px rgba(0,0,0,.06)}.hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}.hero-title{font-size:22px;font-weight:750}.hero-status{font-weight:700;border-radius:999px;padding:4px 10px;border:1px solid var(--line);white-space:nowrap}.human-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.human-block{border:1px solid var(--line);border-radius:8px;padding:12px;background:rgba(0,0,0,.02)}.human-block h3{margin-bottom:6px}.alert{border-color:rgba(163,91,0,.45);background:rgba(163,91,0,.08);margin:0 0 12px}.package-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}.package-card{border:1px solid var(--line);border-radius:8px;padding:12px;background:rgba(18,106,90,.035)}.progress{height:8px;background:rgba(0,0,0,.08);border-radius:999px;overflow:hidden;margin:8px 0}.progress span{display:block;height:100%%;background:var(--accent)}.metric{font-size:26px;font-weight:700}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin:2px 4px 2px 0;background:rgba(18,106,90,.08)}.bad{color:var(--bad)}.warn{color:var(--warn)}.ok{color:var(--ok)}.sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}ul{padding-left:18px;margin:8px 0 0}.item{border-top:1px solid var(--line);padding:10px 0}.item:first-child{border-top:0;padding-top:0}.item-title{font-weight:650}.meta{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted);word-break:break-word}.action{margin-top:6px}.evidence{display:flex;flex-wrap:wrap;gap:8px}.evidence span{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:rgba(0,0,0,.03)}pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.04);border-radius:6px;padding:8px}@media (prefers-color-scheme:dark){:root{--bg:#111412;--panel:#171c19;--text:#e8ece9;--muted:#a2aaa5;--line:#303832;--accent:#61c6ad}.human-block{background:rgba(255,255,255,.03)}.package-card{background:rgba(255,255,255,.03)}}@media(max-width:720px){main{padding:20px 12px}.sections{grid-template-columns:1fr}.hero{display:block}.hero-status{display:inline-block;margin-top:8px}}\n")
 	fmt.Fprintf(&b, "</style>\n</head>\n<body>\n<main>\n")
 	fmt.Fprintf(&b, "<header><h1>%s</h1><div class=\"muted\">local/static evidence only · observed %s</div></header>\n", escapeHTML(title), escapeHTML(summary.ObservedAt))
 	renderHumanProgressHTML(&b, summary)
 	fmt.Fprintf(&b, "<section class=\"grid\" aria-label=\"status overview\">\n")
 	renderMetricHTML(&b, "总体状态", summary.OverallStatus, statusClass(summary.OverallStatus))
-	renderMetricHTML(&b, "派发模式", summary.DispatchMode, statusClass(summary.OverallStatus))
+	renderMetricHTML(&b, "派发模式", humanDispatchModeLabel(summary.DispatchMode), statusClass(summary.OverallStatus))
 	renderMetricHTML(&b, "任务总数", fmt.Sprint(len(ledger.Tasks)), "")
 	renderMetricHTML(&b, "功能包", fmt.Sprint(summary.PackageSummary.Total), "")
 	slotLabel, slotClass := dispatchSlotDisplay(summary)
@@ -2913,7 +2914,7 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	fmt.Fprintf(&b, "</section>\n")
 
 	fmt.Fprintf(&b, "<section class=\"section\"><h2>集成区 / Integration</h2>")
-	fmt.Fprintf(&b, "<p><span class=\"pill\">repo: %s</span><span class=\"pill\">ledger: %s</span><span class=\"pill\">default: %s</span><span class=\"pill\">dispatch: %s</span></p>", escapeHTML(ledger.ProjectRoot), escapeHTML(ledgerPath), escapeHTML(ledger.DefaultBranch), escapeHTML(summary.DispatchMode))
+	fmt.Fprintf(&b, "<p><span class=\"pill\">repo: %s</span><span class=\"pill\">ledger: %s</span><span class=\"pill\">default: %s</span><span class=\"pill\">dispatch: %s</span></p>", escapeHTML(ledger.ProjectRoot), escapeHTML(ledgerPath), escapeHTML(ledger.DefaultBranch), escapeHTML(humanDispatchModeLabel(summary.DispatchMode)))
 	if summary.DispatchNote != "" {
 		fmt.Fprintf(&b, "<p class=\"muted\">dispatch note: %s</p>", escapeHTML(summary.DispatchNote))
 	}
@@ -3149,7 +3150,11 @@ func renderHumanProgressHTML(b *strings.Builder, summary ObserveSummary) {
 		fmt.Fprintf(b, "<div class=\"muted\">%s</div>", escapeHTML(progress.HeartbeatNote))
 	}
 	fmt.Fprintf(b, "</div><div class=\"hero-status %s\">%s</div></div>", escapeHTML(progress.StatusClass), escapeHTML(progress.Headline))
+	if summary.HeartbeatStatus != nil && summary.HeartbeatStatus.Status == "missed" {
+		fmt.Fprintf(b, "<div class=\"human-block alert\"><h3>heartbeat 漏跑提示</h3><p>%s</p><p class=\"muted\">这是 local/static 辅助信号：它说明按本地事件记录看可能漏跑，但不能证明 Codex App、系统睡眠或网络是哪一环出了问题。</p></div>", escapeHTML(humanHeartbeatMissedLine(summary.HeartbeatStatus)))
+	}
 	fmt.Fprintf(b, "<div class=\"human-grid\">")
+	renderHumanProgressBlockHTML(b, "派发模式", []string{humanDispatchModeExplanation(summary.DispatchMode)})
 	renderHumanProgressBlockHTML(b, "已经完成", progress.Completed)
 	renderHumanProgressBlockHTML(b, "正在跑", progress.CurrentWork)
 	renderHumanProgressBlockHTML(b, "是否需要你处理", []string{progress.HumanAction})
@@ -3190,6 +3195,28 @@ func dispatchSlotDisplay(summary ObserveSummary) (string, string) {
 		return fmt.Sprintf("已暂停，不派发（底层槽位 %d / %d）", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency), "warn"
 	default:
 		return fmt.Sprintf("%d / %d", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency), ""
+	}
+}
+
+func humanDispatchModeLabel(mode string) string {
+	switch normalizedDispatchMode(mode) {
+	case "drain":
+		return "drain / 只收口，不派发"
+	case "paused":
+		return "paused / 暂停编排"
+	default:
+		return "active / 可继续派发"
+	}
+}
+
+func humanDispatchModeExplanation(mode string) string {
+	switch normalizedDispatchMode(mode) {
+	case "drain":
+		return "drain：只验收、合并、推送、清理已有 worker；即使有空槽，也不派发新任务。"
+	case "paused":
+		return "paused：暂停编排；不派发、不验收推进，除非用户明确恢复或要求收口。"
+	default:
+		return "active：可以在 repo/ledger 状态允许时继续派发同一功能包内的新 worker。"
 	}
 }
 
@@ -10268,6 +10295,7 @@ func statusAtAGlanceLines(summary ObserveSummary) []string {
 	lines := []string{}
 	lines = append(lines, "当前状态: "+progress.Headline)
 	lines = append(lines, "当前主线: "+progress.CurrentLane)
+	lines = append(lines, "派发模式: "+humanDispatchModeExplanation(summary.DispatchMode))
 	if len(progress.CurrentWork) > 0 {
 		lines = append(lines, "正在跑: "+strings.Join(progress.CurrentWork, "；"))
 	}
@@ -10318,7 +10346,7 @@ func buildHumanProgressSummary(summary ObserveSummary) humanProgressSummary {
 	if summary.HeartbeatStatus != nil && summary.HeartbeatStatus.Status == "missed" {
 		progress.Headline = "heartbeat 可能漏跑"
 		progress.StatusClass = "warn"
-		progress.HeartbeatNote = fmt.Sprintf("heartbeat 可能漏跑：gap=%s，estimatedMissedRuns=%d。", summary.HeartbeatStatus.Gap, summary.HeartbeatStatus.EstimatedMissedRuns)
+		progress.HeartbeatNote = humanHeartbeatMissedLine(summary.HeartbeatStatus)
 		progress.Risks = append(progress.Risks, "heartbeat 漏跑只是 local/static 监控信号，不能证明 Codex App 具体失败原因。")
 	}
 	if summary.ReviewPressure.Blocked > 0 {
@@ -10434,6 +10462,23 @@ func humanObservationNote(item RuntimeStatusItem) string {
 	return ""
 }
 
+func humanHeartbeatMissedLine(status *HeartbeatStatus) string {
+	if status == nil {
+		return ""
+	}
+	parts := []string{"heartbeat 可能漏跑"}
+	if status.Gap != "" {
+		parts = append(parts, "gap="+status.Gap)
+	}
+	if status.EstimatedMissedRuns > 0 {
+		parts = append(parts, fmt.Sprintf("estimatedMissedRuns=%d", status.EstimatedMissedRuns))
+	}
+	if status.MissedAfter != "" {
+		parts = append(parts, "threshold="+status.MissedAfter)
+	}
+	return strings.Join(parts, "，") + "。"
+}
+
 func humanRiskLines(summary ObserveSummary) []string {
 	lines := []string{}
 	if summary.Integration.StateDirOnly {
@@ -10521,10 +10566,11 @@ func renderSummary(summary ObserveSummary) string {
 	progress := buildHumanProgressSummary(summary)
 	fmt.Fprintf(&b, "- 当前状态: %s\n", progress.Headline)
 	fmt.Fprintf(&b, "- 当前主线: %s\n", progress.CurrentLane)
+	fmt.Fprintf(&b, "- 派发模式: %s\n", humanDispatchModeExplanation(summary.DispatchMode))
 	fmt.Fprintf(&b, "- 需要你处理: %s\n", progress.HumanAction)
 	fmt.Fprintf(&b, "- 下一步: %s\n", progress.NextStep)
 	if progress.HeartbeatNote != "" {
-		fmt.Fprintf(&b, "- heartbeat: %s\n", progress.HeartbeatNote)
+		fmt.Fprintf(&b, "- heartbeat 漏跑提示: %s\n", progress.HeartbeatNote)
 	}
 	if len(progress.Completed) > 0 {
 		fmt.Fprintf(&b, "\n### 已经完成\n\n")
@@ -10551,6 +10597,7 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- projectRoot: `%s`\n", summary.ProjectRoot)
 	fmt.Fprintf(&b, "- defaultBranch: `%s`\n", summary.DefaultBranch)
 	fmt.Fprintf(&b, "- dispatchMode: `%s`\n", summary.DispatchMode)
+	fmt.Fprintf(&b, "- dispatchModeLabel: `%s`\n", humanDispatchModeLabel(summary.DispatchMode))
 	if summary.DispatchNote != "" {
 		fmt.Fprintf(&b, "- dispatchNote: `%s`\n", summary.DispatchNote)
 	}
@@ -11174,7 +11221,7 @@ func printJSON(value any) error {
 func printObservations(summary ObserveSummary) {
 	fmt.Printf("Ledger: %s\n", summary.Ledger)
 	fmt.Printf("Project: %s default=%s\n", summary.ProjectRoot, summary.DefaultBranch)
-	fmt.Printf("Dispatch mode: %s", summary.DispatchMode)
+	fmt.Printf("Dispatch mode: %s", humanDispatchModeLabel(summary.DispatchMode))
 	if summary.DispatchNote != "" {
 		fmt.Printf(" note=%q", summary.DispatchNote)
 	}
