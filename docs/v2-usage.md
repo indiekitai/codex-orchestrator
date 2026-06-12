@@ -175,7 +175,11 @@ workers or matches higher-risk package keywords, `packageSummary` tells the
 orchestrator that a package review pack and imported reviewer evidence are
 needed before closeout. Reports also include `packageLaneGuard`, which warns
 about ungrouped workers, multiple active package lanes, and available slots that
-should only be used for the current package. A compact `timeline` gives the
+should only be used for the current package. A separate
+`dispatchRecommendation` block is the action signal: `recommended=false` means
+do not dispatch even when raw `availableSlots` is greater than zero, and
+`reason` / `nextAction` explain whether to wait, reconcile setup, review, clean
+up, or continue inside the same package lane. A compact `timeline` gives the
 recent task/routine sequence without reading raw ledger events. This is still
 local/static ledger and git evidence; it does not attach to live Codex App
 sessions.

@@ -745,6 +745,14 @@ Record the package switch and blocker in the ledger/status report. Do not
 optimize only for "safe and mergeable"; optimize for a coherent product/module
 story that a human can summarize in a daily report.
 
+Treat raw `availableSlots` as capacity only, not as permission to dispatch.
+Before creating a new worker, read `dispatchRecommendation.recommended` and
+`dispatchRecommendation.reason` from `status`/`observe` when available. If a
+current package worker is active, pending setup, dirty, or waiting for the next
+heartbeat, do not fill the free slot with an unrelated "safe" task. Wait,
+reconcile setup truth, review, or dispatch only a task that clearly belongs to
+the same package lane.
+
 ## Decision Brief / Authorization / Live Proof Discipline
 
 When a task needs owner input, do not ask with only a URL, task id, or vague

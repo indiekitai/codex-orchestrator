@@ -1782,6 +1782,31 @@ func TestHumanProgressSummaryBranches(t *testing.T) {
 	if !strings.Contains(lane, "Web Runtime Rewrite Unblock") || strings.Contains(lane, "Staff") {
 		t.Fatalf("expected current lane to prefer active package over old review debt, got %q", lane)
 	}
+
+	split := PackageSummary{Rows: []PackageStatusItem{
+		{ID: "staff-rbac-old-review", Status: "review-needed", TaskCount: 4, LatestUpdatedAt: "2026-06-12T08:00:00+08:00"},
+		{ID: "pre-web-runtime-rewrite-unblock", Status: "active", TaskCount: 1, LatestUpdatedAt: "2026-06-12T09:00:00+08:00"},
+	}}
+	current, ok := selectCurrentPackageLane(split.Rows)
+	if !ok || current.ID != "pre-web-runtime-rewrite-unblock" {
+		t.Fatalf("expected active current lane, got row=%#v ok=%t", current, ok)
+	}
+	split.CurrentLane = optionalPackageStatusItem(current, ok)
+	split.HistoricalReviewDebt = packageRowsWithStatusExcept(split.Rows, "review-needed", current.ID)
+	if split.CurrentLane == nil || split.CurrentLane.ID != "pre-web-runtime-rewrite-unblock" || len(split.HistoricalReviewDebt) != 1 || split.HistoricalReviewDebt[0].ID != "staff-rbac-old-review" {
+		t.Fatalf("expected current lane and historical review debt split, got %#v", split)
+	}
+
+	rec := buildDispatchRecommendation(
+		"active",
+		IntegrationState{},
+		ReviewPressure{Active: 1, AvailableSlots: 1},
+		split,
+		PackageLaneGuard{EvidenceLabel: "local/static", Status: "warning", CurrentPackageID: "pre-web-runtime-rewrite-unblock"},
+	)
+	if rec.Recommended || rec.Reason != "active or pending worker exists" || !strings.Contains(rec.NextAction, "current package worker") {
+		t.Fatalf("expected active worker to suppress filler dispatch, got %#v", rec)
+	}
 }
 
 func TestIntegrationStateDirOnlyAndDrainSlotDisplay(t *testing.T) {

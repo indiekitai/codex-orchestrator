@@ -87,7 +87,10 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
      not-ready / blocked / reject-for-fixup 等收口判断；旧的 cleaned/merged/rejected/
      abandoned 且没有 `packageId` 的历史任务仍保留在 `jobSummary.rows`，但从
      当前行动列表隐藏，并通过 `legacyTerminalUngrouped` 计数说明，不再触发
-     package-lane warning。
+     package-lane warning。`dispatchRecommendation` 现在把 raw capacity 和动作建议
+     分开：`availableSlots` 只是底层槽位，`recommended=false` 会明确说明当前应等待
+     active/pending package worker、reconcile setup、review/cleanup，还是可以继续同一
+     package lane。
    - 边界：local/static closeout guidance；不自动 merge/push/cleanup，不产生直接
      runtime/device/provider proof。
 

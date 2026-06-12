@@ -432,9 +432,13 @@ pre/prod work, the status output marks whether an external package review is
 required and what review pack/import action is next. `observe`, `status`, and
 heartbeat summaries also expose a `packageLaneGuard` block that warns when
 workers are ungrouped, multiple package lanes are active, or an available slot
-should only be filled with work from the current lane. They also include a
-compact `timeline` so a project owner can see the recent task/routine sequence
-without reading raw ledger events. `observe`, `status`, and heartbeat summaries also expose a read-only
+should only be filled with work from the current lane. Reports also include a
+`dispatchRecommendation` block with `recommended`, `reason`, `nextAction`, and
+`availableSlots`; treat this as the action signal and treat raw slots as
+capacity only. If one package worker is active or pending, `recommended=false`
+keeps the orchestrator from filling the free slot with unrelated safe work.
+The compact `timeline` shows the recent task/routine sequence without reading
+raw ledger events. `observe`, `status`, and heartbeat summaries also expose a read-only
 `projectMap` signal. The helper checks for common project-map files such as
 `docs/CODEBASE_MAP.md`; when none exists, it asks Codex App to generate or read
 a concise map before first orchestration.

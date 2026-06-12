@@ -252,9 +252,12 @@ type JobSummary struct {
 }
 
 type PackageSummary struct {
-	EvidenceLabel string              `json:"evidenceLabel"`
-	Total         int                 `json:"total"`
-	Rows          []PackageStatusItem `json:"rows,omitempty"`
+	EvidenceLabel         string              `json:"evidenceLabel"`
+	Total                 int                 `json:"total"`
+	CurrentLane           *PackageStatusItem  `json:"currentLane,omitempty"`
+	HistoricalReviewDebt  []PackageStatusItem `json:"historicalReviewDebt,omitempty"`
+	CleanedPackageHistory []PackageStatusItem `json:"cleanedPackageHistory,omitempty"`
+	Rows                  []PackageStatusItem `json:"rows,omitempty"`
 }
 
 type PackageStatusItem struct {
@@ -334,6 +337,15 @@ type PackageLaneGuard struct {
 	DoNotDispatchReason string   `json:"doNotDispatchReason,omitempty"`
 }
 
+type DispatchRecommendation struct {
+	EvidenceLabel    string `json:"evidenceLabel"`
+	Recommended      bool   `json:"recommended"`
+	Reason           string `json:"reason"`
+	NextAction       string `json:"nextAction"`
+	AvailableSlots   int    `json:"availableSlots"`
+	CurrentPackageID string `json:"currentPackageId,omitempty"`
+}
+
 type TimelineItem struct {
 	At        string `json:"at,omitempty"`
 	Kind      string `json:"kind"`
@@ -356,30 +368,31 @@ type routineBudgetCoverage struct {
 }
 
 type ObserveSummary struct {
-	Ledger             string                `json:"ledger"`
-	Version            int                   `json:"version"`
-	ProjectRoot        string                `json:"projectRoot"`
-	DefaultBranch      string                `json:"defaultBranch"`
-	DispatchMode       string                `json:"dispatchMode,omitempty"`
-	DispatchNote       string                `json:"dispatchNote,omitempty"`
-	HeartbeatStatus    *HeartbeatStatus      `json:"heartbeatStatus,omitempty"`
-	ObservedAt         string                `json:"observedAt"`
-	OverallStatus      string                `json:"overallStatus"`
-	RecommendedActions []string              `json:"recommendedActions"`
-	Counts             map[string]int        `json:"counts"`
-	ReviewPressure     ReviewPressure        `json:"reviewPressure"`
-	BudgetSummary      BudgetSummary         `json:"budgetSummary"`
-	BudgetPressure     BudgetPressureSummary `json:"budgetPressure"`
-	Integration        IntegrationState      `json:"integration"`
-	RuntimeStatus      RuntimeStatusReport   `json:"runtimeStatus"`
-	JobSummary         JobSummary            `json:"jobSummary"`
-	PackageSummary     PackageSummary        `json:"packageSummary"`
-	PackageLaneGuard   PackageLaneGuard      `json:"packageLaneGuard"`
-	ProjectMap         ProjectMapStatus      `json:"projectMap"`
-	Preflight          *PreflightReport      `json:"preflight,omitempty"`
-	Timeline           []TimelineItem        `json:"timeline,omitempty"`
-	Observations       []Observation         `json:"observations"`
-	RecentRoutineRuns  []RoutineRun          `json:"recentRoutineRuns,omitempty"`
+	Ledger                 string                 `json:"ledger"`
+	Version                int                    `json:"version"`
+	ProjectRoot            string                 `json:"projectRoot"`
+	DefaultBranch          string                 `json:"defaultBranch"`
+	DispatchMode           string                 `json:"dispatchMode,omitempty"`
+	DispatchNote           string                 `json:"dispatchNote,omitempty"`
+	HeartbeatStatus        *HeartbeatStatus       `json:"heartbeatStatus,omitempty"`
+	ObservedAt             string                 `json:"observedAt"`
+	OverallStatus          string                 `json:"overallStatus"`
+	RecommendedActions     []string               `json:"recommendedActions"`
+	Counts                 map[string]int         `json:"counts"`
+	ReviewPressure         ReviewPressure         `json:"reviewPressure"`
+	BudgetSummary          BudgetSummary          `json:"budgetSummary"`
+	BudgetPressure         BudgetPressureSummary  `json:"budgetPressure"`
+	Integration            IntegrationState       `json:"integration"`
+	RuntimeStatus          RuntimeStatusReport    `json:"runtimeStatus"`
+	JobSummary             JobSummary             `json:"jobSummary"`
+	PackageSummary         PackageSummary         `json:"packageSummary"`
+	PackageLaneGuard       PackageLaneGuard       `json:"packageLaneGuard"`
+	DispatchRecommendation DispatchRecommendation `json:"dispatchRecommendation"`
+	ProjectMap             ProjectMapStatus       `json:"projectMap"`
+	Preflight              *PreflightReport       `json:"preflight,omitempty"`
+	Timeline               []TimelineItem         `json:"timeline,omitempty"`
+	Observations           []Observation          `json:"observations"`
+	RecentRoutineRuns      []RoutineRun           `json:"recentRoutineRuns,omitempty"`
 }
 
 type HeartbeatStatus struct {
@@ -2159,31 +2172,32 @@ func cmdStatus(args []string) error {
 	}
 	summary.Preflight = buildPreflightReportFromSummary(resolvedLedger, eventsPathForLedger(resolvedLedger), ledger, summary, 20*time.Minute, 45*time.Minute)
 	result := map[string]any{
-		"ledger":            resolvedLedger,
-		"projectRoot":       ledger.ProjectRoot,
-		"defaultBranch":     ledger.DefaultBranch,
-		"dispatchMode":      summary.DispatchMode,
-		"dispatchModeLabel": humanDispatchModeLabel(summary.DispatchMode),
-		"dispatchNote":      emptyToNil(summary.DispatchNote),
-		"taskCount":         len(ledger.Tasks),
-		"routineRunCount":   len(ledger.RoutineRuns),
-		"overallStatus":     summary.OverallStatus,
-		"counts":            summary.Counts,
-		"ledgerCounts":      ledgerCounts,
-		"reviewPressure":    summary.ReviewPressure,
-		"budgetSummary":     summary.BudgetSummary,
-		"budgetPressure":    summary.BudgetPressure,
-		"integration":       summary.Integration,
-		"runtimeStatus":     summary.RuntimeStatus,
-		"jobSummary":        summary.JobSummary,
-		"packageSummary":    summary.PackageSummary,
-		"packageLaneGuard":  summary.PackageLaneGuard,
-		"projectMap":        summary.ProjectMap,
-		"preflight":         summary.Preflight,
-		"timeline":          summary.Timeline,
-		"tasks":             ledger.Tasks,
-		"observations":      summary.Observations,
-		"recentRoutineRuns": summary.RecentRoutineRuns,
+		"ledger":                 resolvedLedger,
+		"projectRoot":            ledger.ProjectRoot,
+		"defaultBranch":          ledger.DefaultBranch,
+		"dispatchMode":           summary.DispatchMode,
+		"dispatchModeLabel":      humanDispatchModeLabel(summary.DispatchMode),
+		"dispatchNote":           emptyToNil(summary.DispatchNote),
+		"taskCount":              len(ledger.Tasks),
+		"routineRunCount":        len(ledger.RoutineRuns),
+		"overallStatus":          summary.OverallStatus,
+		"counts":                 summary.Counts,
+		"ledgerCounts":           ledgerCounts,
+		"reviewPressure":         summary.ReviewPressure,
+		"budgetSummary":          summary.BudgetSummary,
+		"budgetPressure":         summary.BudgetPressure,
+		"integration":            summary.Integration,
+		"runtimeStatus":          summary.RuntimeStatus,
+		"jobSummary":             summary.JobSummary,
+		"packageSummary":         summary.PackageSummary,
+		"packageLaneGuard":       summary.PackageLaneGuard,
+		"dispatchRecommendation": summary.DispatchRecommendation,
+		"projectMap":             summary.ProjectMap,
+		"preflight":              summary.Preflight,
+		"timeline":               summary.Timeline,
+		"tasks":                  ledger.Tasks,
+		"observations":           summary.Observations,
+		"recentRoutineRuns":      summary.RecentRoutineRuns,
 	}
 	if *writeHTML != "" {
 		if err := writeText(*writeHTML, renderStatusHTML(summary, ledger, resolvedLedger)); err != nil {
@@ -2211,6 +2225,11 @@ func cmdStatus(args []string) error {
 	fmt.Println()
 	fmt.Printf("Tasks: %d overall=%s\n", len(ledger.Tasks), summary.OverallStatus)
 	fmt.Printf("Runtime status (%s): %s\n", summary.RuntimeStatus.EvidenceLabel, summary.RuntimeStatus.Summary)
+	fmt.Printf("Dispatch recommended (%s): %t", summary.DispatchRecommendation.EvidenceLabel, summary.DispatchRecommendation.Recommended)
+	if summary.DispatchRecommendation.Reason != "" {
+		fmt.Printf(" reason=%q", summary.DispatchRecommendation.Reason)
+	}
+	fmt.Println()
 	fmt.Printf("Jobs: total=%d counts=%s\n", summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
 	fmt.Printf("Packages: total=%d\n", summary.PackageSummary.Total)
 	fmt.Printf("Lane guard (%s): %s", summary.PackageLaneGuard.EvidenceLabel, summary.PackageLaneGuard.Status)
@@ -2910,6 +2929,8 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	renderMetricHTML(&b, "功能包", fmt.Sprint(summary.PackageSummary.Total), "")
 	slotLabel, slotClass := dispatchSlotDisplay(summary)
 	renderMetricHTML(&b, "派发槽", slotLabel, slotClass)
+	dispatchLabel, dispatchClass := dispatchRecommendationDisplay(summary.DispatchRecommendation)
+	renderMetricHTML(&b, "派发建议", dispatchLabel, dispatchClass)
 	renderMetricHTML(&b, "待审/阻塞", fmt.Sprintf("%d / %d", summary.ReviewPressure.ReviewNeeded, summary.ReviewPressure.Blocked), pressureClass(summary.ReviewPressure.Blocked, summary.ReviewPressure.ReviewNeeded))
 	fmt.Fprintf(&b, "</section>\n")
 
@@ -2948,6 +2969,10 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	fmt.Fprintf(&b, "</section>\n")
 
 	fmt.Fprintf(&b, "<section class=\"section\"><h2>下一步建议 / Next</h2><p>%s</p>", escapeHTML(nextAction))
+	fmt.Fprintf(&b, "<p><strong>dispatchRecommended=%t</strong> · reason=%s</p>", summary.DispatchRecommendation.Recommended, escapeHTML(summary.DispatchRecommendation.Reason))
+	if summary.DispatchRecommendation.NextAction != "" {
+		fmt.Fprintf(&b, "<p>%s</p>", escapeHTML(summary.DispatchRecommendation.NextAction))
+	}
 	if len(summary.RecommendedActions) > 1 {
 		fmt.Fprintf(&b, "<ul>")
 		for _, action := range summary.RecommendedActions[1:] {
@@ -3229,6 +3254,16 @@ func dispatchSlotDisplay(summary ObserveSummary) (string, string) {
 	}
 }
 
+func dispatchRecommendationDisplay(rec DispatchRecommendation) (string, string) {
+	if rec.Recommended {
+		return "可以派发", "ok"
+	}
+	if rec.Reason == "" {
+		return "不建议派发", "warn"
+	}
+	return "不建议派发", "warn"
+}
+
 func humanDispatchModeLabel(mode string) string {
 	switch normalizedDispatchMode(mode) {
 	case "drain":
@@ -3293,41 +3328,57 @@ func renderPackageSummaryHTML(b *strings.Builder, summary PackageSummary) {
 		fmt.Fprintf(b, "<p class=\"muted\">No packageId recorded yet. Add <code>--package-id</code> when recording related worker tasks.</p></section>\n")
 		return
 	}
-	fmt.Fprintf(b, "<div class=\"package-grid\">")
-	for _, row := range summary.Rows {
-		percent := packageProgressPercent(row)
-		fmt.Fprintf(b, "<div class=\"package-card\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(humanIdentifier(row.ID)), escapeHTML(row.Status))
-		fmt.Fprintf(b, "<div class=\"progress\" aria-label=\"package progress\"><span style=\"width:%d%%\"></span></div>", percent)
-		fmt.Fprintf(b, "<div>%s</div>", escapeHTML(row.HumanSummary))
-		fmt.Fprintf(b, "<div class=\"meta\">id=%s · tasks=%d · counts=%s", escapeHTML(row.ID), row.TaskCount, escapeHTML(formatIntMap(row.Counts)))
-		if row.LatestUpdatedAt != "" {
-			fmt.Fprintf(b, " · updated=%s", escapeHTML(row.LatestUpdatedAt))
-		}
-		fmt.Fprintf(b, "</div>")
-		if row.ReviewStatus != "" {
-			fmt.Fprintf(b, "<div class=\"meta\">external review: %s</div>", escapeHTML(row.ReviewStatus))
-		}
-		if row.ReviewDecision != "" {
-			fmt.Fprintf(b, "<div class=\"meta\">review decision: %s", escapeHTML(row.ReviewDecision))
-			if row.ReviewRequired {
-				fmt.Fprintf(b, " · required")
-			}
-			fmt.Fprintf(b, "</div>")
-		}
-		if row.ReviewNextAction != "" {
-			fmt.Fprintf(b, "<div class=\"action warn\">%s</div>", escapeHTML(row.ReviewNextAction))
-		}
-		if row.NextSuggestedAction != "" {
-			fmt.Fprintf(b, "<div class=\"action\">%s</div>", escapeHTML(row.NextSuggestedAction))
-		}
-		renderPackageTaskIDsHTML(b, "active", row.ActiveTaskIDs)
-		renderPackageTaskIDsHTML(b, "review", row.ReviewTaskIDs)
-		renderPackageTaskIDsHTML(b, "blocked", row.BlockedTaskIDs)
-		renderPackageTaskIDsHTML(b, "cleanup", row.CleanupTaskIDs)
-		renderPackageTaskIDsHTML(b, "other", row.OtherTaskIDs)
+	if summary.CurrentLane != nil {
+		fmt.Fprintf(b, "<h3>当前 active lane</h3><div class=\"package-grid\">")
+		renderPackageCardHTML(b, *summary.CurrentLane)
 		fmt.Fprintf(b, "</div>")
 	}
+	if len(summary.HistoricalReviewDebt) > 0 {
+		fmt.Fprintf(b, "<h3 style=\"margin-top:14px\">历史 review debt</h3><p class=\"muted\">这些包需要复核或导入外部 review，但不代表当前主线应该切回去。</p><div class=\"package-grid\">")
+		for _, row := range summary.HistoricalReviewDebt {
+			renderPackageCardHTML(b, row)
+		}
+		fmt.Fprintf(b, "</div>")
+	}
+	fmt.Fprintf(b, "<h3 style=\"margin-top:14px\">全部 package rows</h3><div class=\"package-grid\">")
+	for _, row := range summary.Rows {
+		renderPackageCardHTML(b, row)
+	}
 	fmt.Fprintf(b, "</div></section>\n")
+}
+
+func renderPackageCardHTML(b *strings.Builder, row PackageStatusItem) {
+	percent := packageProgressPercent(row)
+	fmt.Fprintf(b, "<div class=\"package-card\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(humanIdentifier(row.ID)), escapeHTML(row.Status))
+	fmt.Fprintf(b, "<div class=\"progress\" aria-label=\"package progress\"><span style=\"width:%d%%\"></span></div>", percent)
+	fmt.Fprintf(b, "<div>%s</div>", escapeHTML(row.HumanSummary))
+	fmt.Fprintf(b, "<div class=\"meta\">id=%s · tasks=%d · counts=%s", escapeHTML(row.ID), row.TaskCount, escapeHTML(formatIntMap(row.Counts)))
+	if row.LatestUpdatedAt != "" {
+		fmt.Fprintf(b, " · updated=%s", escapeHTML(row.LatestUpdatedAt))
+	}
+	fmt.Fprintf(b, "</div>")
+	if row.ReviewStatus != "" {
+		fmt.Fprintf(b, "<div class=\"meta\">external review: %s</div>", escapeHTML(row.ReviewStatus))
+	}
+	if row.ReviewDecision != "" {
+		fmt.Fprintf(b, "<div class=\"meta\">review decision: %s", escapeHTML(row.ReviewDecision))
+		if row.ReviewRequired {
+			fmt.Fprintf(b, " · required")
+		}
+		fmt.Fprintf(b, "</div>")
+	}
+	if row.ReviewNextAction != "" {
+		fmt.Fprintf(b, "<div class=\"action warn\">%s</div>", escapeHTML(row.ReviewNextAction))
+	}
+	if row.NextSuggestedAction != "" {
+		fmt.Fprintf(b, "<div class=\"action\">%s</div>", escapeHTML(row.NextSuggestedAction))
+	}
+	renderPackageTaskIDsHTML(b, "active", row.ActiveTaskIDs)
+	renderPackageTaskIDsHTML(b, "review", row.ReviewTaskIDs)
+	renderPackageTaskIDsHTML(b, "blocked", row.BlockedTaskIDs)
+	renderPackageTaskIDsHTML(b, "cleanup", row.CleanupTaskIDs)
+	renderPackageTaskIDsHTML(b, "other", row.OtherTaskIDs)
+	fmt.Fprintf(b, "</div>")
 }
 
 func renderPackageTaskIDsHTML(b *strings.Builder, label string, ids []string) {
@@ -8396,32 +8447,34 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	jobSummary := buildJobSummary(ledger.Tasks, observations, counts)
 	packageSummary := buildPackageSummary(ledger.Tasks, observations, ledger.RoutineRuns)
 	laneGuard := buildPackageLaneGuard(packageSummary, jobSummary, pressure, normalizedDispatchMode(ledger.DispatchMode))
+	dispatchRecommendation := buildDispatchRecommendation(normalizedDispatchMode(ledger.DispatchMode), integration, pressure, packageSummary, laneGuard)
 	projectMap := inspectProjectMap(ledger.ProjectRoot)
 	timeline := buildTimeline(ledger.Tasks, observations, ledger.RoutineRuns, 12)
 	overall, actions := summarizeObservations(ledger, integration, counts, pressure)
 	summary := ObserveSummary{
-		Ledger:             ledgerPath,
-		Version:            ledger.Version,
-		ProjectRoot:        ledger.ProjectRoot,
-		DefaultBranch:      ledger.DefaultBranch,
-		DispatchMode:       normalizedDispatchMode(ledger.DispatchMode),
-		DispatchNote:       ledger.DispatchNote,
-		ObservedAt:         observedAt.Format(time.RFC3339),
-		OverallStatus:      overall,
-		RecommendedActions: actions,
-		Counts:             counts,
-		ReviewPressure:     pressure,
-		BudgetSummary:      budget,
-		BudgetPressure:     budgetPressure,
-		Integration:        integration,
-		RuntimeStatus:      runtimeStatus,
-		JobSummary:         jobSummary,
-		PackageSummary:     packageSummary,
-		PackageLaneGuard:   laneGuard,
-		ProjectMap:         projectMap,
-		Timeline:           timeline,
-		Observations:       observations,
-		RecentRoutineRuns:  recentRoutineRuns(ledger.RoutineRuns, 5),
+		Ledger:                 ledgerPath,
+		Version:                ledger.Version,
+		ProjectRoot:            ledger.ProjectRoot,
+		DefaultBranch:          ledger.DefaultBranch,
+		DispatchMode:           normalizedDispatchMode(ledger.DispatchMode),
+		DispatchNote:           ledger.DispatchNote,
+		ObservedAt:             observedAt.Format(time.RFC3339),
+		OverallStatus:          overall,
+		RecommendedActions:     actions,
+		Counts:                 counts,
+		ReviewPressure:         pressure,
+		BudgetSummary:          budget,
+		BudgetPressure:         budgetPressure,
+		Integration:            integration,
+		RuntimeStatus:          runtimeStatus,
+		JobSummary:             jobSummary,
+		PackageSummary:         packageSummary,
+		PackageLaneGuard:       laneGuard,
+		DispatchRecommendation: dispatchRecommendation,
+		ProjectMap:             projectMap,
+		Timeline:               timeline,
+		Observations:           observations,
+		RecentRoutineRuns:      recentRoutineRuns(ledger.RoutineRuns, 5),
 	}
 	if heartbeatStatus := loadRepoHeartbeatStatus(ledger.ProjectRoot); heartbeatStatus != nil {
 		summary.HeartbeatStatus = heartbeatStatus
@@ -8726,6 +8779,79 @@ func buildPackageLaneGuard(summary PackageSummary, jobs JobSummary, pressure Rev
 		guard.Status = "passed"
 	}
 	return guard
+}
+
+func buildDispatchRecommendation(dispatchMode string, integration IntegrationState, pressure ReviewPressure, summary PackageSummary, laneGuard PackageLaneGuard) DispatchRecommendation {
+	rec := DispatchRecommendation{
+		EvidenceLabel:    "local/static",
+		Recommended:      false,
+		Reason:           "not evaluated",
+		NextAction:       "Inspect repo, ledger, package lane, and worker state before dispatch.",
+		AvailableSlots:   pressure.AvailableSlots,
+		CurrentPackageID: laneGuard.CurrentPackageID,
+	}
+	mode := normalizedDispatchMode(dispatchMode)
+	switch mode {
+	case "drain", "paused":
+		rec.Reason = "dispatch mode is " + mode
+		rec.NextAction = "Do not dispatch new workers until run-mode is active."
+		return rec
+	}
+	if integration.Dirty && !integration.StateDirOnly {
+		rec.Reason = "integration workspace has business-file changes"
+		rec.NextAction = "Classify or clean integration workspace changes before dispatch."
+		return rec
+	}
+	if pressure.CleanupNeeded > 0 {
+		rec.Reason = "cleanup-needed tasks exist"
+		rec.NextAction = "Clean accepted workers before dispatching more work."
+		return rec
+	}
+	if pressure.ReviewNeeded > 0 {
+		rec.Reason = "completed-unreviewed tasks exist"
+		rec.NextAction = "Review completed commits and merge or reject them before dispatching more work."
+		return rec
+	}
+	if pressure.Blocked > 0 {
+		rec.Reason = "blocked tasks exist"
+		rec.NextAction = "Record or resolve blockers before dispatching more work."
+		return rec
+	}
+	if pressure.Stale > 0 {
+		rec.Reason = "stale tasks need inspection"
+		rec.NextAction = "Inspect stale workers before dispatching more work."
+		return rec
+	}
+	if pressure.Active > 0 || pressure.PendingSetup > 0 {
+		rec.Reason = "active or pending worker exists"
+		rec.NextAction = "Wait for the current package worker, or run dispatch reconcile if setup truth is out of sync."
+		return rec
+	}
+	if laneGuard.Status == "warning" && laneGuard.DoNotDispatchReason != "" {
+		rec.Reason = laneGuard.DoNotDispatchReason
+		rec.NextAction = laneGuard.RecommendedAction
+		return rec
+	}
+	if laneGuard.Status == "warning" && len(laneGuard.ActivePackageIDs) > 1 {
+		rec.Reason = "multiple package lanes need attention"
+		rec.NextAction = laneGuard.RecommendedAction
+		return rec
+	}
+	if current, ok := currentPackageLane(summary); ok && current.Status == "review-needed" {
+		rec.CurrentPackageID = current.ID
+		rec.Reason = "current package has historical review debt"
+		rec.NextAction = "Treat this as review debt, not a reason to switch active product lanes."
+		return rec
+	}
+	if pressure.AvailableSlots <= 0 {
+		rec.Reason = "no dispatch slots available"
+		rec.NextAction = "Wait for current worker progress."
+		return rec
+	}
+	rec.Recommended = true
+	rec.Reason = "capacity available and no local blocker is visible"
+	rec.NextAction = "Dispatch only the next coherent worker from the current or selected feature package; do not fill slots with unrelated safe work."
+	return rec
 }
 
 func packageLaneActive(status string) bool {
@@ -9072,11 +9198,38 @@ func buildPackageSummary(tasks []Task, observations []Observation, routineRuns [
 		}
 		return rows[i].ID < rows[j].ID
 	})
-	return PackageSummary{
-		EvidenceLabel: "local/static",
-		Total:         len(rows),
-		Rows:          rows,
+	currentLane, currentLaneOK := selectCurrentPackageLane(rows)
+	currentLaneID := ""
+	if currentLaneOK {
+		currentLaneID = currentLane.ID
 	}
+	historicalReviewDebt := packageRowsWithStatusExcept(rows, "review-needed", currentLaneID)
+	cleanedPackageHistory := packageRowsWithStatusExcept(rows, "cleaned", currentLaneID)
+	return PackageSummary{
+		EvidenceLabel:         "local/static",
+		Total:                 len(rows),
+		CurrentLane:           optionalPackageStatusItem(currentLane, currentLaneOK),
+		HistoricalReviewDebt:  historicalReviewDebt,
+		CleanedPackageHistory: cleanedPackageHistory,
+		Rows:                  rows,
+	}
+}
+
+func optionalPackageStatusItem(row PackageStatusItem, ok bool) *PackageStatusItem {
+	if !ok {
+		return nil
+	}
+	return &row
+}
+
+func packageRowsWithStatusExcept(rows []PackageStatusItem, status string, exceptID string) []PackageStatusItem {
+	var out []PackageStatusItem
+	for _, row := range rows {
+		if row.Status == status && row.ID != exceptID {
+			out = append(out, row)
+		}
+	}
+	return out
 }
 
 func packageReviewStatus(current string, run RoutineRun) string {
@@ -10490,13 +10643,20 @@ func currentLaneName(summary ObserveSummary) string {
 }
 
 func currentPackageLane(summary PackageSummary) (PackageStatusItem, bool) {
-	if len(summary.Rows) == 0 {
+	if summary.CurrentLane != nil {
+		return *summary.CurrentLane, true
+	}
+	return selectCurrentPackageLane(summary.Rows)
+}
+
+func selectCurrentPackageLane(rows []PackageStatusItem) (PackageStatusItem, bool) {
+	if len(rows) == 0 {
 		return PackageStatusItem{}, false
 	}
 	preferred := []string{"active", "blocked", "cleanup-needed", "attention-needed", "review-needed", "review-only", "cleaned"}
 	for _, status := range preferred {
 		var candidates []PackageStatusItem
-		for _, row := range summary.Rows {
+		for _, row := range rows {
 			if row.Status == status {
 				candidates = append(candidates, row)
 			}
@@ -10512,7 +10672,7 @@ func currentPackageLane(summary PackageSummary) (PackageStatusItem, bool) {
 		})
 		return candidates[0], true
 	}
-	return summary.Rows[0], true
+	return rows[0], true
 }
 
 func humanCompletedLines(summary ObserveSummary) []string {
@@ -10712,6 +10872,13 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- defaultBranch: `%s`\n", summary.DefaultBranch)
 	fmt.Fprintf(&b, "- dispatchMode: `%s`\n", summary.DispatchMode)
 	fmt.Fprintf(&b, "- dispatchModeLabel: `%s`\n", humanDispatchModeLabel(summary.DispatchMode))
+	fmt.Fprintf(&b, "- dispatchRecommended: `%t`\n", summary.DispatchRecommendation.Recommended)
+	if summary.DispatchRecommendation.Reason != "" {
+		fmt.Fprintf(&b, "- dispatchReason: %s\n", summary.DispatchRecommendation.Reason)
+	}
+	if summary.DispatchRecommendation.NextAction != "" {
+		fmt.Fprintf(&b, "- dispatchNextAction: %s\n", summary.DispatchRecommendation.NextAction)
+	}
 	if summary.DispatchNote != "" {
 		fmt.Fprintf(&b, "- dispatchNote: `%s`\n", summary.DispatchNote)
 	}
@@ -10784,6 +10951,7 @@ func renderSummary(summary ObserveSummary) string {
 		}
 	}
 	renderRuntimeStatusMarkdown(&b, summary.RuntimeStatus)
+	renderDispatchRecommendationMarkdown(&b, summary.DispatchRecommendation)
 	renderPackageLaneGuardMarkdown(&b, summary.PackageLaneGuard)
 	renderPreflightMarkdownInto(&b, summary.Preflight)
 	renderTimelineMarkdown(&b, summary.Timeline)
@@ -10891,6 +11059,22 @@ func renderRuntimeStatusCategoryMarkdown(b *strings.Builder, title string, items
 	}
 }
 
+func renderDispatchRecommendationMarkdown(b *strings.Builder, rec DispatchRecommendation) {
+	fmt.Fprintf(b, "\n## Dispatch Recommendation\n\n")
+	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", rec.EvidenceLabel)
+	fmt.Fprintf(b, "- dispatchRecommended: `%t`\n", rec.Recommended)
+	fmt.Fprintf(b, "- availableSlots: `%d`\n", rec.AvailableSlots)
+	if rec.CurrentPackageID != "" {
+		fmt.Fprintf(b, "- currentPackageId: `%s`\n", rec.CurrentPackageID)
+	}
+	if rec.Reason != "" {
+		fmt.Fprintf(b, "- reason: %s\n", rec.Reason)
+	}
+	if rec.NextAction != "" {
+		fmt.Fprintf(b, "- nextAction: %s\n", rec.NextAction)
+	}
+}
+
 func renderPackageLaneGuardMarkdown(b *strings.Builder, guard PackageLaneGuard) {
 	if guard.Status == "" {
 		return
@@ -10956,6 +11140,16 @@ func renderPackageSummaryMarkdown(b *strings.Builder, summary PackageSummary) {
 	if len(summary.Rows) == 0 {
 		fmt.Fprintf(b, "- no packageId recorded yet; use `--package-id` when recording related worker tasks.\n")
 		return
+	}
+	if summary.CurrentLane != nil {
+		fmt.Fprintf(b, "- currentLane: `%s` `%s` - %s\n", summary.CurrentLane.ID, summary.CurrentLane.Status, firstNonEmpty(summary.CurrentLane.HumanSummary, summary.CurrentLane.ProgressLabel))
+	}
+	if len(summary.HistoricalReviewDebt) > 0 {
+		ids := make([]string, 0, len(summary.HistoricalReviewDebt))
+		for _, row := range summary.HistoricalReviewDebt {
+			ids = append(ids, row.ID)
+		}
+		fmt.Fprintf(b, "- historicalReviewDebt: `%s` (not the active lane unless explicitly selected)\n", strings.Join(ids, ", "))
 	}
 	fmt.Fprintf(b, "\n| Package | Status | Progress | External Review | Review Decision | Counts | Updated | Next |\n")
 	fmt.Fprintf(b, "|---|---|---|---|---|---|---|---|\n")
