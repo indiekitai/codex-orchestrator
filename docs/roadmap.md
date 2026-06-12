@@ -129,11 +129,11 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
      `project-map.md`；已有文件默认不覆盖，只有显式 `--force` 才覆盖。
    - 边界：这些模板是本地编排状态，不等于项目代码或 direct proof。
 
-5. v0.3.4 release closeout：待本轮验证后执行。
+5. v0.3.4 release closeout：已完成。
    - 目标：在 preflight、watchdog、status UX、package closeout、legacy ledger 降噪、
      onboarding templates 稳定后发下一个 release。
-   - 收口前检查：`go test ./...`、`policy check`、`eval run`、status/preflight smoke、
-     release assets smoke。
+   - 当前落地：`v0.3.4` tag 和 GitHub Release 已发布并验证，release assets 齐全，
+     release-verifier 通过，darwin_arm64 下载 smoke 通过。
 
 ## 分层架构
 
