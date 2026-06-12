@@ -277,6 +277,39 @@ The intended setup order stays the same even when the helper is used:
 For release assets and shell completions, see
 [docs/distribution-package.md](docs/distribution-package.md).
 
+## Updating
+
+The update story is also Codex App-first. If you are not sure whether your
+installed skill or helper is current, paste this into Codex App from this
+repository checkout:
+
+```text
+Please update my local codex-orchestrator installation from this repository.
+
+Check the installed skill at ~/.codex/skills/codex-orchestrator and the helper
+binary on PATH. Update the Codex App skill from this checkout, rebuild the Go
+helper only if it is already installed or clearly useful, and do not touch any
+project .codex-orchestrator/ledger.json files. After updating, run a smoke check
+and tell me what changed.
+```
+
+If you prefer the command line from a cloned checkout:
+
+```bash
+# Sync the local Codex App skill. Rebuild the helper only if it already exists.
+scripts/update-local.sh
+
+# Force a helper rebuild too.
+scripts/update-local.sh --with-helper
+
+# Only update the skill, leaving any helper binary unchanged.
+scripts/update-local.sh --skill-only
+```
+
+`scripts/update-local.sh` does not run `git pull`, dispatch sessions, mutate
+project ledgers, merge, push, or clean worktrees. It only refreshes the local
+skill directory and, when requested or already installed, rebuilds the helper.
+
 After setup, ask Codex App to use codex-orchestrator. Codex may invoke the
 installed skill when appropriate:
 
@@ -948,6 +981,7 @@ codex-orchestrator/
 │   ├── ledger_heartbeat.py
 │   ├── install-macos-watchdog.sh
 │   ├── macos-watchdog-run.sh
+│   ├── update-local.sh
 │   └── publish-release.sh
 ├── go.mod
 ├── README.md             # This file

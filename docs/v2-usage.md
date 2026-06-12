@@ -37,6 +37,40 @@ chmod +x codex-orchestrator_darwin_arm64
 mv codex-orchestrator_darwin_arm64 ~/.local/bin/codex-orchestrator
 ```
 
+## Update An Existing Local Install
+
+If you already have a checkout of this repository, the friendliest path is to
+ask Codex App to update itself from the checkout:
+
+```text
+Please update my local codex-orchestrator installation from this repository.
+
+Check the installed skill at ~/.codex/skills/codex-orchestrator and the helper
+binary on PATH. Update the Codex App skill from this checkout, rebuild the Go
+helper only if it is already installed or clearly useful, and do not touch any
+project .codex-orchestrator/ledger.json files. After updating, run a smoke check
+and tell me what changed.
+```
+
+For direct command-line use:
+
+```bash
+# Update the installed Codex App skill. If the helper already exists in
+# ~/.local/bin, rebuild it too.
+scripts/update-local.sh
+
+# Force helper rebuild as well.
+scripts/update-local.sh --with-helper
+
+# Only sync ~/.codex/skills/codex-orchestrator.
+scripts/update-local.sh --skill-only
+```
+
+`scripts/update-local.sh` intentionally does not run `git pull`, mutate project
+ledgers, dispatch sessions, merge, push, or clean worktrees. Pull or download
+the repository version you want first, then use the script to refresh your local
+Codex skill and optional helper.
+
 ## Initialize A Project Ledger
 
 Run this from the repository you want to orchestrate:

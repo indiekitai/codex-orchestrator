@@ -238,6 +238,37 @@ Codex App 读取这个仓库。
 Release assets 和 shell completion 见
 [docs/distribution-package.md](docs/distribution-package.md)。
 
+## 更新方式
+
+更新也保持 Codex App-first。你不确定本机 skill 或 helper 是否最新时，可以在本仓库
+checkout 里把这段发给 Codex App：
+
+```text
+请从当前仓库更新我的本地 codex-orchestrator。
+
+检查 ~/.codex/skills/codex-orchestrator 里的已安装 skill，以及 PATH 上的 helper
+binary。从这个 checkout 更新 Codex App skill；只有在 helper 已经安装或明确有用时
+才重建 Go helper；不要触碰任何项目里的 .codex-orchestrator/ledger.json。更新后跑
+一个 smoke check，并告诉我改了什么。
+```
+
+如果你更熟悉命令行，也可以在本仓库 checkout 里执行：
+
+```bash
+# 同步本地 Codex App skill；如果 helper 已存在，则顺手重建。
+scripts/update-local.sh
+
+# 强制重建 helper。
+scripts/update-local.sh --with-helper
+
+# 只更新 skill，不动 helper binary。
+scripts/update-local.sh --skill-only
+```
+
+`scripts/update-local.sh` 不会运行 `git pull`，不会派发 session，不会修改项目
+ledger，不会 merge / push / cleanup worktree。它只刷新本地 skill 目录，并在需要时
+重建 helper。
+
 接入后，直接让 Codex App 使用 codex-orchestrator；Codex 会在需要时调用已安装的 skill：
 
 ```
@@ -778,6 +809,7 @@ codex-orchestrator/
 │   ├── ledger_heartbeat.py
 │   ├── install-macos-watchdog.sh
 │   ├── macos-watchdog-run.sh
+│   ├── update-local.sh
 │   └── publish-release.sh
 ├── go.mod
 ├── README.md             # 英文说明

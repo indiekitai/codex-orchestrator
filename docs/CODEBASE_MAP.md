@@ -17,7 +17,7 @@ orchestration work in this repository.
 | `docs/roadmap.md` | Current roadmap and phase status. Update when a feature slice completes or a route is intentionally de-scoped. |
 | `docs/reviews/` | Review and proof notes. Add a dated note for non-trivial changes, especially CLI behavior, release, policy/eval, or safety changes. |
 | `examples/` | Example ledgers, routine reports, heartbeat reports, and external-user prompt artifacts. Keep examples in sync with schema changes. |
-| `scripts/` | Install, release, compatibility, macOS watchdog, and legacy helper scripts. Do not add package-manager distribution scripts unless explicitly re-scoped. |
+| `scripts/` | Install, update, release, compatibility, macOS watchdog, and legacy helper scripts. Do not add package-manager distribution scripts unless explicitly re-scoped. |
 
 ## Common Verification Gates
 
