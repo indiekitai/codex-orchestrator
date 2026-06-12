@@ -1,86 +1,95 @@
-# v0.3.2 Release Notes
+# v0.3.3 Release Notes
 
-`v0.3.2` strengthens the review and decision handoff layer around
-`codex-orchestrator`. The release keeps the same Codex App-first workflow, but
-makes local/static packs more decision-ready for humans, orchestrators, and
-external reviewers.
+`v0.3.3` makes `codex-orchestrator` easier to run hands-off and easier to
+understand when it is running. It keeps the Codex App-first workflow: Codex App
+is still the orchestrator, while the helper provides durable local state,
+status snapshots, conservative watchdog evidence, and package-level review
+handoff material.
 
 ## Highlights
 
-- Added model-agnostic loop strategy notes:
-  `docs/research/model-plateau-loop-engineering.md`.
-- Updated the roadmap to prioritize portable review artifacts over
-  model-specific prompt tricks.
-- Strengthened `pack consultation` with:
-  - `ownerDecisionBrief`
-  - `authorizationMatrix`
-  - `liveProofGate`
-- Strengthened `pack merge-readiness` with:
-  - `authorizationMatrix`
-  - `liveProofGate`
-  - `acceptanceReport`
-- Updated `SKILL.md` so orchestrators separate review evidence, merge
-  acceptance, push closeout, cleanup, release/deploy authorization, and live
-  proof or waiver requirements.
-- Added review documentation:
-  `docs/reviews/2026-06-11-decision-brief-authorization-live-proof-pack.md`.
+- Added package-aware orchestration visibility:
+  - `record-task` and `dispatch record` support `--package-id`;
+  - `observe`, `status`, and heartbeat reports include `packageSummary`;
+  - roadmap scoring now prefers coherent package lanes over unrelated small
+    backlog slices.
+- Added human-readable status surfaces:
+  - `status --write-html` and `status --write-summary` now start with
+    "At a Glance" lines;
+  - status output highlights integration cleanliness, current package lane,
+    missed heartbeat risk, review/blocker/cleanup pressure, dispatch slots, and
+    the first recommended action.
+- Added hands-off reliability guardrails:
+  - helper heartbeat reports can detect missed local heartbeat intervals;
+  - macOS LaunchAgent watchdog scripts can emit local/static missed-wakeup
+    notifications;
+  - `codex-orchestrator watchdog status --repo .` inspects the installed
+    watchdog plist, loaded state, last report, summary, and logs.
+- Added package-level external review workflow:
+  - `pack review` builds portable local/static review material;
+  - `review policy check` recommends when a package should use one or two
+    external reviewers;
+  - `review run --reviewer pi|claude` and `review import` record advisory
+    model review results without treating them as merge authorization.
 
 ## Why This Release
 
-Recent maintainer-orchestrator practice converges on the same lesson:
-delegated work should not hand a human a vague blocker or a bare URL. A useful
-orchestrator should prepare a decision-ready brief, name the evidence, separate
-permissions, and make live-proof gaps explicit.
+Real long-running Codex App orchestration exposed two practical gaps:
 
-`v0.3.2` brings that discipline into the existing consultation and
-merge-readiness packs without turning the helper into a daemon, release bot, or
-GitHub-specific maintainer tool.
+1. Users could not quickly see what the orchestrator was doing, especially when
+   tasks were split across several worker sessions.
+2. Missed heartbeat wakeups and failed worktree setup needed durable,
+   local/static evidence instead of relying on chat memory.
 
-## New Pack Fields
+`v0.3.3` addresses those gaps without turning the helper into a daemon or an
+agent operating system. The helper still does not create Codex sessions, merge,
+push, clean worktrees, or prove live runtime behavior.
 
-`pack consultation` now includes:
+## New Commands And Outputs
 
-- `ownerDecisionBrief`: what is blocked, why a decision is needed now, what
-  proof exists, what is missing, available choices, tradeoffs, and the
-  recommendation.
-- `authorizationMatrix`: records that consultation only authorizes asking the
-  owner, not implementation, merge, push, cleanup, or release.
-- `liveProofGate`: records whether live/runtime/device/provider proof appears
-  required, whether it exists, and whether a waiver would be needed.
+Package status:
 
-`pack merge-readiness` now includes:
+```bash
+codex-orchestrator record-task --id TASK --package-id PACKAGE --worktree /path/to/wt --branch codex/task
+codex-orchestrator observe --json
+codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
+```
 
-- `authorizationMatrix`: review evidence is not the same as merge, push,
-  cleanup, or release authorization.
-- `liveProofGate`: runtime/device/provider proof remains separate from local
-  static review evidence.
-- `acceptanceReport`: a draft review outcome such as `review-ready`,
-  `needs-review`, `reject-for-fixup`, or `blocked`, with evidence and residual
-  risks.
+Hands-off watchdog status:
+
+```bash
+REPO=/path/to/project ./scripts/install-macos-watchdog.sh
+codex-orchestrator watchdog status --repo /path/to/project
+```
+
+Package external review:
+
+```bash
+codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
+codex-orchestrator review policy check --package-id PKG --risk medium --task-count 4 --json
+codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --write-report /tmp/pi-review.json
+```
 
 ## Evidence Boundary
 
-The new fields are still `local/static` review aids. They do not:
+The new watchdog and status surfaces are `local/static` evidence. They can show
+that a local check ran, did not run, or saw a missed interval. They cannot prove
+why Codex App did not wake a thread, keep a sleeping Mac awake, or replace
+Codex App heartbeat automation.
 
-- create Codex App sessions,
-- dispatch workers,
-- merge or push,
-- clean worktrees,
-- edit ledger or git state,
-- call the network,
-- perform live runtime/device/provider checks,
-- authorize release, deploy, tag, registry publish, production mutation, or
-  external-service action.
-
-Direct proof and item-specific waivers remain outside the pack until a human or
-orchestrator records them explicitly.
+External model review is advisory evidence. A Pi, Claude, DeepSeek, or other
+review report can help the orchestrator find issues, but it does not by itself
+authorize implementation, merge, push, cleanup, release, deployment, external
+service calls, or direct runtime proof.
 
 ## Verification Before Publishing
 
 Checks used for this release:
 
-- `go test ./cmd/codex-orchestrator -run 'TestPackConsultation|TestPackMergeReadiness'`
 - `go test ./...`
+- `bash -n scripts/install-macos-watchdog.sh scripts/macos-watchdog-run.sh`
+- `codex-orchestrator watchdog status --repo .`
+- `go run ./cmd/codex-orchestrator validate-routines --dir routines --json`
 - `go run ./cmd/codex-orchestrator policy check --repo .`
 - `go run ./cmd/codex-orchestrator run-routine docs-drift-checker --repo . --json`
 - `go run ./cmd/codex-orchestrator run-routine evidence-label-auditor --repo . --json`
@@ -91,8 +100,8 @@ publishing.
 
 ## Suggested Announcement
 
-`codex-orchestrator v0.3.2` adds decision-ready handoff fields to consultation
-and merge-readiness packs: owner decision briefs, authorization matrices, live
-proof gates, and acceptance report drafts. The goal is still App-first Loop
-Engineering: isolate work, review evidence, keep permissions explicit, and
-never confuse local/static proof with live/direct proof.
+`codex-orchestrator v0.3.3` improves App-first Loop Engineering visibility:
+package-level status, human-readable status snapshots, missed-heartbeat
+detection, macOS watchdog status, and optional package-level Pi/Claude review
+handoffs. It remains a conservative helper around Codex App, not a daemon or
+autonomous release bot.

@@ -11,6 +11,12 @@ DIST_DIR=${2:-"dist"}
 REPO=${REPO:-indiekitai/codex-orchestrator}
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 NOTES_FILE=${NOTES_FILE:-"$ROOT_DIR/docs/beta-release-notes-draft.md"}
+PRERELEASE=false
+case "$TAG" in
+  *-alpha*|*-beta*|*-rc*)
+    PRERELEASE=true
+    ;;
+esac
 
 gh_api_retry() {
   ATTEMPT=1
@@ -84,7 +90,7 @@ else
     -f name="$TAG" \
     -f body="$RELEASE_BODY" \
     -F draft=false \
-    -F prerelease=true \
+    -F prerelease="$PRERELEASE" \
     --jq '.id')
 fi
 

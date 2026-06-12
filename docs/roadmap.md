@@ -97,9 +97,11 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
      recommended actions。
    - 边界：仍然只做本地提醒和报告，不替代 Codex App session 调度。
 
-5. v0.3.3 release closeout：待做。
+5. v0.3.3 release closeout：进行中。
    - 目标：在 Roadmap scorer v2 和 package/status polish 足够稳定后，发下一个
      release，把 post-`v0.3.2` 的 watchdog/status/review 能力对外收口。
+   - 当前落地：release notes 已更新为 `v0.3.3`，本地 release assets 已构建，
+     release helper 已修正 stable/prerelease 判断；等待 tag/publish/verification。
 
 ## 分层架构
 
