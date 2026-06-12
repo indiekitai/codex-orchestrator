@@ -376,6 +376,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
+./codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
 ./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
 ./codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
@@ -422,6 +423,11 @@ for a quick human scan of integration cleanliness, active and pending work,
 review/blocked/cleanup queues, dispatch slots, budget pressure, next suggested
 action, and evidence labels without reading raw JSON. It does not start a
 server, daemon, scheduler, merge, push, cleanup, or runtime monitor.
+`status --write-html .codex-orchestrator/status.html --write-summary
+.codex-orchestrator/status.md` is the recommended per-cycle snapshot for a
+Codex App orchestrator: refresh it during every monitor/review/dispatch turn and
+include the paths in the user-facing status update so humans do not need to run
+helper commands manually.
 
 `dispatch record` and `dispatch reconcile` are the App-first dispatch closure
 commands. Use `dispatch record` immediately after Codex App returns a

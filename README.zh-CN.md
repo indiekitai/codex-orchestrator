@@ -326,6 +326,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
+./codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
 ./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
 ./codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
@@ -368,6 +369,9 @@ session 或强制执行预算。
 integration 是否干净、活跃和 pending 工作、待审/阻塞/清理队列、可用派发槽、
 budget pressure、下一步建议和 evidence label，而不必直接读 JSON。它不会启动
 server、daemon、scheduler，也不会 merge、push、cleanup 或监控 runtime。
+推荐编排 session 每轮都运行 `status --write-html .codex-orchestrator/status.html
+--write-summary .codex-orchestrator/status.md`，把固定状态页和摘要刷新出来，并在中文
+汇报里带上路径。这样用户不需要自己记命令，也不用猜“现在到底跑到哪一步”。
 
 `dispatch record` 和 `dispatch reconcile` 是 App-first 的派发闭环命令。Codex
 App 返回 `pendingWorktreeId` 后，先用 `dispatch record` 立即写入 task ID、可选

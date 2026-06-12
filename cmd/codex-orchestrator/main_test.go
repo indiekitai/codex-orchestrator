@@ -1082,6 +1082,25 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 	if strings.Contains(statusHTML, "Pending <setup>") {
 		t.Fatalf("expected status HTML to escape task title:\n%s", statusHTML)
 	}
+	statusHTMLPath := filepath.Join(root, "status.html")
+	statusSummaryPath := filepath.Join(root, "status.md")
+	if err := cmdStatus([]string{"--ledger", ledger, "--write-html", statusHTMLPath, "--write-summary", statusSummaryPath}); err != nil {
+		t.Fatal(err)
+	}
+	writtenHTML, err := os.ReadFile(statusHTMLPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(writtenHTML), "codex-orchestrator 本地静态状态页") {
+		t.Fatalf("expected written status HTML, got:\n%s", string(writtenHTML))
+	}
+	writtenSummary, err := os.ReadFile(statusSummaryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(writtenSummary), "## Runtime Status") {
+		t.Fatalf("expected written status summary, got:\n%s", string(writtenSummary))
+	}
 	if err := cmdStatus([]string{"--ledger", ledger, "--json", "--html"}); err == nil {
 		t.Fatal("expected mutually exclusive JSON/HTML status flags to fail")
 	}

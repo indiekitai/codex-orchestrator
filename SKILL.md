@@ -166,6 +166,7 @@ ledger over chat-only state:
 codex-orchestrator init
 codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
 codex-orchestrator observe --json
+codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
 codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json --write-summary .codex-orchestrator/heartbeat-summary.md
 codex-orchestrator append-event --task-id TASK --type review --status completed-unreviewed --note "Ready for orchestrator review."
 ```
@@ -197,6 +198,16 @@ queue status. `projectMap` checks for common files such as
 orchestration, ask Codex App to generate or read a concise project map covering
 module boundaries, owner docs, test commands, shared contracts, and high-risk
 paths before dispatching broad work.
+
+For long-running Codex App orchestrator sessions, refresh fixed status artifacts
+on every visible monitor, review, merge, cleanup, or dispatch turn:
+
+```bash
+codex-orchestrator status --repo . --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
+```
+
+Include those paths in Chinese user-facing status updates and handoffs. The user
+should not need to remember helper commands to see overall progress.
 
 If the repository includes v2.5 routine contracts, validate them before relying
 on routine names in a plan:

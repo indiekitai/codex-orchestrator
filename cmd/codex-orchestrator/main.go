@@ -795,7 +795,7 @@ Usage:
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--count 0] [--write-report PATH]
-  codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--stale-after 15m]
+  codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--write-html PATH] [--write-summary PATH] [--stale-after 15m]
   codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack consultation --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack review --package-id PKG --task-id TASK [--task-id TASK...] [--repo PATH] [--ledger PATH] [--output DIR] [--write-report PATH] [--json]
@@ -907,7 +907,7 @@ _codex_orchestrator()
       COMPREPLY=( $(compgen -W "--repo --ledger --json --write-report --write-summary --stale-after --help" -- "$cur") )
       ;;
     status)
-      COMPREPLY=( $(compgen -W "--repo --ledger --json --html --stale-after --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--repo --ledger --json --html --write-html --write-summary --stale-after --help" -- "$cur") )
       ;;
     pack)
       if [[ ${COMP_WORDS[2]} == "merge-readiness" ]]; then
@@ -1107,7 +1107,7 @@ case $state in
         _values 'options' --repo --ledger --json --write-report --write-summary --stale-after --help
         ;;
       status)
-        _values 'options' --repo --ledger --json --html --stale-after --help
+        _values 'options' --repo --ledger --json --html --write-html --write-summary --stale-after --help
         ;;
       heartbeat)
         _values 'options' --repo --ledger --interval --count --write-report --write-summary --help
@@ -1154,6 +1154,7 @@ complete -c codex-orchestrator -n '__fish_seen_subcommand_from completion' -a 'b
 complete -c codex-orchestrator -l ledger -d 'Ledger path'
 complete -c codex-orchestrator -l json -d 'Print JSON'
 complete -c codex-orchestrator -l html -d 'Print local/static HTML status page'
+complete -c codex-orchestrator -l write-html -d 'Write local/static HTML status page'
 complete -c codex-orchestrator -l write-report -d 'Write JSON report'
 complete -c codex-orchestrator -l write-summary -d 'Write Markdown summary'
 complete -c codex-orchestrator -l stale-after -d 'Stale threshold'
@@ -1766,6 +1767,8 @@ func cmdStatus(args []string) error {
 	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
 	jsonOut := fs.Bool("json", false, "print JSON")
 	htmlOut := fs.Bool("html", false, "print local/static HTML status page")
+	writeHTML := fs.String("write-html", "", "write local/static HTML status page")
+	writeSummary := fs.String("write-summary", "", "write Markdown status summary")
 	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale threshold")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1810,6 +1813,16 @@ func cmdStatus(args []string) error {
 		"observations":      summary.Observations,
 		"recentRoutineRuns": summary.RecentRoutineRuns,
 	}
+	if *writeHTML != "" {
+		if err := writeText(*writeHTML, renderStatusHTML(summary, ledger, resolvedLedger)); err != nil {
+			return err
+		}
+	}
+	if *writeSummary != "" {
+		if err := writeText(*writeSummary, renderSummary(summary)); err != nil {
+			return err
+		}
+	}
 	if *jsonOut {
 		return printJSON(result)
 	}
@@ -1833,6 +1846,12 @@ func cmdStatus(args []string) error {
 		summary.RuntimeStatus.AvailableDispatchSlots,
 	)
 	printRuntimeStatusReport(summary.RuntimeStatus)
+	if *writeHTML != "" {
+		fmt.Printf("Status HTML: %s\n", *writeHTML)
+	}
+	if *writeSummary != "" {
+		fmt.Printf("Status summary: %s\n", *writeSummary)
+	}
 	return nil
 }
 
