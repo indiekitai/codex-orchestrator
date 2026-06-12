@@ -252,6 +252,9 @@ type PackageSummary struct {
 type PackageStatusItem struct {
 	ID                  string         `json:"id"`
 	Status              string         `json:"status"`
+	ProgressLabel       string         `json:"progressLabel,omitempty"`
+	ReviewStatus        string         `json:"reviewStatus,omitempty"`
+	HumanSummary        string         `json:"humanSummary,omitempty"`
 	TaskCount           int            `json:"taskCount"`
 	Counts              map[string]int `json:"counts"`
 	ActiveTaskIDs       []string       `json:"activeTaskIds,omitempty"`
@@ -618,6 +621,33 @@ type AcceptanceReport struct {
 	NextAction          string               `json:"nextAction"`
 }
 
+type PackageAcceptanceReport struct {
+	SchemaVersion       int                         `json:"schemaVersion"`
+	Command             string                      `json:"command"`
+	GeneratedAt         string                      `json:"generatedAt"`
+	Status              string                      `json:"status"`
+	EvidenceLabel       string                      `json:"evidenceLabel"`
+	Boundary            string                      `json:"boundary"`
+	PackageID           string                      `json:"packageId"`
+	LedgerPath          string                      `json:"ledgerPath"`
+	RepoPath            string                      `json:"repoPath"`
+	Tasks               []MergeReadinessTaskSummary `json:"tasks,omitempty"`
+	TaskReports         []AcceptanceReport          `json:"taskReports,omitempty"`
+	ExternalReviewRuns  []RoutineRun                `json:"externalReviewRuns,omitempty"`
+	Decision            string                      `json:"decision"`
+	Why                 []string                    `json:"why"`
+	EvidenceReviewed    []string                    `json:"evidenceReviewed"`
+	GatesReviewed       []string                    `json:"gatesReviewed,omitempty"`
+	AuthorizationMatrix []AuthorizationCheck        `json:"authorizationMatrix"`
+	LiveProofGate       LiveProofGate               `json:"liveProofGate"`
+	ResidualRisks       []string                    `json:"residualRisks,omitempty"`
+	NeedsHuman          bool                        `json:"needsHuman"`
+	BlockedReason       string                      `json:"blockedReason,omitempty"`
+	NextAction          string                      `json:"nextAction"`
+	Evidence            map[string][]string         `json:"evidence"`
+	ActionsTaken        []string                    `json:"actionsTaken"`
+}
+
 type ReviewPack struct {
 	SchemaVersion       int                         `json:"schemaVersion"`
 	Command             string                      `json:"command"`
@@ -879,7 +909,8 @@ Usage:
   codex-orchestrator watchdog status [--repo PATH] [--label-suffix SUFFIX] [--json]
   codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack consultation --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
-  codex-orchestrator pack review --package-id PKG --task-id TASK [--task-id TASK...] [--repo PATH] [--ledger PATH] [--output DIR] [--write-report PATH] [--json]
+  codex-orchestrator pack review --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--output DIR] [--write-report PATH] [--json]
+  codex-orchestrator pack acceptance --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator review run --package-id PKG --reviewer pi|claude --pack DIR [--repo PATH] [--ledger PATH] [--write-report PATH] [--json] [--dry-run]
   codex-orchestrator review import --package-id PKG --reviewer NAME --file PATH [--ledger PATH] [--task-id TASK] [--status passed|failed|blocked] [--json]
   codex-orchestrator review policy show|check [--repo PATH] [--config PATH] [--risk low|medium|high] [--task-count N] [--package-id PKG] [--json]
@@ -952,7 +983,7 @@ _codex_orchestrator()
       return 0
       ;;
     pack)
-      COMPREPLY=( $(compgen -W "merge-readiness consultation review" -- "$cur") )
+      COMPREPLY=( $(compgen -W "merge-readiness consultation review acceptance" -- "$cur") )
       return 0
       ;;
     watchdog)
@@ -1020,7 +1051,7 @@ _codex_orchestrator()
       elif [[ ${COMP_WORDS[2]} == "review" ]]; then
         COMPREPLY=( $(compgen -W "--repo --ledger --package-id --task-id --output --write-report --json --help" -- "$cur") )
       else
-        COMPREPLY=( $(compgen -W "merge-readiness consultation review" -- "$cur") )
+        COMPREPLY=( $(compgen -W "merge-readiness consultation review acceptance" -- "$cur") )
       fi
       ;;
     review)
@@ -1191,7 +1222,7 @@ case $state in
         ;;
       pack)
         if (( CURRENT == 3 )); then
-          _values 'subcommand' merge-readiness consultation review
+          _values 'subcommand' merge-readiness consultation review acceptance
         elif [[ $words[3] == "review" ]]; then
           _values 'options' --repo --ledger --package-id --task-id --output --write-report --json --help
         else
@@ -1268,7 +1299,7 @@ complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a '
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from dispatch' -a 'record reconcile'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-mode' -a 'set'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from watchdog' -a 'status'
-complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness consultation review'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness consultation review acceptance'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from review' -a 'run import policy'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run add-failure'
@@ -2250,7 +2281,7 @@ func printWatchdogStatus(report WatchdogStatusReport) {
 
 func cmdPack(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: codex-orchestrator pack merge-readiness|consultation|review")
+		return errors.New("usage: codex-orchestrator pack merge-readiness|consultation|review|acceptance")
 	}
 	switch args[0] {
 	case "merge-readiness":
@@ -2259,8 +2290,10 @@ func cmdPack(args []string) error {
 		return cmdPackConsultation(args[1:])
 	case "review":
 		return cmdPackReview(args[1:])
+	case "acceptance":
+		return cmdPackAcceptance(args[1:])
 	case "help", "-h", "--help":
-		fmt.Println("usage: codex-orchestrator pack merge-readiness|consultation|review --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]")
+		fmt.Println("usage: codex-orchestrator pack merge-readiness|consultation|review|acceptance [--package-id PKG] [--task-id TASK] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]")
 		return nil
 	default:
 		return fmt.Errorf("unknown pack subcommand: %s", args[0])
@@ -2351,15 +2384,16 @@ func cmdPackReview(args []string) error {
 	if *packageID == "" {
 		return errors.New("pack review requires --package-id")
 	}
-	if len(taskIDs) == 0 {
-		return errors.New("pack review requires at least one --task-id")
-	}
 	resolvedRepo := expandPath(*repo)
 	if resolvedRepo == "" {
 		resolvedRepo = "."
 	}
 	resolvedLedger := resolveDefaultLedgerPath(resolvedRepo, *ledgerPath, flagProvided(fs, "ledger"))
-	report, err := buildReviewPack(resolvedRepo, resolvedLedger, *packageID, taskIDs, *outputDir)
+	selectedTaskIDs, err := selectPackageTaskIDs(resolvedLedger, *packageID, taskIDs)
+	if err != nil {
+		return err
+	}
+	report, err := buildReviewPack(resolvedRepo, resolvedLedger, *packageID, selectedTaskIDs, *outputDir)
 	if err != nil {
 		return err
 	}
@@ -2377,6 +2411,46 @@ func cmdPackReview(args []string) error {
 	if *writeReport != "" {
 		fmt.Printf("Wrote review pack report: %s\n", *writeReport)
 	}
+	return nil
+}
+
+func cmdPackAcceptance(args []string) error {
+	fs := flag.NewFlagSet("pack acceptance", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	packageID := fs.String("package-id", "", "feature package id")
+	writeReport := fs.String("write-report", "", "write package acceptance report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	var taskIDs stringList
+	fs.Var(&taskIDs, "task-id", "task id to include; repeatable. Defaults to all tasks in --package-id")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *packageID == "" {
+		return errors.New("pack acceptance requires --package-id")
+	}
+	resolvedRepo := expandPath(*repo)
+	if resolvedRepo == "" {
+		resolvedRepo = "."
+	}
+	resolvedLedger := resolveDefaultLedgerPath(resolvedRepo, *ledgerPath, flagProvided(fs, "ledger"))
+	selectedTaskIDs, err := selectPackageTaskIDs(resolvedLedger, *packageID, taskIDs)
+	if err != nil {
+		return err
+	}
+	report, err := buildPackageAcceptanceReport(resolvedRepo, resolvedLedger, *packageID, selectedTaskIDs)
+	if err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote package acceptance report: %s\n", *writeReport)
 	return nil
 }
 
@@ -2596,7 +2670,7 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	fmt.Fprintf(&b, "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n", escapeHTML(title))
 	fmt.Fprintf(&b, "<style>\n")
-	fmt.Fprintf(&b, ":root{color-scheme:light dark;--bg:#f7f7f4;--panel:#ffffff;--text:#1e2428;--muted:#667075;--line:#d9dedb;--accent:#126a5a;--warn:#a35b00;--bad:#a83232;--ok:#2f6f3e}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}main{max-width:1180px;margin:0 auto;padding:28px 20px 44px}h1{font-size:28px;margin:0 0 6px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0}.muted,small{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}.card,.section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}.human{border-color:rgba(18,106,90,.35);box-shadow:0 8px 24px rgba(0,0,0,.06)}.hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}.hero-title{font-size:22px;font-weight:750}.hero-status{font-weight:700;border-radius:999px;padding:4px 10px;border:1px solid var(--line);white-space:nowrap}.human-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.human-block{border:1px solid var(--line);border-radius:8px;padding:12px;background:rgba(0,0,0,.02)}.human-block h3{margin-bottom:6px}.metric{font-size:26px;font-weight:700}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin:2px 4px 2px 0;background:rgba(18,106,90,.08)}.bad{color:var(--bad)}.warn{color:var(--warn)}.ok{color:var(--ok)}.sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}ul{padding-left:18px;margin:8px 0 0}.item{border-top:1px solid var(--line);padding:10px 0}.item:first-child{border-top:0;padding-top:0}.item-title{font-weight:650}.meta{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted);word-break:break-word}.action{margin-top:6px}.evidence{display:flex;flex-wrap:wrap;gap:8px}.evidence span{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:rgba(0,0,0,.03)}pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.04);border-radius:6px;padding:8px}@media (prefers-color-scheme:dark){:root{--bg:#111412;--panel:#171c19;--text:#e8ece9;--muted:#a2aaa5;--line:#303832;--accent:#61c6ad}.human-block{background:rgba(255,255,255,.03)}}@media(max-width:720px){main{padding:20px 12px}.sections{grid-template-columns:1fr}.hero{display:block}.hero-status{display:inline-block;margin-top:8px}}\n")
+	fmt.Fprintf(&b, ":root{color-scheme:light dark;--bg:#f7f7f4;--panel:#ffffff;--text:#1e2428;--muted:#667075;--line:#d9dedb;--accent:#126a5a;--warn:#a35b00;--bad:#a83232;--ok:#2f6f3e}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}main{max-width:1180px;margin:0 auto;padding:28px 20px 44px}h1{font-size:28px;margin:0 0 6px}h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0}.muted,small{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}.card,.section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}.human{border-color:rgba(18,106,90,.35);box-shadow:0 8px 24px rgba(0,0,0,.06)}.hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}.hero-title{font-size:22px;font-weight:750}.hero-status{font-weight:700;border-radius:999px;padding:4px 10px;border:1px solid var(--line);white-space:nowrap}.human-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.human-block{border:1px solid var(--line);border-radius:8px;padding:12px;background:rgba(0,0,0,.02)}.human-block h3{margin-bottom:6px}.package-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}.package-card{border:1px solid var(--line);border-radius:8px;padding:12px;background:rgba(18,106,90,.035)}.progress{height:8px;background:rgba(0,0,0,.08);border-radius:999px;overflow:hidden;margin:8px 0}.progress span{display:block;height:100%%;background:var(--accent)}.metric{font-size:26px;font-weight:700}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 8px;margin:2px 4px 2px 0;background:rgba(18,106,90,.08)}.bad{color:var(--bad)}.warn{color:var(--warn)}.ok{color:var(--ok)}.sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}ul{padding-left:18px;margin:8px 0 0}.item{border-top:1px solid var(--line);padding:10px 0}.item:first-child{border-top:0;padding-top:0}.item-title{font-weight:650}.meta{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted);word-break:break-word}.action{margin-top:6px}.evidence{display:flex;flex-wrap:wrap;gap:8px}.evidence span{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:rgba(0,0,0,.03)}pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.04);border-radius:6px;padding:8px}@media (prefers-color-scheme:dark){:root{--bg:#111412;--panel:#171c19;--text:#e8ece9;--muted:#a2aaa5;--line:#303832;--accent:#61c6ad}.human-block{background:rgba(255,255,255,.03)}.package-card{background:rgba(255,255,255,.03)}}@media(max-width:720px){main{padding:20px 12px}.sections{grid-template-columns:1fr}.hero{display:block}.hero-status{display:inline-block;margin-top:8px}}\n")
 	fmt.Fprintf(&b, "</style>\n</head>\n<body>\n<main>\n")
 	fmt.Fprintf(&b, "<header><h1>%s</h1><div class=\"muted\">local/static evidence only · observed %s</div></header>\n", escapeHTML(title), escapeHTML(summary.ObservedAt))
 	renderHumanProgressHTML(&b, summary)
@@ -2818,13 +2892,20 @@ func renderPackageSummaryHTML(b *strings.Builder, summary PackageSummary) {
 		fmt.Fprintf(b, "<p class=\"muted\">No packageId recorded yet. Add <code>--package-id</code> when recording related worker tasks.</p></section>\n")
 		return
 	}
+	fmt.Fprintf(b, "<div class=\"package-grid\">")
 	for _, row := range summary.Rows {
-		fmt.Fprintf(b, "<div class=\"item\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(row.ID), escapeHTML(row.Status))
-		fmt.Fprintf(b, "<div class=\"meta\">tasks=%d counts=%s", row.TaskCount, escapeHTML(formatIntMap(row.Counts)))
+		percent := packageProgressPercent(row)
+		fmt.Fprintf(b, "<div class=\"package-card\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(humanIdentifier(row.ID)), escapeHTML(row.Status))
+		fmt.Fprintf(b, "<div class=\"progress\" aria-label=\"package progress\"><span style=\"width:%d%%\"></span></div>", percent)
+		fmt.Fprintf(b, "<div>%s</div>", escapeHTML(row.HumanSummary))
+		fmt.Fprintf(b, "<div class=\"meta\">id=%s · tasks=%d · counts=%s", escapeHTML(row.ID), row.TaskCount, escapeHTML(formatIntMap(row.Counts)))
 		if row.LatestUpdatedAt != "" {
 			fmt.Fprintf(b, " · updated=%s", escapeHTML(row.LatestUpdatedAt))
 		}
 		fmt.Fprintf(b, "</div>")
+		if row.ReviewStatus != "" {
+			fmt.Fprintf(b, "<div class=\"meta\">external review: %s</div>", escapeHTML(row.ReviewStatus))
+		}
 		if row.NextSuggestedAction != "" {
 			fmt.Fprintf(b, "<div class=\"action\">%s</div>", escapeHTML(row.NextSuggestedAction))
 		}
@@ -2835,7 +2916,7 @@ func renderPackageSummaryHTML(b *strings.Builder, summary PackageSummary) {
 		renderPackageTaskIDsHTML(b, "other", row.OtherTaskIDs)
 		fmt.Fprintf(b, "</div>")
 	}
-	fmt.Fprintf(b, "</section>\n")
+	fmt.Fprintf(b, "</div></section>\n")
 }
 
 func renderPackageTaskIDsHTML(b *strings.Builder, label string, ids []string) {
@@ -4140,6 +4221,166 @@ func buildReviewPack(repoPath string, ledgerPath string, packageID string, taskI
 		report.NextSuggestedAction = "Run an external reviewer at the feature-package boundary, import the report, then generate a package acceptance decision separately."
 	}
 	return report, nil
+}
+
+func selectPackageTaskIDs(ledgerPath string, packageID string, explicitTaskIDs []string) ([]string, error) {
+	ledger, err := loadLedger(ledgerPath)
+	if err != nil {
+		return nil, err
+	}
+	if len(explicitTaskIDs) > 0 {
+		taskByID := map[string]Task{}
+		for _, task := range ledger.Tasks {
+			taskByID[task.ID] = task
+		}
+		for _, taskID := range uniqueSortedStrings(explicitTaskIDs) {
+			task, ok := taskByID[taskID]
+			if !ok {
+				return nil, fmt.Errorf("task %q is not recorded in ledger", taskID)
+			}
+			if strings.TrimSpace(task.PackageID) != "" && strings.TrimSpace(task.PackageID) != strings.TrimSpace(packageID) {
+				return nil, fmt.Errorf("task %q belongs to package %q, not %q", taskID, task.PackageID, packageID)
+			}
+		}
+		return uniqueSortedStrings(explicitTaskIDs), nil
+	}
+	var taskIDs []string
+	for _, task := range ledger.Tasks {
+		if strings.TrimSpace(task.PackageID) == strings.TrimSpace(packageID) {
+			taskIDs = append(taskIDs, task.ID)
+		}
+	}
+	taskIDs = uniqueSortedStrings(taskIDs)
+	if len(taskIDs) == 0 {
+		return nil, fmt.Errorf("no tasks found for package %q; pass --task-id explicitly or record tasks with --package-id", packageID)
+	}
+	return taskIDs, nil
+}
+
+func buildPackageAcceptanceReport(repoPath string, ledgerPath string, packageID string, taskIDs []string) (PackageAcceptanceReport, error) {
+	report := PackageAcceptanceReport{
+		SchemaVersion: 1,
+		Command:       "pack acceptance",
+		GeneratedAt:   nowISO(),
+		Status:        "passed",
+		EvidenceLabel: "local/static",
+		Boundary:      "This package acceptance report is local/static orchestration evidence. It aggregates merge-readiness packs and imported external reviewer signals, but it does not merge, push, cleanup, dispatch, deploy, or produce direct runtime/device/provider proof.",
+		PackageID:     packageID,
+		LedgerPath:    ledgerPath,
+		RepoPath:      repoPath,
+		Decision:      "review-ready",
+		Evidence: normalizedEvidence(map[string][]string{
+			"local": {"Package acceptance report reads local ledger and git/worktree state."},
+		}),
+		ActionsTaken: []string{"Started package-level acceptance report generation"},
+		NextAction:   "Have the Codex App orchestrator review this report, rerun appropriate gates, and make a separate merge/reject/block decision.",
+	}
+	ledger, err := loadLedger(ledgerPath)
+	if err != nil {
+		return report, err
+	}
+	report.RepoPath = firstNonEmpty(ledger.ProjectRoot, repoPath)
+	for _, taskID := range uniqueSortedStrings(taskIDs) {
+		pack, err := buildMergeReadinessPack(repoPath, ledgerPath, taskID)
+		if err != nil {
+			return report, err
+		}
+		report.Tasks = append(report.Tasks, pack.Task)
+		report.TaskReports = append(report.TaskReports, pack.AcceptanceReport)
+		report.EvidenceReviewed = append(report.EvidenceReviewed, pack.AcceptanceReport.EvidenceReviewed...)
+		report.GatesReviewed = append(report.GatesReviewed, pack.AcceptanceReport.GatesReviewed...)
+		report.ResidualRisks = append(report.ResidualRisks, pack.AcceptanceReport.ResidualRisks...)
+		report.ActionsTaken = append(report.ActionsTaken, "Generated merge-readiness acceptance input for task "+taskID)
+		mergeEvidence(report.Evidence, pack.Evidence)
+		if pack.Status == "blocked" || pack.AcceptanceReport.Decision == "blocked" {
+			report.Status = "blocked"
+			report.Decision = "blocked"
+			report.NeedsHuman = true
+			report.BlockedReason = firstNonEmpty(report.BlockedReason, "one or more task acceptance inputs are blocked")
+			report.Why = append(report.Why, "Task "+taskID+" is blocked: "+firstNonEmpty(pack.BlockedReason, pack.AcceptanceReport.NextAction))
+		} else if pack.Status == "failed" || pack.AcceptanceReport.Decision == "reject-for-fixup" {
+			if report.Status != "blocked" {
+				report.Status = "failed"
+				report.Decision = "reject-for-fixup"
+			}
+			report.NeedsHuman = true
+			report.Why = append(report.Why, "Task "+taskID+" failed local/static merge-readiness checks.")
+		} else if pack.AcceptanceReport.Decision == "needs-review" && report.Status == "passed" {
+			report.Decision = "needs-review"
+			report.NeedsHuman = true
+			report.Why = append(report.Why, "Task "+taskID+" still needs orchestrator review.")
+		}
+		report.LiveProofGate = mergeLiveProofGates(report.LiveProofGate, pack.AcceptanceReport.LiveProofGate)
+	}
+	if len(report.Tasks) == 0 {
+		report.Status = "blocked"
+		report.Decision = "blocked"
+		report.NeedsHuman = true
+		report.BlockedReason = "no package tasks were available"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "No task ids were selected for package acceptance.")
+	}
+	for _, run := range ledger.RoutineRuns {
+		if strings.TrimSpace(run.PackageID) != strings.TrimSpace(packageID) || run.RoutineID != "external-reviewer" {
+			continue
+		}
+		report.ExternalReviewRuns = append(report.ExternalReviewRuns, run)
+		report.EvidenceReviewed = append(report.EvidenceReviewed, "external reviewer "+firstNonEmpty(run.Reviewer, "unknown")+": "+run.Status)
+		if run.Status == "blocked" || run.Status == "failed" {
+			report.NeedsHuman = true
+			report.ResidualRisks = append(report.ResidualRisks, "External reviewer "+firstNonEmpty(run.Reviewer, "unknown")+" reported "+run.Status+".")
+			if report.Status == "passed" {
+				report.Decision = "needs-review"
+			}
+		}
+	}
+	if len(report.Why) == 0 {
+		report.Why = append(report.Why, "All selected task acceptance inputs are locally review-ready.")
+	}
+	report.EvidenceReviewed = uniqueSortedStrings(report.EvidenceReviewed)
+	report.GatesReviewed = uniqueSortedStrings(report.GatesReviewed)
+	report.ResidualRisks = uniqueSortedStrings(report.ResidualRisks)
+	report.ActionsTaken = uniqueSortedStrings(report.ActionsTaken)
+	report.Evidence = normalizedEvidence(report.Evidence)
+	if report.LiveProofGate.Status == "" {
+		report.LiveProofGate = LiveProofGate{
+			Status:          "not-collected-by-acceptance-report",
+			Required:        false,
+			MissingEvidence: []string{"Reviewer must still verify whether this package requires direct live/runtime/device/provider proof."},
+			Boundary:        "Package acceptance reports aggregate local/static evidence and optional proxy/advisory external review signals. Direct live/runtime/device/provider proof must be collected separately when required.",
+		}
+	}
+	report.AuthorizationMatrix = packageAcceptanceAuthorizationMatrix()
+	return report, nil
+}
+
+func mergeLiveProofGates(current LiveProofGate, next LiveProofGate) LiveProofGate {
+	if current.Status == "" {
+		return next
+	}
+	if next.Status == "" {
+		return current
+	}
+	current.Required = current.Required || next.Required
+	current.WaiverRequired = current.WaiverRequired || next.WaiverRequired
+	current.Evidence = uniqueSortedStrings(append(current.Evidence, next.Evidence...))
+	current.MissingEvidence = uniqueSortedStrings(append(current.MissingEvidence, next.MissingEvidence...))
+	if current.WaiverRequired || next.WaiverRequired {
+		current.Status = "blocked-or-waiver-required"
+	}
+	if current.Boundary == "" {
+		current.Boundary = next.Boundary
+	}
+	return current
+}
+
+func packageAcceptanceAuthorizationMatrix() []AuthorizationCheck {
+	return []AuthorizationCheck{
+		{Action: "review", Status: "authorized-output", Reason: "The report summarizes local/static package acceptance evidence for orchestrator review."},
+		{Action: "merge", Status: "requires-separate-orchestrator-decision", Reason: "Even a clean package report does not merge by itself; the Codex App orchestrator must decide and execute closeout."},
+		{Action: "push", Status: "requires-separate-orchestrator-decision", Reason: "Push is a closeout action after accepted merge, not part of report generation."},
+		{Action: "cleanup", Status: "requires-separate-orchestrator-decision", Reason: "Cleanup requires accepted merge, rejection, or abandonment decision."},
+		{Action: "direct-proof", Status: "not-provided-by-report", Reason: "The report is local/static unless separate direct runtime/device/provider evidence is attached."},
+	}
 }
 
 func newReviewPack(repoPath string, ledgerPath string, packageID string) ReviewPack {
@@ -7882,7 +8123,17 @@ func buildPackageSummary(tasks []Task, observations []Observation, routineRuns [
 			row.LatestUpdatedAt = observation.LastUpdatedAt
 		}
 	}
-	for _, run := range routineRuns {
+	sortedRuns := append([]RoutineRun(nil), routineRuns...)
+	sort.SliceStable(sortedRuns, func(i, j int) bool {
+		if sortedRuns[i].At != sortedRuns[j].At {
+			return sortedRuns[i].At < sortedRuns[j].At
+		}
+		if sortedRuns[i].PackageID != sortedRuns[j].PackageID {
+			return sortedRuns[i].PackageID < sortedRuns[j].PackageID
+		}
+		return sortedRuns[i].Reviewer < sortedRuns[j].Reviewer
+	})
+	for _, run := range sortedRuns {
 		packageID := strings.TrimSpace(run.PackageID)
 		if packageID == "" {
 			continue
@@ -7898,6 +8149,9 @@ func buildPackageSummary(tasks []Task, observations []Observation, routineRuns [
 		if run.At > row.LatestUpdatedAt {
 			row.LatestUpdatedAt = run.At
 		}
+		if run.RoutineID == "external-reviewer" {
+			row.ReviewStatus = packageReviewStatus(row.ReviewStatus, run)
+		}
 	}
 	rows := make([]PackageStatusItem, 0, len(rowsByID))
 	for _, row := range rowsByID {
@@ -7908,6 +8162,11 @@ func buildPackageSummary(tasks []Task, observations []Observation, routineRuns [
 		sort.Strings(row.RecentTaskIDs)
 		sort.Strings(row.OtherTaskIDs)
 		row.Status, row.NextSuggestedAction = packageStatusAndAction(*row)
+		row.ProgressLabel = packageProgressLabel(*row)
+		row.HumanSummary = packageHumanSummary(*row)
+		if row.ReviewStatus == "" {
+			row.ReviewStatus = "external-review-not-recorded"
+		}
 		rows = append(rows, *row)
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -7924,6 +8183,67 @@ func buildPackageSummary(tasks []Task, observations []Observation, routineRuns [
 		Total:         len(rows),
 		Rows:          rows,
 	}
+}
+
+func packageReviewStatus(current string, run RoutineRun) string {
+	reviewer := strings.TrimSpace(run.Reviewer)
+	if reviewer == "" {
+		reviewer = "external"
+	}
+	status := reviewer + ":" + strings.TrimSpace(run.Status)
+	if current == "" {
+		return status
+	}
+	if strings.Contains(current, reviewer+":") {
+		parts := strings.Split(current, ", ")
+		for index, part := range parts {
+			if strings.HasPrefix(part, reviewer+":") {
+				parts[index] = status
+			}
+		}
+		return strings.Join(parts, ", ")
+	}
+	return current + ", " + status
+}
+
+func packageProgressLabel(row PackageStatusItem) string {
+	done := row.Counts["merged"] + row.Counts["released"] + row.Counts["cleaned"]
+	if row.TaskCount == 0 {
+		return "0/0"
+	}
+	return fmt.Sprintf("%d/%d worker 已收口", done, row.TaskCount)
+}
+
+func packageProgressPercent(row PackageStatusItem) int {
+	if row.TaskCount <= 0 {
+		return 0
+	}
+	done := row.Counts["merged"] + row.Counts["released"] + row.Counts["cleaned"]
+	percent := (done * 100) / row.TaskCount
+	if percent < 0 {
+		return 0
+	}
+	if percent > 100 {
+		return 100
+	}
+	return percent
+}
+
+func packageHumanSummary(row PackageStatusItem) string {
+	pieces := []string{packageProgressLabel(row)}
+	if len(row.ActiveTaskIDs) > 0 {
+		pieces = append(pieces, fmt.Sprintf("%d 个进行中", len(row.ActiveTaskIDs)))
+	}
+	if len(row.ReviewTaskIDs) > 0 {
+		pieces = append(pieces, fmt.Sprintf("%d 个待验收", len(row.ReviewTaskIDs)))
+	}
+	if len(row.BlockedTaskIDs) > 0 {
+		pieces = append(pieces, fmt.Sprintf("%d 个阻塞", len(row.BlockedTaskIDs)))
+	}
+	if len(row.CleanupTaskIDs) > 0 {
+		pieces = append(pieces, fmt.Sprintf("%d 个待清理", len(row.CleanupTaskIDs)))
+	}
+	return strings.Join(pieces, "，")
 }
 
 func packageStatusAndAction(row PackageStatusItem) (string, string) {
@@ -9311,13 +9631,14 @@ func renderPackageSummaryMarkdown(b *strings.Builder, summary PackageSummary) {
 		fmt.Fprintf(b, "- no packageId recorded yet; use `--package-id` when recording related worker tasks.\n")
 		return
 	}
-	fmt.Fprintf(b, "\n| Package | Status | Tasks | Counts | Updated | Next |\n")
-	fmt.Fprintf(b, "|---|---|---:|---|---|---|\n")
+	fmt.Fprintf(b, "\n| Package | Status | Progress | External Review | Counts | Updated | Next |\n")
+	fmt.Fprintf(b, "|---|---|---|---|---|---|---|\n")
 	for _, row := range summary.Rows {
-		fmt.Fprintf(b, "| `%s` | `%s` | `%d` | `%s` | `%s` | %s |\n",
+		fmt.Fprintf(b, "| `%s` | `%s` | %s | `%s` | `%s` | `%s` | %s |\n",
 			row.ID,
 			row.Status,
-			row.TaskCount,
+			escapeMarkdownTable(firstNonEmpty(row.HumanSummary, row.ProgressLabel)),
+			escapeMarkdownTable(row.ReviewStatus),
 			escapeMarkdownTable(formatIntMap(row.Counts)),
 			row.LatestUpdatedAt,
 			escapeMarkdownTable(row.NextSuggestedAction),

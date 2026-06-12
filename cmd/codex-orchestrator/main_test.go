@@ -1229,6 +1229,13 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "blocker", "--task-id", "PKG-BLOCKED", "--status", "blocked", "--note", "needs owner input"}); err != nil {
 		t.Fatal(err)
 	}
+	reviewFile := filepath.Join(root, "pi-review.md")
+	if err := os.WriteFile(reviewFile, []byte("Verdict: pass\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdReviewImport([]string{"--ledger", ledger, "--package-id", "PKG-CHECKOUT", "--reviewer", "pi", "--file", reviewFile, "--task-id", "PKG-ACTIVE", "--status", "passed"}); err != nil {
+		t.Fatal(err)
+	}
 
 	stored, err := loadLedger(ledger)
 	if err != nil {
@@ -1252,6 +1259,9 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	if !containsString(pkg.ActiveTaskIDs, "PKG-ACTIVE") || !containsString(pkg.BlockedTaskIDs, "PKG-BLOCKED") {
 		t.Fatalf("expected active and blocked task ids, got %#v", pkg)
 	}
+	if pkg.ProgressLabel != "0/2 worker 已收口" || !strings.Contains(pkg.HumanSummary, "1 个阻塞") || pkg.ReviewStatus != "pi:passed" {
+		t.Fatalf("expected package dashboard fields, got %#v", pkg)
+	}
 
 	statusJSON := captureStdout(t, func() error {
 		return cmdStatus([]string{"--ledger", ledger, "--json"})
@@ -1274,7 +1284,7 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	if !strings.Contains(rendered, "## 当前进度") || !strings.Contains(rendered, "当前主线: Pkg Checkout") || !strings.Contains(rendered, "需要你处理: 有 1 个阻塞项") {
 		t.Fatalf("expected human-readable package progress in Markdown:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "## Package Summary") || !strings.Contains(rendered, "PKG-CHECKOUT") {
+	if !strings.Contains(rendered, "## Package Summary") || !strings.Contains(rendered, "PKG-CHECKOUT") || !strings.Contains(rendered, "0/2 worker 已收口") || !strings.Contains(rendered, "pi:passed") {
 		t.Fatalf("expected package summary in Markdown:\n%s", rendered)
 	}
 	statusHTML := captureStdout(t, func() error {
@@ -1283,7 +1293,7 @@ func TestStatusIncludesPackageSummary(t *testing.T) {
 	if !strings.Contains(statusHTML, "当前进度") || !strings.Contains(statusHTML, "Pkg Checkout") || !strings.Contains(statusHTML, "需要你处理") {
 		t.Fatalf("expected human-readable package progress in HTML:\n%s", statusHTML)
 	}
-	if !strings.Contains(statusHTML, "功能包 / Packages") || !strings.Contains(statusHTML, "PKG-CHECKOUT") {
+	if !strings.Contains(statusHTML, "功能包 / Packages") || !strings.Contains(statusHTML, "PKG-CHECKOUT") || !strings.Contains(statusHTML, "0/2 worker 已收口") || !strings.Contains(statusHTML, "external review: pi:passed") {
 		t.Fatalf("expected package summary in HTML:\n%s", statusHTML)
 	}
 
@@ -2193,6 +2203,7 @@ func TestPackReviewWritesPortablePackageReviewPack(t *testing.T) {
 		"--ledger", ledger,
 		"--id", "TASK-PACKAGE",
 		"--title", "Package review task",
+		"--package-id", "PKG-REVIEW",
 		"--worktree", worker,
 		"--branch", "codex/package-review",
 		"--base-commit", base,
@@ -2215,7 +2226,7 @@ func TestPackReviewWritesPortablePackageReviewPack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := cmdPackReview([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-REVIEW", "--task-id", "TASK-PACKAGE", "--output", outputDir}); err != nil {
+	if err := cmdPackReview([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-REVIEW", "--output", outputDir}); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"review-pack.json", "reviewer-prompt.md", "changed-files.txt", "gates.md", "evidence.md", "residual-risks.md", "diff.patch", "TASK-PACKAGE.patch"} {
@@ -2246,6 +2257,53 @@ func TestPackReviewWritesPortablePackageReviewPack(t *testing.T) {
 	}
 	if !strings.Contains(string(prompt), "independent read-only reviewer") || !strings.Contains(string(prompt), "evidence labels") {
 		t.Fatalf("unexpected reviewer prompt:\n%s", string(prompt))
+	}
+
+	acceptancePath := filepath.Join(root, "package-acceptance.json")
+	if err := cmdPackAcceptance([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-REVIEW", "--write-report", acceptancePath}); err != nil {
+		t.Fatal(err)
+	}
+	acceptanceData, err := os.ReadFile(acceptancePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var acceptance PackageAcceptanceReport
+	if err := json.Unmarshal(acceptanceData, &acceptance); err != nil {
+		t.Fatal(err)
+	}
+	if acceptance.PackageID != "PKG-REVIEW" || acceptance.Status != "passed" || acceptance.Decision != "needs-review" {
+		t.Fatalf("unexpected package acceptance report: %#v", acceptance)
+	}
+	if len(acceptance.Tasks) != 1 || acceptance.Tasks[0].ID != "TASK-PACKAGE" {
+		t.Fatalf("expected selected package task in acceptance report, got %#v", acceptance.Tasks)
+	}
+	if !containsAuthorizationStatus(acceptance.AuthorizationMatrix, "merge", "requires-separate-orchestrator-decision") {
+		t.Fatalf("expected package acceptance merge boundary, got %#v", acceptance.AuthorizationMatrix)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "OTHER-PACKAGE-TASK",
+		"--package-id", "OTHER-PACKAGE",
+		"--pending-worktree-id", "other-pwt",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdPackReview([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-REVIEW", "--task-id", "OTHER-PACKAGE-TASK", "--write-report", filepath.Join(root, "bad-review-pack.json")}); err == nil {
+		t.Fatal("expected wrong-package explicit task to fail")
+	}
+	failedReviewFile := filepath.Join(root, "pi-failed-review.md")
+	if err := os.WriteFile(failedReviewFile, []byte("Verdict: reject\nFinding: missing proof.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdReviewImport([]string{"--ledger", ledger, "--package-id", "PKG-REVIEW", "--reviewer", "pi", "--file", failedReviewFile, "--task-id", "TASK-PACKAGE", "--status", "failed"}); err != nil {
+		t.Fatal(err)
+	}
+	failedAcceptance, err := buildPackageAcceptanceReport(project, ledger, "PKG-REVIEW", []string{"TASK-PACKAGE"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !failedAcceptance.NeedsHuman || failedAcceptance.Decision != "needs-review" || !strings.Contains(strings.Join(failedAcceptance.ResidualRisks, "\n"), "pi reported failed") {
+		t.Fatalf("expected failed external review to force package review attention, got %#v", failedAcceptance)
 	}
 }
 

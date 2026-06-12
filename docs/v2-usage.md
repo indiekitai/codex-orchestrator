@@ -146,16 +146,22 @@ jobs/status-style view: total task count, per-status counts, and compact task
 rows with id, package ID, status, signal, branch, pending worktree id, latest
 timestamp, and next action. When related workers are recorded with
 `--package-id`, reports also include `packageSummary`: package-level
-active/review/blocked/cleanup state, member task counts, and the next suggested
-package action. This is still local/static ledger and git evidence; it does not
-attach to live Codex App sessions.
+active/review/blocked/cleanup state, member task counts, completion progress,
+external review status, and the next suggested package action. This is the
+dashboard layer for "one feature package at a time": it should show whether a
+lane is still running, waiting for review, blocked, or ready to close before
+the orchestrator fills capacity with unrelated work. This is still local/static
+ledger and git evidence; it does not attach to live Codex App sessions.
 
 Markdown and HTML status outputs start with a human-first `当前进度` section,
 not raw ledger fields. It answers the questions a project owner usually has:
 whether the run is healthy, which feature package is the current lane, what was
 recently completed, what is running now, whether the human needs to act, the
 next safe step, and the evidence boundary. Detailed runtime, package, and job
-tables remain below that summary for the orchestrator or reviewer.
+tables remain below that summary for the orchestrator or reviewer. The package
+section is deliberately closer to a product dashboard than a raw job table: it
+shows progress like `3/5 worker 已收口`, external review status, waiting queues,
+and a package-specific next action.
 
 Reports include a `projectMap` block as a lightweight onboarding signal. The
 helper checks common files such as `docs/CODEBASE_MAP.md`,
@@ -230,6 +236,34 @@ Important statuses:
 | `cleanup-needed` | A terminal task still has a worktree/branch that should be cleaned |
 | `stale` | A task needs inspection or same-task nudge |
 | `blocked` | Setup, branch, git, or integration state blocks safe progress |
+
+## Package Review And Acceptance
+
+Use package-level review at a feature-package boundary, not after every tiny
+worker. The normal sequence is:
+
+```bash
+codex-orchestrator pack review \
+  --package-id PKG \
+  --output .codex-orchestrator/review-pack/PKG
+
+codex-orchestrator review run \
+  --package-id PKG \
+  --reviewer pi \
+  --pack .codex-orchestrator/review-pack/PKG \
+  --write-report .codex-orchestrator/review-pack/PKG/pi-review.json
+
+codex-orchestrator pack acceptance \
+  --package-id PKG \
+  --write-report .codex-orchestrator/review-pack/PKG/package-acceptance.json
+```
+
+If `--task-id` is omitted, `pack review` and `pack acceptance` select tasks
+recorded with the given `packageId`. This keeps the orchestrator from manually
+copying a long list of task ids out of chat. External reviewer output is
+`proxy/advisory`; the package acceptance report is `local/static`. Neither one
+merges, pushes, cleans worktrees, deploys, or produces direct runtime/device/
+provider proof by itself.
 
 ## Run A Heartbeat
 

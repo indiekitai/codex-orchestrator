@@ -381,7 +381,8 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator watchdog status --repo .
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
 ./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
-./codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
+./codex-orchestrator pack review --package-id PKG --output /tmp/review-pack/PKG
+./codex-orchestrator pack acceptance --package-id PKG --write-report /tmp/package-acceptance.json
 ./codex-orchestrator review policy check --package-id PKG --risk medium --task-count 4 --json
 ./codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --write-report /tmp/pi-review-run.json
 ./codex-orchestrator review import --package-id PKG --reviewer deepseek --file /tmp/deepseek-review.md --status passed
@@ -410,8 +411,11 @@ The JSON heartbeat report includes `overallStatus`, per-status `counts`, a
 jobs/status dashboards: total tasks, per-status counts, and compact rows for
 each tracked task. Related tasks can be grouped with `--package-id`; `observe`,
 `status`, and heartbeat summaries then expose a `packageSummary` with
-package-level active/review/blocked/cleanup state and the next suggested package
-action. `observe`, `status`, and heartbeat summaries also expose a read-only
+package-level active/review/blocked/cleanup state, completion progress, external
+review status, and the next suggested package action. This is the project
+dashboard layer: a human can see which product lane is active, how many workers
+are already closed, what is waiting for review, and why the next action still
+belongs to the same package. `observe`, `status`, and heartbeat summaries also expose a read-only
 `projectMap` signal. The helper checks for common project-map files such as
 `docs/CODEBASE_MAP.md`; when none exists, it asks Codex App to generate or read
 a concise map before first orchestration.
@@ -427,8 +431,10 @@ processes, schedule sessions, or enforce budgets.
 a human-readable `当前进度` panel that summarizes current status, the active
 feature package, recently completed work, running or waiting work, required
 human action, next step, and risk/evidence boundaries before listing detailed
-task tables. It intentionally keeps dispatch-slot and raw ledger jargon below
-the first screen. It is meant for a quick human scan without reading raw JSON.
+task tables. The package section now renders product-lane cards with progress,
+review status, member task queues, and package-specific next actions. It
+intentionally keeps dispatch-slot and raw ledger jargon below the first screen.
+It is meant for a quick human scan without reading raw JSON.
 It does not start a server, daemon, scheduler, merge, push, cleanup, or runtime
 monitor.
 `status --write-html .codex-orchestrator/status.html --write-summary
@@ -510,6 +516,22 @@ also emits an `authorizationMatrix`, a `liveProofGate`, and an
 exists" from "merge/push/cleanup/release is authorized." It does not merge,
 push, cleanup, dispatch, edit git state, or claim runtime, production, device,
 or direct worker proof.
+
+`pack acceptance --package-id PKG` aggregates the selected package workers into
+a package-level local/static acceptance report. If no `--task-id` is provided,
+it selects tasks recorded with that `packageId`. The report combines each
+task's merge-readiness acceptance draft with imported external reviewer runs
+for the same package, then emits one decision such as `review-ready`,
+`needs-review`, `reject-for-fixup`, or `blocked`. It is an acceptance artifact,
+not a merge command: merge, push, cleanup, release, deploy, and direct proof
+still require a separate orchestrator closeout decision.
+
+`pack review --package-id PKG` now also defaults to the tasks recorded with that
+package when explicit `--task-id` flags are omitted. Use it at a feature-package
+boundary to create a portable handoff for Pi, Claude, DeepSeek, a human reviewer,
+or another read-only model. External reviewer output remains `proxy/advisory`
+evidence and should be compared with the package acceptance report before the
+orchestrator accepts or blocks the package.
 
 `pack consultation` converts a blocked, stale, decision-gated, or human-action
 ledger task into a concise local/static consultation request. The JSON report
