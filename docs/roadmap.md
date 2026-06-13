@@ -144,11 +144,10 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
    - 当前落地：`v0.3.5` 已发布；覆盖 self-update、README 拆分、公开案例匿名化、
      install surface 简化、drain 终态展示和 state-dir-only merge-readiness handling。
 
-6. v0.3.6 trust-loop release closeout：进行中。
+6. v0.3.6 trust-loop release closeout：已完成。
    - 目标：把 developer-agent misalignment reduction alpha 发成公开 release。
-   - 当前落地：代码和文档已补 misalignment event log、constraint stack、
-     `claimVerification`、`trustRisk`、`OPA010` 和 helper version reporting；发布完成后
-     将以 `v0.3.6` 作为最新验证资产。
+   - 当前落地：`v0.3.6` 已发布；覆盖 misalignment event log、constraint stack、
+     `claimVerification`、`trustRisk`、`OPA010` 和 helper version reporting。
 
 ## 分层架构
 
@@ -257,11 +256,10 @@ Future daemon/UI
 
 下一步建议：
 
-1. 发布可用的 beta tag，验证 GitHub release artifacts。已完成到 `v0.3.5`，`v0.3.6`
-   trust-loop release 正在收口。
+1. 发布可用的 beta tag，验证 GitHub release artifacts。已完成到 `v0.3.6`。
    当前 release 线已包含 missed heartbeat 检测、macOS watchdog fallback、
    reusable status snapshot、package/external review workflow、package closeout
-   status、starter templates、更清晰的 current-action rows，以及待发布的
+   status、starter templates、更清晰的 current-action rows，以及
    misalignment/claim-verification/trust-risk 本地静态闭环。后续 release 文档只应声明
    已经发布并验证过的资产。
 
