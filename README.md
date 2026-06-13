@@ -41,7 +41,8 @@ runs the worker sessions.
 
 ## Quick Start
 
-Open Codex App in the repository you want to orchestrate and paste:
+Open Codex App in the repository you want to orchestrate. Copy this prompt as
+your first message:
 
 ```text
 I want to try codex-orchestrator in this repository.
@@ -84,7 +85,7 @@ clearly useful, and do not touch any project .codex-orchestrator/ledger.json
 files. After updating, run a smoke check and tell me what changed.
 ```
 
-Command-line users can also run:
+If you already have the helper installed, you can also run:
 
 ```bash
 codex-orchestrator self-update
