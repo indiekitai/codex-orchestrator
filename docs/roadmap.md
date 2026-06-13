@@ -152,6 +152,13 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
    - 当前落地：`v0.3.6` 已发布；覆盖 misalignment event log、constraint stack、
      `claimVerification`、`trustRisk`、`OPA010` 和 helper version reporting。
 
+7. v0.3.7 real-run reliability closeout：已完成。
+   - 目标：把真实项目长跑反馈里的 ledger 滞后、heartbeat 误删、path matcher 误报
+     和 evidence scan 噪音沉淀成工具/规则/eval。
+   - 当前落地：新增 `observe --reconcile --write`、active run-mode heartbeat
+     deletion guard、`**` 跨目录 path matcher、matched-rule 输出，以及 cleanup/retry/
+     event/outbox/lifecycle/API 幂等性自审规则。
+
 ## 分层架构
 
 推荐长期结构：
@@ -259,7 +266,7 @@ Future daemon/UI
 
 下一步建议：
 
-1. 发布可用的 beta tag，验证 GitHub release artifacts。已完成到 `v0.3.6`。
+1. 发布可用的 beta tag，验证 GitHub release artifacts。已完成到 `v0.3.7`。
    当前 release 线已包含 missed heartbeat 检测、macOS watchdog fallback、
    reusable status snapshot、package/external review workflow、package closeout
    status、starter templates、更清晰的 current-action rows，以及
