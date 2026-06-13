@@ -2,38 +2,38 @@
 
 # codex-orchestrator
 
-**给真实代码仓库用的 Codex App-first 受监督工程循环。**
+**面向真实代码仓库的 Codex App 优先工程编排流程。**
 
-`codex-orchestrator` 帮一个主 Codex App session 跑更安全的外层循环：把工作拆成有界
-任务，启动隔离的 worktree session，用本地 ledger 记录状态，用 heartbeat 唤醒检查，
-审查完成分支，merge/push 已接受的工作，清理现场，然后继续推进路线图。
+`codex-orchestrator` 帮一个主 Codex App 会话跑更安全的外层循环：先把工作拆成边界清楚
+的任务，再启动隔离的 worktree 会话；用本地账本（ledger）记录状态，用心跳
+（heartbeat）定时唤醒检查；完成的分支先审查，确认可接受后再 merge/push，最后清理
+worktree，并继续推进路线图。
 
-它的目标不是“让 Agent 一直自动写代码”，而是让每一个 worker branch 都可审查、可
-拒绝、可合并、可清理。
+它的目标不是“让 Agent 一直自动写代码”，而是让每一个 worker 分支都能被审查、拒绝、
+合并和清理。
 
 ## 为什么需要它
 
-一个 Codex 聊天做小改动没问题。任务变大以后，问题会变多：
+一个 Codex 聊天处理小改动通常够用。任务变大以后，麻烦会集中出现：
 
-- worker session 完成时间不同；
-- pending worktree 或卡住的 session 很容易漏看；
-- 本地检查结果容易被描述得强于实际证据；
-- 完成分支需要 review、merge、push、cleanup；
-- 长循环容易变成随机扫小任务，而不是推进一个功能包。
+- 多个 worker 会话完成时间不同；
+- 待创建的 worktree 或卡住的会话很容易漏掉；
+- 本地检查结果常常被说得比实际证据更强；
+- 完成分支需要审查、合并、推送和清理；
+- 长时间循环容易变成随机扫小任务，而不是持续推进一个功能包。
 
-`codex-orchestrator` 解决的是这套工程纪律。
+`codex-orchestrator` 解决的就是这套工程纪律。
 
 ## 它包含什么
 
-- **Codex skill**：安装到 `~/.codex/skills/codex-orchestrator`，给 Codex App
-  当编排 runbook。
-- **可选 Go helper CLI**：`codex-orchestrator`，用于 ledger、status、heartbeat
-  report、review pack、policy check 和本地更新。
-- **文档和模板**：project map、package plan、orchestration policy、案例和 routine
-  spec。
+- **Codex skill**：安装到 `~/.codex/skills/codex-orchestrator`，作为 Codex App 的
+  编排手册。
+- **可选 Go 辅助命令**：`codex-orchestrator`，用于维护账本、生成状态页和心跳报告、
+  准备审查包、运行策略检查，以及更新本地安装。
+- **文档和模板**：项目地图、功能包计划、编排策略、案例和 routine 规范。
 
-它不是 daemon，不是 package-manager-first 产品，不是完整 Agent Operating System，
-也不是不经审查就自动写代码的 bot。Codex App 仍然负责创建和运行 worker session。
+它不是后台守护进程，不是以包管理器为中心的产品，也不是完整的 Agent 操作系统；更不是
+不经审查就自动写代码的机器人。Codex App 仍然负责创建和运行 worker 会话。
 
 ## 快速开始
 
@@ -43,39 +43,39 @@
 我想在这个仓库里试用 codex-orchestrator。
 
 请阅读 https://github.com/indiekitai/codex-orchestrator，并把它作为
-Codex App-first 的工程编排工作流来使用。
+以 Codex App 为主入口的工程编排工作流来使用。
 
 如果这个仓库提供的 Codex App skill 还没安装，请安装到
 ~/.codex/skills/codex-orchestrator。
 
-如果 Go helper CLI 对持久 ledger 状态有帮助，请先解释它的作用，然后在安全的情况下安装或构建。
+如果 Go 辅助命令对持久化任务状态有帮助，请先解释它的作用，然后在安全的情况下安装或构建。
 
-先做 dry run：
+先做只读演练：
 - 检查 git status、worktree 和项目文档；
-- 说明你会如何把工作拆成隔离的 Codex worktree session；
-- 说明你会监控、审查、合并、push、清理哪些东西；
+- 说明你会如何把工作拆成隔离的 Codex worktree 会话；
+- 说明你会监控、审查、合并、推送和清理哪些内容；
 - 把证据标为 direct、proxy、local 或 blocked。
 
-除非我明确批准，不要 push、deploy、删除 worktree，或执行破坏性操作。
+除非我明确批准，不要推送、部署、删除 worktree，也不要执行破坏性操作。
 ```
 
-Codex 应该读取本仓库，按需安装或更新 skill，判断 helper 是否有用，然后先给出只读
+Codex 应该先读取本仓库，按需安装或更新 skill，判断是否需要辅助命令，然后给出只读
 计划。
 
 ## 更新方式
 
-更新需要用户触发，不会后台自动发生。推荐方式仍然是 Codex App-first：
+更新需要用户触发，不会在后台自动发生。推荐方式仍然是交给 Codex App：
 
 ```text
 请从 https://github.com/indiekitai/codex-orchestrator 更新我的本地 codex-orchestrator。
 
-检查 ~/.codex/skills/codex-orchestrator 里的已安装 skill，以及 PATH 上的 helper
-binary。需要时 fetch 或 clone 最新仓库，更新 Codex App skill；只有在 helper 已经
-安装或明确有用时才重建 Go helper；不要触碰任何项目里的
-.codex-orchestrator/ledger.json。更新后跑一个 smoke check，并告诉我改了什么。
+检查 ~/.codex/skills/codex-orchestrator 里的已安装 skill，以及 PATH 里的辅助命令。
+需要时 fetch 或 clone 最新仓库，更新 Codex App skill；只有在辅助命令已经安装或明确有用时
+才重建 Go helper；不要触碰任何项目里的 .codex-orchestrator/ledger.json。更新后跑一次
+烟测，并告诉我改了什么。
 ```
 
-如果你已经安装了 helper，也可以运行：
+如果你已经安装了辅助命令，也可以直接运行：
 
 ```bash
 codex-orchestrator self-update
@@ -83,25 +83,25 @@ codex-orchestrator self-update --from-github
 codex-orchestrator self-update --with-helper
 ```
 
-`self-update` 只刷新本地 skill/helper。它不会派发 session，不会修改项目 ledger，不会
-merge、push、deploy 或 cleanup worktree。
+`self-update` 只刷新本地 skill 和辅助命令。它不会派发会话，不会修改项目账本，也不会
+合并、推送、部署或清理 worktree。
 
 ## 工作方式
 
 ```mermaid
 flowchart LR
     plan["规划功能包"] --> dispatch["派发有界 worker"]
-    dispatch --> worktree["Codex App worktree session"]
-    worktree --> ledger["Ledger + status"]
-    ledger --> review["审查 diff、gate、证据"]
-    review --> merge["Merge / push / cleanup"]
+    dispatch --> worktree["Codex App worktree 会话"]
+    worktree --> ledger["账本 + 状态"]
+    ledger --> review["审查 diff、检查项、证据"]
+    review --> merge["合并 / 推送 / 清理"]
     merge --> next["继续或停止"]
 ```
 
 这套循环刻意保守：
 
-- repo/worktree truth 优先于聊天状态；
-- shared contract、migration、API、设备、支付和部署串行处理；
+- repo/worktree 的真实状态优先于聊天里的说法；
+- 共享契约、迁移、API、设备、支付和部署串行处理；
 - `direct`、`proxy`、`local`、`blocked` 证据不混写；
 - 有空闲并发槽，不代表要派无关任务；
 - worker 只提交自己的分支，统领负责审查和合并。
@@ -110,8 +110,8 @@ flowchart LR
 
 - [完整指南](docs/full-guide.zh-CN.md)：原来的长 README，包含详细流程、routine、
   配置和示例。
-- [v2 helper 用法](docs/v2-usage.md)：ledger、status、heartbeat、review pack、
-  self-update 和 CLI 细节。
+- [v2 辅助命令用法](docs/v2-usage.md)：账本、状态、心跳、审查包、self-update
+  和 CLI 细节。
 - [Routine 库](docs/routines/README.md)：包括 `pr-reviewer`、
   `stale-task-rescuer`、`ci-fixer`、`release-verifier`、
   `docs-drift-checker`、`evidence-label-auditor`、
@@ -120,12 +120,12 @@ flowchart LR
 - [路线图](docs/roadmap.md)：当前产品方向和已完成阶段。
 - [餐厅 POS 重写案例](docs/case-studies/restaurant-pos-orchestration.md)：真实项目编排案例。
 - [Loop Engineering 对齐笔记](docs/research/loop-engineering-alignment.md)：研究背景和设计取舍。
-- [分发包说明](docs/distribution-package.md)：release assets 和 helper 打包细节。
+- [分发包说明](docs/distribution-package.md)：release 资产和辅助命令打包细节。
 
 ## 同名项目说明
 
-现在已经有其他叫 `codex-orchestrator` 的项目。这个仓库专注于 Codex App-first 的
-worktree session 编排，不管理机器 fleet、API proxy、凭证，也不启动 tmux 里的 Codex
+现在已经有其他项目也叫 `codex-orchestrator`。这个仓库专注于 Codex App 优先的
+worktree 会话编排；它不管理机器集群、API 代理或凭证，也不负责启动 tmux 里的 Codex
 CLI agent。
 
 ## 许可证
