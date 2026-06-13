@@ -132,11 +132,11 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
      `project-map.md`；已有文件默认不覆盖，只有显式 `--force` 才覆盖。
    - 边界：这些模板是本地编排状态，不等于项目代码或 direct proof。
 
-5. v0.3.5 release closeout：进行中。
+5. v0.3.5 release closeout：已完成。
    - 目标：在 preflight、watchdog、status UX、package closeout、legacy ledger 降噪、
      onboarding templates、self-update、公开 README 和 real-run hardening 稳定后发下一个
      release。
-   - 当前落地：`v0.3.5` 准备发布；覆盖 self-update、README 拆分、公开案例匿名化、
+   - 当前落地：`v0.3.5` 已发布；覆盖 self-update、README 拆分、公开案例匿名化、
      install surface 简化、drain 终态展示和 state-dir-only merge-readiness handling。
 
 ## 分层架构
@@ -246,8 +246,7 @@ Future daemon/UI
 
 下一步建议：
 
-1. 发布可用的 beta tag，验证 GitHub release artifacts。已完成到 `v0.3.4`，
-   `v0.3.5` 正在发布收口。
+1. 发布可用的 beta tag，验证 GitHub release artifacts。已完成到 `v0.3.5`。
    当前 release 已包含 missed heartbeat 检测、macOS watchdog fallback、
    reusable status snapshot、package/external review workflow、package closeout
    status、starter templates 和更清晰的 current-action rows。后续 release 文档
