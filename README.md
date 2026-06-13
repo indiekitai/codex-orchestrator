@@ -33,7 +33,8 @@ One Codex chat is enough for small edits. Larger work gets messy:
 - **Optional Go helper CLI**: `codex-orchestrator`, used for ledger, status,
   heartbeat reports, review packs, policy checks, and local update support.
 - **Docs and templates**: project maps, package plans, orchestration policy,
-  thread maps, pulse/inbox/router prompts, case studies, and routine specs.
+  thread maps, concepts/inbox notes, pulse/inbox/router prompts, case studies,
+  and routine specs.
 
 The helper now also tracks trust boundaries: it can record developer-agent
 misalignment events, snapshot each worker's constraint stack, verify completion
@@ -141,6 +142,11 @@ is:
 `.codex-orchestrator/thread-map.md` and
 `.codex-orchestrator/pulse-threads.md` so a project can record this topology
 instead of relying on chat memory.
+
+For long-lived projects, it also creates a small local knowledge layer:
+`.codex-orchestrator/concepts.md` for glossary, stable rules, prior decisions,
+and historical pitfalls, plus `.codex-orchestrator/inbox.md` for issues,
+feedback, external reviews, and pulse outputs before they become tasks.
 
 ## Documentation
 

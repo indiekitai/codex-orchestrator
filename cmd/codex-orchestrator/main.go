@@ -352,6 +352,22 @@ type ThreadMapStatus struct {
 	RecommendedAction string   `json:"recommendedAction,omitempty"`
 }
 
+type ConceptsStatus struct {
+	EvidenceLabel     string   `json:"evidenceLabel"`
+	Status            string   `json:"status"`
+	Path              string   `json:"path,omitempty"`
+	CheckedPaths      []string `json:"checkedPaths"`
+	RecommendedAction string   `json:"recommendedAction,omitempty"`
+}
+
+type InboxStatus struct {
+	EvidenceLabel     string   `json:"evidenceLabel"`
+	Status            string   `json:"status"`
+	Path              string   `json:"path,omitempty"`
+	CheckedPaths      []string `json:"checkedPaths"`
+	RecommendedAction string   `json:"recommendedAction,omitempty"`
+}
+
 type PreflightReport struct {
 	SchemaVersion       int                 `json:"schemaVersion"`
 	Command             string              `json:"command"`
@@ -443,6 +459,8 @@ type ObserveSummary struct {
 	DispatchRecommendation DispatchRecommendation       `json:"dispatchRecommendation"`
 	ProjectMap             ProjectMapStatus             `json:"projectMap"`
 	ThreadMap              ThreadMapStatus              `json:"threadMap"`
+	Concepts               ConceptsStatus               `json:"concepts"`
+	Inbox                  InboxStatus                  `json:"inbox"`
 	Preflight              *PreflightReport             `json:"preflight,omitempty"`
 	Timeline               []TimelineItem               `json:"timeline,omitempty"`
 	Observations           []Observation                `json:"observations"`
@@ -3070,6 +3088,8 @@ func cmdStatus(args []string) error {
 		"dispatchRecommendation": summary.DispatchRecommendation,
 		"projectMap":             summary.ProjectMap,
 		"threadMap":              summary.ThreadMap,
+		"concepts":               summary.Concepts,
+		"inbox":                  summary.Inbox,
 		"preflight":              summary.Preflight,
 		"timeline":               summary.Timeline,
 		"tasks":                  ledger.Tasks,
@@ -3137,6 +3157,16 @@ func cmdStatus(args []string) error {
 	fmt.Printf("Thread map (%s): %s", summary.ThreadMap.EvidenceLabel, summary.ThreadMap.Status)
 	if summary.ThreadMap.Path != "" {
 		fmt.Printf(" path=%s", summary.ThreadMap.Path)
+	}
+	fmt.Println()
+	fmt.Printf("Concepts (%s): %s", summary.Concepts.EvidenceLabel, summary.Concepts.Status)
+	if summary.Concepts.Path != "" {
+		fmt.Printf(" path=%s", summary.Concepts.Path)
+	}
+	fmt.Println()
+	fmt.Printf("Inbox (%s): %s", summary.Inbox.EvidenceLabel, summary.Inbox.Status)
+	if summary.Inbox.Path != "" {
+		fmt.Printf(" path=%s", summary.Inbox.Path)
 	}
 	fmt.Println()
 	fmt.Printf("Dispatch slots: used=%d/%d available=%d\n",
@@ -3910,6 +3940,8 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 		{"budget", summary.BudgetPressure.EvidenceLabel},
 		{"projectMap", summary.ProjectMap.EvidenceLabel},
 		{"threadMap", summary.ThreadMap.EvidenceLabel},
+		{"concepts", summary.Concepts.EvidenceLabel},
+		{"inbox", summary.Inbox.EvidenceLabel},
 	} {
 		if item.value != "" {
 			fmt.Fprintf(&b, "<span>%s: <strong>%s</strong></span>", escapeHTML(item.label), escapeHTML(item.value))
@@ -9845,6 +9877,8 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	heartbeatStatus := loadRepoHeartbeatStatus(ledger.ProjectRoot)
 	trustRisk := buildTrustRiskReport(ledger, observations, heartbeatStatus)
 	threadMap := inspectThreadMap(ledger.ProjectRoot)
+	concepts := inspectConcepts(ledger.ProjectRoot)
+	inbox := inspectInbox(ledger.ProjectRoot)
 	overall, actions := summarizeObservations(ledger, integration, counts, pressure)
 	summary := ObserveSummary{
 		Ledger:                 ledgerPath,
@@ -9869,6 +9903,8 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		DispatchRecommendation: dispatchRecommendation,
 		ProjectMap:             projectMap,
 		ThreadMap:              threadMap,
+		Concepts:               concepts,
+		Inbox:                  inbox,
 		Timeline:               timeline,
 		Observations:           observations,
 		RecentRoutineRuns:      recentRoutineRuns(ledger.RoutineRuns, 5),
@@ -9904,6 +9940,8 @@ func buildPreflightReportFromSummary(ledgerPath string, eventsPath string, ledge
 	addPreflightCheck(report, preflightWatchdogCheck(ledger.ProjectRoot))
 	addPreflightCheck(report, preflightProjectMapCheck(summary.ProjectMap))
 	addPreflightCheck(report, preflightThreadMapCheck(summary.ThreadMap))
+	addPreflightCheck(report, preflightConceptsCheck(summary.Concepts))
+	addPreflightCheck(report, preflightInboxCheck(summary.Inbox))
 	addPreflightCheck(report, preflightPackageLaneCheck(summary.PackageLaneGuard))
 	addPreflightCheck(report, preflightReviewPolicyCheck(summary.PackageSummary))
 	report.Summary = preflightSummary(report)
@@ -10053,6 +10091,30 @@ func preflightThreadMapCheck(status ThreadMapStatus) PreflightCheck {
 		check.Action = "Create .codex-orchestrator/thread-map.md before relying on multiple long-lived Codex threads, routers, inboxes, or pulse monitors."
 	} else if status.Path != "" {
 		check.Detail = "thread map path=" + status.Path + "."
+	}
+	return check
+}
+
+func preflightConceptsCheck(status ConceptsStatus) PreflightCheck {
+	check := PreflightCheck{Name: "concepts", Status: "passed", EvidenceLabel: "local/static", Detail: "concept library is present."}
+	if status.Status == "missing" {
+		check.Status = "warning"
+		check.Detail = "concept library is missing."
+		check.Action = "Create .codex-orchestrator/concepts.md before relying on a router or orchestrator to remember project-specific terms, decisions, rules, and historical pitfalls."
+	} else if status.Path != "" {
+		check.Detail = "concept library path=" + status.Path + "."
+	}
+	return check
+}
+
+func preflightInboxCheck(status InboxStatus) PreflightCheck {
+	check := PreflightCheck{Name: "inbox", Status: "passed", EvidenceLabel: "local/static", Detail: "inbox is present."}
+	if status.Status == "missing" {
+		check.Status = "warning"
+		check.Detail = "inbox is missing."
+		check.Action = "Create .codex-orchestrator/inbox.md to collect issues, user feedback, external reviews, and run observations before routing them into tasks."
+	} else if status.Path != "" {
+		check.Detail = "inbox path=" + status.Path + "."
 	}
 	return check
 }
@@ -11723,6 +11785,8 @@ func writeStarterTemplates(projectRoot string, force bool) ([]string, []string, 
 		filepath.Join(stateDir, "project-map.md"):          starterProjectMapTemplate(),
 		filepath.Join(stateDir, "thread-map.md"):           starterThreadMapTemplate(),
 		filepath.Join(stateDir, "pulse-threads.md"):        starterPulseThreadsTemplate(),
+		filepath.Join(stateDir, "concepts.md"):             starterConceptsTemplate(),
+		filepath.Join(stateDir, "inbox.md"):                starterInboxTemplate(),
 	}
 	paths := make([]string, 0, len(templates))
 	for path := range templates {
@@ -11924,8 +11988,9 @@ blocked, duplicate, or needs routing. Do not implement or dispatch directly.
 Purpose: choose the right owner thread and create compact handoff prompts.
 
 ~~~text
-Read the thread map and classify this input. Decide whether it belongs to the
-project orchestrator, inbox, pulse, release, docs, or research thread. Produce a
+Read the thread map, project map, concepts library, inbox, and current status.
+Classify this input. Decide whether it belongs to the project orchestrator,
+inbox, pulse, release, docs, research, or concept-library thread. Produce a
 short handoff prompt with boundaries and evidence labels. Do not edit code,
 merge, push, deploy, or clean worktrees.
 ~~~
@@ -11947,6 +12012,78 @@ instead of copying raw logs.
   user explicitly authorizes a different thread.
 - A thread map is local/static evidence. Verify live thread state before taking
   irreversible action.
+`
+}
+
+func starterConceptsTemplate() string {
+	return `# Concepts
+
+This is a local/static concept library for Codex App-first orchestration. It is
+not a source of direct runtime, production, provider, device, or customer proof.
+Use it to keep stable project knowledge out of compressed chat memory.
+
+## Glossary
+
+| Term | Meaning | Source / owner | Notes |
+|---|---|---|---|
+|  |  |  |  |
+
+## Stable Rules
+
+- TBD
+
+## Decisions Already Made
+
+| Date | Decision | Why | Revisit when |
+|---|---|---|---|
+|  |  |  |  |
+
+## Historical Pitfalls
+
+- TBD
+
+## Blocked / Owner-Gated Concepts
+
+| Concept | Blocker | Evidence label | Next human input |
+|---|---|---|---|
+|  |  | blocked |  |
+
+## Source Docs To Read First
+
+- TBD
+
+## Open Questions
+
+- TBD
+`
+}
+
+func starterInboxTemplate() string {
+	return `# Inbox
+
+This is a local/static intake surface for issues, user feedback, external
+reviews, pulse outputs, and project-run observations before they become
+orchestrated tasks. It is not a worker queue and it is not proof that a task
+was dispatched.
+
+## Intake
+
+| Date | Source | Summary | Suggested owner | Package / task | Status | Evidence | Next action |
+|---|---|---|---|---|---|---|---|
+|  |  |  | Router |  | untriaged | local/static | classify |
+
+## Routing Rules
+
+- Inbox items stay unexecuted until a Project Orchestrator turns them into a
+  bounded package or worker contract.
+- Router threads may classify and hand off inbox items, but they must not
+  implement code, dispatch workers, merge, push, deploy, or clean worktrees.
+- Keep external reviews and social feedback separate from repo truth until a
+  reviewer confirms the claim against local code or docs.
+
+## Archive
+
+- TBD
 `
 }
 
@@ -12306,6 +12443,12 @@ func humanRiskLines(summary ObserveSummary) []string {
 	if summary.ThreadMap.Status == "missing" {
 		lines = append(lines, "缺少 thread map；多线程长期编排前最好补一份 Router/Inbox/Pulse/Project Orchestrator 线程地图。")
 	}
+	if summary.Concepts.Status == "missing" {
+		lines = append(lines, "缺少 concepts；长期编排前最好补一份项目术语、稳定规则、历史决策和坑点的概念库。")
+	}
+	if summary.Inbox.Status == "missing" {
+		lines = append(lines, "缺少 inbox；外部反馈、issue、review 和运行观察最好先进入收件箱，再由 Router/统领分类。")
+	}
 	if summary.PackageLaneGuard.Status == "warning" || summary.PackageLaneGuard.Status == "blocked" {
 		lines = append(lines, "主线保护提示："+summary.PackageLaneGuard.RecommendedAction)
 		lines = append(lines, summary.PackageLaneGuard.Warnings...)
@@ -12480,6 +12623,16 @@ func renderSummary(summary ObserveSummary) string {
 		fmt.Fprintf(&b, " path=`%s`", summary.ThreadMap.Path)
 	}
 	fmt.Fprintf(&b, "\n")
+	fmt.Fprintf(&b, "- concepts: `%s`", summary.Concepts.Status)
+	if summary.Concepts.Path != "" {
+		fmt.Fprintf(&b, " path=`%s`", summary.Concepts.Path)
+	}
+	fmt.Fprintf(&b, "\n")
+	fmt.Fprintf(&b, "- inbox: `%s`", summary.Inbox.Status)
+	if summary.Inbox.Path != "" {
+		fmt.Fprintf(&b, " path=`%s`", summary.Inbox.Path)
+	}
+	fmt.Fprintf(&b, "\n")
 	fmt.Fprintf(&b, "- tasksWithBudget: `%d`\n", summary.BudgetSummary.TasksWithBudget)
 	if summary.BudgetSummary.TotalMaxRuntimeMinutes > 0 {
 		fmt.Fprintf(&b, "- totalMaxRuntimeMinutes: `%d`\n", summary.BudgetSummary.TotalMaxRuntimeMinutes)
@@ -12519,6 +12672,8 @@ func renderSummary(summary ObserveSummary) string {
 	renderJobSummaryMarkdown(&b, summary.JobSummary)
 	renderProjectMapMarkdown(&b, summary.ProjectMap)
 	renderThreadMapMarkdown(&b, summary.ThreadMap)
+	renderConceptsMarkdown(&b, summary.Concepts)
+	renderInboxMarkdown(&b, summary.Inbox)
 	fmt.Fprintf(&b, "\n## Tasks\n\n")
 	if len(summary.Observations) == 0 {
 		fmt.Fprintf(&b, "- No tasks recorded.\n")
@@ -12883,6 +13038,30 @@ func renderThreadMapMarkdown(b *strings.Builder, status ThreadMapStatus) {
 	}
 }
 
+func renderConceptsMarkdown(b *strings.Builder, status ConceptsStatus) {
+	fmt.Fprintf(b, "\n## Concepts\n\n")
+	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", status.EvidenceLabel)
+	fmt.Fprintf(b, "- status: `%s`\n", status.Status)
+	if status.Path != "" {
+		fmt.Fprintf(b, "- path: `%s`\n", status.Path)
+	}
+	if status.RecommendedAction != "" {
+		fmt.Fprintf(b, "- recommendedAction: %s\n", status.RecommendedAction)
+	}
+}
+
+func renderInboxMarkdown(b *strings.Builder, status InboxStatus) {
+	fmt.Fprintf(b, "\n## Inbox\n\n")
+	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", status.EvidenceLabel)
+	fmt.Fprintf(b, "- status: `%s`\n", status.Status)
+	if status.Path != "" {
+		fmt.Fprintf(b, "- path: `%s`\n", status.Path)
+	}
+	if status.RecommendedAction != "" {
+		fmt.Fprintf(b, "- recommendedAction: %s\n", status.RecommendedAction)
+	}
+}
+
 func escapeMarkdownTable(value string) string {
 	value = strings.ReplaceAll(value, "|", "\\|")
 	value = strings.ReplaceAll(value, "\n", " ")
@@ -13012,6 +13191,72 @@ func inspectThreadMap(projectRoot string) ThreadMapStatus {
 		status.Status = "present"
 		status.Path = candidate
 		status.RecommendedAction = "Use the thread map to route input across Router, Inbox, Pulse, Log, and Project Orchestrator threads without relying on chat memory."
+		return status
+	}
+	return status
+}
+
+func inspectConcepts(projectRoot string) ConceptsStatus {
+	root := expandPath(projectRoot)
+	if root == "" {
+		root = "."
+	}
+	candidates := []string{
+		filepath.Join(defaultStateDir, "concepts.md"),
+		filepath.Join("docs", "CONCEPTS.md"),
+		filepath.Join("docs", "concepts.md"),
+		filepath.Join("docs", "glossary.md"),
+		"CONCEPTS.md",
+		"GLOSSARY.md",
+	}
+	status := ConceptsStatus{
+		EvidenceLabel: "local/static",
+		Status:        "missing",
+		CheckedPaths:  append([]string(nil), candidates...),
+		RecommendedAction: "Create a concepts library before relying on Router/Orchestrator memory. " +
+			"A useful concepts file records glossary, stable rules, prior decisions, historical pitfalls, blocked concepts, and source docs.",
+	}
+	for _, candidate := range candidates {
+		fullPath := filepath.Join(root, candidate)
+		info, err := os.Stat(fullPath)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		status.Status = "present"
+		status.Path = candidate
+		status.RecommendedAction = "Use the concepts library before routing new inputs or writing worker contracts."
+		return status
+	}
+	return status
+}
+
+func inspectInbox(projectRoot string) InboxStatus {
+	root := expandPath(projectRoot)
+	if root == "" {
+		root = "."
+	}
+	candidates := []string{
+		filepath.Join(defaultStateDir, "inbox.md"),
+		filepath.Join("docs", "INBOX.md"),
+		filepath.Join("docs", "inbox.md"),
+		"INBOX.md",
+	}
+	status := InboxStatus{
+		EvidenceLabel: "local/static",
+		Status:        "missing",
+		CheckedPaths:  append([]string(nil), candidates...),
+		RecommendedAction: "Create an inbox file before routing issues, feedback, external reviews, or pulse outputs into tasks. " +
+			"Inbox items should be classified before they become worker contracts.",
+	}
+	for _, candidate := range candidates {
+		fullPath := filepath.Join(root, candidate)
+		info, err := os.Stat(fullPath)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		status.Status = "present"
+		status.Path = candidate
+		status.RecommendedAction = "Use the inbox as intake context before dispatching or updating the package plan."
 		return status
 	}
 	return status
@@ -13204,6 +13449,22 @@ func printObservations(summary ObserveSummary) {
 	}
 	if summary.ThreadMap.Status == "missing" && summary.ThreadMap.RecommendedAction != "" {
 		fmt.Printf(" - %s", summary.ThreadMap.RecommendedAction)
+	}
+	fmt.Println()
+	fmt.Printf("Concepts (%s): %s", summary.Concepts.EvidenceLabel, summary.Concepts.Status)
+	if summary.Concepts.Path != "" {
+		fmt.Printf(" path=%s", summary.Concepts.Path)
+	}
+	if summary.Concepts.Status == "missing" && summary.Concepts.RecommendedAction != "" {
+		fmt.Printf(" - %s", summary.Concepts.RecommendedAction)
+	}
+	fmt.Println()
+	fmt.Printf("Inbox (%s): %s", summary.Inbox.EvidenceLabel, summary.Inbox.Status)
+	if summary.Inbox.Path != "" {
+		fmt.Printf(" path=%s", summary.Inbox.Path)
+	}
+	if summary.Inbox.Status == "missing" && summary.Inbox.RecommendedAction != "" {
+		fmt.Printf(" - %s", summary.Inbox.RecommendedAction)
 	}
 	fmt.Println()
 	fmt.Printf("Dispatch slots: used=%d/%d available=%d\n",
@@ -15409,7 +15670,7 @@ func violatesRouterBoundary(text string) bool {
 		return false
 	}
 	roleTerms := []string{"router", "inbox", "pulse", "log thread", "路由线程", "收件箱", "脉冲", "日志线程"}
-	negationTerms := []string{"do not", "must not", "never", "read-only", "cannot", "does not", "no ", "不得", "不要", "不能", "只读", "不应该", "不负责"}
+	negationTerms := []string{"do not", "must not", "never", "read-only", "cannot", "does not", "not permission", "stop dispatch", "no ", "不得", "不要", "不能", "只读", "不应该", "不负责"}
 	forbiddenTerms := []string{
 		"implement code",
 		"write code",

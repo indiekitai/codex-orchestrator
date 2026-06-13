@@ -204,15 +204,19 @@ It emits `overallStatus` values suitable for a Codex App orchestrator:
 - `blocked`
 
 It also emits per-status `counts`, `reviewPressure`, `runtimeStatus`,
-`jobSummary`, `projectMap`, and `threadMap` fields so a coordinator can stop
-dispatching when the review queue, stale queue, blocked queue, cleanup queue,
-or cross-thread topology needs attention.
+`jobSummary`, `projectMap`, `threadMap`, `concepts`, and `inbox` fields so a
+coordinator can stop dispatching when the review queue, stale queue, blocked
+queue, cleanup queue, cross-thread topology, or project knowledge intake needs
+attention.
 `jobSummary` is a compact jobs/status-style table derived from local ledger and
 git truth. `projectMap` is a local/static onboarding hint that checks for common
 project-map files and asks Codex App to generate or read one before first
 orchestration when none exists. `threadMap` checks for local thread topology
 files such as `.codex-orchestrator/thread-map.md`; it helps keep Router, Inbox,
-Pulse, Log, and Project Orchestrator roles out of chat memory.
+Pulse, Log, and Project Orchestrator roles out of chat memory. `concepts` and
+`inbox` check for local concept-library and intake files so routers and project
+orchestrators can read project vocabulary, decisions, pitfalls, feedback, and
+external-review inputs from files instead of compressed chat history.
 
 The Python helper remains as a prototype and compatibility reference. If
 neither helper is available, use the same ledger schema manually and let the

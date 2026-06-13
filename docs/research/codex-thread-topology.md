@@ -23,11 +23,23 @@ This aligns with Codex App user feedback asking for task boards,
 cross-thread references, dispatcher/controller threads, and handoff between
 durable threads.
 
+Long Chen's follow-up framing adds one product detail worth keeping: the
+handoff layer is not only thread roles. It is also a local task board plus a
+concept library. A Router is much more useful when it can read stable local
+state before deciding where to send input:
+
+- task board / ledger / status / reports: what is happening now;
+- project map: where code and ownership live;
+- thread map: which durable thread owns which role;
+- concepts: stable terms, rules, decisions, and historical pitfalls;
+- inbox: untriaged issues, user feedback, external reviews, pulse outputs, and
+  run observations.
+
 ## Product Interpretation
 
 `codex-orchestrator` should remain a project-level engineering orchestrator,
 not a general agent operating system. But it should make long-lived Codex App
-thread layouts explicit and reviewable.
+thread layouts and local knowledge handoff explicit and reviewable.
 
 The minimum useful model is:
 
@@ -38,6 +50,13 @@ The minimum useful model is:
 | Inbox | collect issues, external review, user feedback, run observations | dispatch workers directly |
 | Router | classify new input and generate handoff prompts for the right owner thread | implement code, dispatch workers, merge, push, deploy, cleanup |
 | Log | human-readable operating journal | act as source of truth over repo/ledger |
+
+The local knowledge layer is intentionally small:
+
+| File | Purpose | Evidence boundary |
+|---|---|---|
+| `.codex-orchestrator/concepts.md` | glossary, stable rules, prior decisions, pitfalls, blocked concepts, source docs | local/static |
+| `.codex-orchestrator/inbox.md` | intake for feedback, issues, external reviews, pulse outputs, run observations | local/static |
 
 ## Design Decisions
 
@@ -61,9 +80,17 @@ The minimum useful model is:
    - No automated cross-thread messaging protocol yet.
    - No promise that thread-map entries prove live thread or automation state.
 
+5. Add Concepts and Inbox as files, not integrations.
+   - File: `.codex-orchestrator/concepts.md`
+   - File: `.codex-orchestrator/inbox.md`
+   - Status fields: `concepts`, `inbox`
+   - Preflight warnings when missing.
+   - No Notion/remote sync yet; local Markdown stays inspectable and portable.
+
 ## Evidence Boundary
 
-- `local/static`: thread-map file exists; status/preflight can read it.
+- `local/static`: thread-map, concepts, or inbox file exists; status/preflight
+  can read it.
 - `proxy`: public posts and discussions describing durable-thread patterns.
 - `blocked`: no direct Codex App runtime proof that a Router can message every
   thread or that automations fired on schedule.
@@ -75,7 +102,9 @@ and ledger state before mutating anything.
 ## Next Possible Work
 
 - Add `thread-map validate` if thread-map structure becomes more formal.
-- Add a read-only "thread inbox import" report after Codex App exposes stable
-  thread-list/message APIs.
+- Add `concepts validate` or lightweight lint if the concepts file becomes
+  structured enough to check stale decisions.
+- Add read-only inbox import after GitHub/X/Codex App thread-list/message APIs
+  become stable.
 - Add status UI grouping for project orchestrator / pulse / inbox / router
   if thread metadata becomes machine-readable.

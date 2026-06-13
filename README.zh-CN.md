@@ -30,8 +30,8 @@ worktree，并继续推进路线图。
   编排手册。
 - **可选 Go 辅助命令**：`codex-orchestrator`，用于维护账本、生成状态页和心跳报告、
   准备审查包、运行策略检查，以及更新本地安装。
-- **文档和模板**：项目地图、功能包计划、编排策略、线程地图、Pulse/Inbox/Router
-  提示词、案例和 routine 规范。
+- **文档和模板**：项目地图、功能包计划、编排策略、线程地图、概念库/收件箱、
+  Pulse/Inbox/Router 提示词、案例和 routine 规范。
 
 辅助命令现在也会显式跟踪信任边界：它可以记录 developer-agent misalignment 事件，
 保存 worker 的约束栈快照，把完成声明和本地证据绑定起来，并在状态页里显示
@@ -128,6 +128,10 @@ flowchart LR
 `codex-orchestrator init --write-templates` 现在会生成
 `.codex-orchestrator/thread-map.md` 和
 `.codex-orchestrator/pulse-threads.md`，把这些长期线程关系落到文件里，而不是靠聊天记忆。
+
+它也会生成一个很轻的本地知识层：`.codex-orchestrator/concepts.md` 用来记录术语、
+稳定规则、历史决策和踩坑记录；`.codex-orchestrator/inbox.md` 用来收集 issue、反馈、
+外部 review 和 Pulse 输出，先归类，再变成任务。
 
 ## 文档
 

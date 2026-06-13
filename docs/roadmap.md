@@ -166,6 +166,9 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
      `pulse-threads.md`；`observe`/`status`/`preflight` 暴露 `threadMap`；
      README/完整指南/SKILL 说明 Project Orchestrator、Pulse、Inbox、Router、Log
      角色；新增 OPA011 防止 Router/Inbox/Pulse/Log 被写成执行线程。
+   - 后续扩展：已补 `concepts.md` 和 `inbox.md` 本地知识层；`observe`/`status`/
+     `preflight` 暴露 `concepts` 与 `inbox`，让 Router/统领先读项目术语、稳定规则、
+     历史决策、反馈和外部 review intake，再决定是否派发任务。
 
 ## 分层架构
 

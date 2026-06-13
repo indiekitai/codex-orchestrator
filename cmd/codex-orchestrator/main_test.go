@@ -1695,7 +1695,7 @@ func TestInitCanWriteStarterTemplates(t *testing.T) {
 	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project, "--write-templates"}); err != nil {
 		t.Fatal(err)
 	}
-	templateNames := []string{"orchestration-policy.md", "package-plan.md", "project-map.md", "thread-map.md", "pulse-threads.md"}
+	templateNames := []string{"orchestration-policy.md", "package-plan.md", "project-map.md", "thread-map.md", "pulse-threads.md", "concepts.md", "inbox.md"}
 	for _, name := range templateNames {
 		path := filepath.Join(project, ".codex-orchestrator", name)
 		data, err := os.ReadFile(path)
@@ -1710,6 +1710,12 @@ func TestInitCanWriteStarterTemplates(t *testing.T) {
 		}
 		if name == "pulse-threads.md" && !strings.Contains(string(data), "Project Pulse") {
 			t.Fatalf("expected pulse template to include Project Pulse, got:\n%s", string(data))
+		}
+		if name == "concepts.md" && !strings.Contains(string(data), "Historical Pitfalls") {
+			t.Fatalf("expected concepts template to include Historical Pitfalls, got:\n%s", string(data))
+		}
+		if name == "inbox.md" && !strings.Contains(string(data), "Intake") {
+			t.Fatalf("expected inbox template to include Intake, got:\n%s", string(data))
 		}
 	}
 	policy := filepath.Join(project, ".codex-orchestrator", "orchestration-policy.md")
@@ -1796,7 +1802,7 @@ func TestPreflightReportsHandsOffReadinessWarnings(t *testing.T) {
 	for _, check := range report.Checks {
 		checks[check.Name] = check
 	}
-	for _, name := range []string{"repo-git", "ledger", "heartbeat-gap", "watchdog", "project-map", "package-lane", "external-review-policy"} {
+	for _, name := range []string{"repo-git", "ledger", "heartbeat-gap", "watchdog", "project-map", "thread-map", "concepts", "inbox", "package-lane", "external-review-policy"} {
 		if _, ok := checks[name]; !ok {
 			t.Fatalf("expected preflight check %q in %#v", name, report.Checks)
 		}
@@ -2289,6 +2295,12 @@ func TestObserveJobSummaryAndProjectMap(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(project, ".codex-orchestrator", "thread-map.md"), []byte("# Thread Map\n\nRouter\nInbox\nPulse\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(project, ".codex-orchestrator", "concepts.md"), []byte("# Concepts\n\nGlossary\nDecisions\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".codex-orchestrator", "inbox.md"), []byte("# Inbox\n\nIntake\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
 		t.Fatal(err)
 	}
@@ -2323,8 +2335,14 @@ func TestObserveJobSummaryAndProjectMap(t *testing.T) {
 	if summary.ThreadMap.Status != "present" || summary.ThreadMap.Path != filepath.Join(".codex-orchestrator", "thread-map.md") {
 		t.Fatalf("expected detected thread map, got %#v", summary.ThreadMap)
 	}
+	if summary.Concepts.Status != "present" || summary.Concepts.Path != filepath.Join(".codex-orchestrator", "concepts.md") {
+		t.Fatalf("expected detected concepts, got %#v", summary.Concepts)
+	}
+	if summary.Inbox.Status != "present" || summary.Inbox.Path != filepath.Join(".codex-orchestrator", "inbox.md") {
+		t.Fatalf("expected detected inbox, got %#v", summary.Inbox)
+	}
 	rendered := renderSummary(summary)
-	for _, want := range []string{"## Job Summary", "| `STATUS-ROW` | `` | `active`", "## Project Map", "docs/CODEBASE_MAP.md", "## Thread Map", ".codex-orchestrator/thread-map.md"} {
+	for _, want := range []string{"## Job Summary", "| `STATUS-ROW` | `` | `active`", "## Project Map", "docs/CODEBASE_MAP.md", "## Thread Map", ".codex-orchestrator/thread-map.md", "## Concepts", ".codex-orchestrator/concepts.md", "## Inbox", ".codex-orchestrator/inbox.md"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected rendered summary to include %q:\n%s", want, rendered)
 		}
@@ -2337,12 +2355,14 @@ func TestObserveJobSummaryAndProjectMap(t *testing.T) {
 		JobSummary JobSummary       `json:"jobSummary"`
 		ProjectMap ProjectMapStatus `json:"projectMap"`
 		ThreadMap  ThreadMapStatus  `json:"threadMap"`
+		Concepts   ConceptsStatus   `json:"concepts"`
+		Inbox      InboxStatus      `json:"inbox"`
 	}
 	if err := json.Unmarshal([]byte(statusJSON), &statusPayload); err != nil {
 		t.Fatalf("expected status JSON, got %q: %v", statusJSON, err)
 	}
-	if statusPayload.JobSummary.Total != 1 || statusPayload.ProjectMap.Status != "present" || statusPayload.ThreadMap.Status != "present" {
-		t.Fatalf("expected status JSON jobSummary/projectMap/threadMap, got %#v", statusPayload)
+	if statusPayload.JobSummary.Total != 1 || statusPayload.ProjectMap.Status != "present" || statusPayload.ThreadMap.Status != "present" || statusPayload.Concepts.Status != "present" || statusPayload.Inbox.Status != "present" {
+		t.Fatalf("expected status JSON jobSummary/projectMap/threadMap/concepts/inbox, got %#v", statusPayload)
 	}
 }
 

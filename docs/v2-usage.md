@@ -116,11 +116,13 @@ This adds non-overwriting templates under `.codex-orchestrator/`:
 .codex-orchestrator/project-map.md
 .codex-orchestrator/thread-map.md
 .codex-orchestrator/pulse-threads.md
+.codex-orchestrator/concepts.md
+.codex-orchestrator/inbox.md
 ```
 
 Use them to record the current product lane, feature package outcome, safe
-worker queue, blocked external proof, project map, and long-lived Codex thread
-topology before the first hands-off run. Existing files are preserved unless
+worker queue, blocked external proof, project map, long-lived Codex thread
+topology, stable concepts, and intake items before the first hands-off run. Existing files are preserved unless
 `--force` is explicitly used.
 
 `thread-map.md` is for durable Codex App thread roles such as Router, Inbox,
@@ -128,6 +130,12 @@ Pulse, Log, and Project Orchestrator. `pulse-threads.md` contains reusable
 prompt shapes for recurring read-only pulse checks, input triage, routing, and
 decision logs. These files are local/static coordination state: verify live
 thread ids and automations before taking irreversible action.
+
+`concepts.md` is a local concept library for glossary terms, stable rules,
+prior decisions, historical pitfalls, blocked concepts, and source docs.
+`inbox.md` is a local intake surface for issues, user feedback, external
+reviews, pulse outputs, and run observations before they become task contracts.
+They are not task ledgers, external knowledge-base sync, or direct proof.
 
 ## Record Dispatch Setup
 
@@ -272,6 +280,13 @@ long-lived Codex App threads, routers, inboxes, or pulse monitors. A thread map
 does not prove that a thread or automation is alive; it only keeps the intended
 topology out of chat memory.
 
+Reports also include `concepts` and `inbox` blocks. The helper checks
+`.codex-orchestrator/concepts.md`, common docs glossary/concepts files,
+`.codex-orchestrator/inbox.md`, and common inbox files. Missing files are
+local/static onboarding warnings: they mean the router or orchestrator may be
+depending on chat memory for project vocabulary, prior decisions, feedback, or
+external review intake.
+
 Older ledgers may contain completed tasks that were recorded before
 `packageId` existed. Those terminal ungrouped tasks remain available in JSON
 `jobSummary.rows`, but `status` also exposes:
@@ -357,6 +372,8 @@ The report includes:
 - `jobSummary` with jobs/status-style counts and compact task rows,
 - `projectMap` with local project-map readiness and a recommended first-run
   action,
+- `threadMap`, `concepts`, and `inbox` with local/static readiness signals for
+  long-lived thread topology and project knowledge intake,
 - `overallStatus`,
 - per-status `counts`,
 - `reviewPressure` with active/review/stale/blocked/cleanup queues,
@@ -463,8 +480,8 @@ codex-orchestrator preflight --repo /path/to/project \
 ```
 
 `preflight` checks repo cleanliness, ledger shape, dispatch mode, recent
-heartbeat gap, watchdog status, project-map presence, package-lane health, and
-missing external-review evidence. A warning does not prove Codex App or OS
+heartbeat gap, watchdog status, project-map/thread-map/concepts/inbox presence,
+package-lane health, and missing external-review evidence. A warning does not prove Codex App or OS
 failure; it is a local/static signal to surface before an unattended run.
 Warnings exit successfully by default so preflight can write status artifacts
 without failing the monitor turn. Add `--fail-on-warning` when using it as a

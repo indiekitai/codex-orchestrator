@@ -316,8 +316,9 @@ paths before dispatching broad work.
 For multi-thread Codex App setups, use `threadMap` when available.
 `codex-orchestrator init --write-templates` writes
 `.codex-orchestrator/thread-map.md` and
-`.codex-orchestrator/pulse-threads.md`. Use them to record long-lived thread
-roles:
+`.codex-orchestrator/pulse-threads.md`. It also writes
+`.codex-orchestrator/concepts.md` and `.codex-orchestrator/inbox.md` as a small
+local knowledge layer. Use them to record long-lived thread roles:
 
 - Project Orchestrator: owns repo truth, ledger, worker dispatch, review,
   merge, push, cleanup, and feature-package closeout.
@@ -329,6 +330,13 @@ roles:
   clean worktrees unless the user explicitly promotes it to the project
   orchestrator role.
 - Log: human-readable operating journal and decision record.
+
+Before routing new input or writing worker contracts, read the project map,
+thread map, concepts library, inbox, ledger, and status artifacts when they
+exist. `concepts.md` is for stable project terms, rules, prior decisions, and
+historical pitfalls. `inbox.md` is for untriaged issues, user feedback, external
+reviews, pulse outputs, and run observations before they become bounded tasks.
+Both are local/static coordination evidence, not direct proof.
 
 Treat the thread map as local/static coordination state. Verify live thread ids,
 automation bindings, and recent messages before taking irreversible action.

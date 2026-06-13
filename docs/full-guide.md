@@ -115,8 +115,8 @@ If you are evaluating the workflow for the first time, use this order:
    [docs/case-studies/restaurant-pos-orchestration.md](case-studies/restaurant-pos-orchestration.md).
 7. When the project is ready for durable state, Codex can run
    `codex-orchestrator init --write-templates` to create starter local files
-   for the project map, package plan, orchestration policy, thread map, and
-   pulse/inbox/router prompts.
+   for the project map, package plan, orchestration policy, thread map,
+   concepts, inbox, and pulse/inbox/router prompts.
 
 Naming note: **codex-orchestrator** is the product name, repository name,
 Codex App skill name, and helper CLI name.
@@ -279,6 +279,12 @@ The generated `.codex-orchestrator/thread-map.md` and
 - Router threads classify new input and create handoff prompts; they do not
   implement code, dispatch workers, merge, push, deploy, or clean worktrees.
 - Log threads keep a human-readable operating journal.
+
+The generated `.codex-orchestrator/concepts.md` and
+`.codex-orchestrator/inbox.md` are the local knowledge layer: concepts records
+glossary terms, stable rules, prior decisions, and pitfalls; inbox collects
+issues, user feedback, external reviews, pulse outputs, and run observations
+before they become task contracts.
 
 You can also download a prebuilt `codex-orchestrator_<os>_<arch>` binary from
 the Releases page and put it on your `PATH`, but that is an advanced/helper
@@ -596,7 +602,7 @@ missed-run detection on every wakeup:
 
 `preflight` is the one-shot "can I leave this running?" check. It inspects
 repo cleanliness, ledger shape, dispatch mode, last heartbeat gap, macOS
-watchdog status, project map presence, package-lane health, and missing
+watchdog status, project/thread/concepts/inbox presence, package-lane health, and missing
 external review evidence. It is local/static only; warnings should be surfaced
 before leaving the orchestrator unattended, but they do not prove Codex App,
 OS, or runtime behavior. By default warnings print and exit successfully so the
