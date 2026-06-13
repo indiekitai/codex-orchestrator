@@ -8,6 +8,8 @@ orchestration work in this repository.
 | Path | Purpose |
 |---|---|
 | `SKILL.md` | Codex App skill entrypoint and orchestration runbook. Keep runtime behavior and safety rules here when Codex should follow them during work. |
+| `README.md` / `README.zh-CN.md` | Human-facing project homepage. Keep concise and link to deeper docs. |
+| `docs/full-guide.md` / `docs/full-guide.zh-CN.md` | Detailed guide split out from the old long README. Put deep workflow/reference material here instead of growing the root README. |
 | `cmd/codex-orchestrator/main.go` | Go helper CLI. Contains ledger commands, observe/status/heartbeat reports, routine runners, policy/eval helpers, and release verification helpers. |
 | `cmd/codex-orchestrator/main_test.go` | Go test coverage for ledger lifecycle, observe/status state, routines, policy/eval fixtures, release checks, and CLI behavior. |
 | `routines/*.json` | Routine contracts: inputs, allowed/forbidden actions, gates, evidence labels, and budget metadata. |
