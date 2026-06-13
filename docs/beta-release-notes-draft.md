@@ -1,84 +1,76 @@
-# v0.3.4 Release Notes
+# v0.3.5 Release Notes
 
-`v0.3.4` is a usability closeout release for the App-first orchestration loop.
-It builds on `v0.3.3` status/preflight work and focuses on three owner-visible
-problems: old ledger history making status pages look scattered, new projects
-lacking starter planning files, and feature packages needing a clear closeout
-checkpoint.
+`v0.3.5` is a public-usability and real-run hardening release for the
+Codex App-first orchestration workflow. It keeps the same product boundary:
+Codex App runs the supervised multi-session loop, while the helper provides
+local ledger, status, review, update, and policy evidence.
 
 ## Highlights
 
-- Added package closeout status:
-  - `codex-orchestrator pack status --package-id PKG`;
-  - embeds package acceptance and package summary;
-  - reports whether a package is ready for orchestrator acceptance, blocked,
-    not ready, rejected for fixup, or waiting for external review.
-- Added first-project onboarding templates:
-  - `codex-orchestrator init --write-templates`;
-  - writes non-overwriting local templates for orchestration policy, package
-    plan, and project map under `.codex-orchestrator/`.
-- Reduced legacy ledger noise:
-  - old terminal ungrouped tasks stay in JSON `jobSummary.rows` for audit;
-  - status surfaces expose `legacyTerminalUngrouped`, `visibleRows`, and
-    `ungroupedNonTerminal`;
-  - package lane guard no longer warns when the only ungrouped tasks are old
-    cleaned/merged/rejected/abandoned history.
-- Refined README / Chinese README / skill docs so Codex App users can discover
-  the new flow without learning the helper first.
+- Added a local self-update path:
+  - `codex-orchestrator self-update`;
+  - `codex-orchestrator self-update --from-github`;
+  - `codex-orchestrator self-update --with-helper`.
+- Split the public README into a short human-facing homepage plus full English
+  and Chinese guides.
+- Simplified the install/update surface around the App-first workflow:
+  - users can paste one bootstrap prompt into Codex App;
+  - release binaries remain optional helper assets;
+  - Homebrew/npm/tap/package-manager routes stay out of scope.
+- Anonymized the public restaurant POS case study and review notes so the repo
+  no longer exposes the private project name.
+- Hardened status and review behavior from real overnight orchestration:
+  - terminal `drain` mode now says the queue is stopped instead of highlighting
+    raw spare capacity;
+  - `pack merge-readiness` no longer fails solely because a worker has
+    untracked `.codex-orchestrator/` local state files;
+  - package switches must record concrete reasons instead of following idle
+    capacity.
 
 ## Why This Release
 
-Real project orchestration showed that a technically correct ledger can still
-feel confusing:
+Real project usage exposed two usability gaps:
 
-1. Old completed tasks without `packageId` made a fresh status page look like
-   the current work was scattered.
-2. New projects needed the same project map / package plan / orchestration
-   policy shape, but this lived too much in chat.
-3. After several related workers landed, the orchestrator needed one compact
-   local/static answer to "can this package close?"
+1. Public readers saw a README that was useful for agents but too long for
+   humans.
+2. Long-running orchestration status could confuse capacity with permission:
+   `availableSlots` looked dispatchable even when the run was drained, and
+   local `.codex-orchestrator/` state files could make merge-readiness look
+   failed even when business code was clean.
 
-`v0.3.4` keeps the same conservative boundary: the helper does not create Codex
-sessions, merge, push, clean worktrees, deploy, or prove direct runtime/device
-behavior. It gives the Codex App orchestrator better local facts for those
-decisions.
+`v0.3.5` turns those lessons into default behavior and documentation.
 
-## New Commands And Outputs
+## New / Changed Commands
 
-Initialize starter templates:
+Self-update the installed Codex skill and, when requested, the helper binary:
 
 ```bash
-codex-orchestrator init --write-templates
+codex-orchestrator self-update
+codex-orchestrator self-update --from-github
+codex-orchestrator self-update --with-helper
 ```
 
-Package closeout status:
+`self-update` updates the local skill/helper only. It does not dispatch
+sessions, mutate project ledgers, merge, push, deploy, or clean worktrees.
 
-```bash
-codex-orchestrator pack status --package-id CHECKOUT-COUPONS --json
-codex-orchestrator pack status \
-  --package-id CHECKOUT-COUPONS \
-  --write-report .codex-orchestrator/reviews/CHECKOUT-COUPONS-status.json
+`pack merge-readiness` now separates state-dir-only local changes:
+
+```text
+.codex-orchestrator/ changes are local orchestration state only
 ```
 
-Status rows now distinguish current-action jobs from legacy terminal history:
-
-```json
-{
-  "legacyTerminalUngrouped": 38,
-  "ungroupedNonTerminal": 0,
-  "visibleRows": []
-}
-```
+That remains local/static evidence and a residual risk, but it no longer blocks
+a merge-readiness pack as business dirty work.
 
 ## Evidence Boundary
 
-All new reports in this release are `local/static` evidence. They can help the
-Codex App orchestrator decide what to review next, but they do not authorize
-merge, push, cleanup, release, deploy, provider actions, or direct live proof by
-themselves.
+All new helper outputs in this release are still `local/static` evidence. They
+can help a Codex App orchestrator decide what to inspect, but they do not
+authorize implementation, merge, push, cleanup, release, deploy, provider
+actions, external-service mutation, direct runtime proof, or OS wake proof.
 
-External model review remains proxy/advisory evidence. It can block or inform a
-package closeout decision, but the orchestrator still owns the final
+External model review remains `proxy/advisory` evidence. It can block or inform
+a package closeout decision, but the orchestrator owns the final
 accept/reject/block decision.
 
 ## Verification Before Publishing
@@ -88,17 +80,18 @@ Checks used for this release:
 - `go test ./...`
 - `go run ./cmd/codex-orchestrator policy check --repo . --json`
 - `go run ./cmd/codex-orchestrator eval run --repo . --json`
+- `go run ./cmd/codex-orchestrator run-routine docs-drift-checker --repo . --json`
+- `go run ./cmd/codex-orchestrator run-routine evidence-label-auditor --repo . --json`
 - `go run ./cmd/codex-orchestrator status --repo . --json`
 - `go run ./cmd/codex-orchestrator preflight --repo . --json`
+- `go run ./cmd/codex-orchestrator self-update --source . --dry-run --json`
 - `git diff --check`
-- Pi read-only proxy/advisory review of the local diff
 
 The local helper was rebuilt and the installed Codex skill was synced before
 publishing.
 
 ## Suggested Announcement
 
-`codex-orchestrator v0.3.4` makes App-first orchestration easier to read and
-close out: package status reports, starter project templates, and legacy ledger
-noise control. It still stays conservative: Codex App runs the loop; the helper
-provides local ledger/status/review evidence.
+`codex-orchestrator v0.3.5` makes the App-first loop easier to adopt and safer
+to leave running: self-update, a shorter README, anonymized public case studies,
+clearer drain status, and merge-readiness that ignores local state-dir noise.
