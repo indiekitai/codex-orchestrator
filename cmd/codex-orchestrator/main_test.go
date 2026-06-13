@@ -167,6 +167,7 @@ func TestCompletionScriptsMentionCoreCommands(t *testing.T) {
 				"release-verifier",
 				"roadmap-next-task-suggester",
 				"rules",
+				"misalignment",
 				"watchdog",
 				"self-update",
 				"completion",
@@ -2733,6 +2734,12 @@ func TestPackMergeReadinessWritesStandardLocalReport(t *testing.T) {
 	if report.AcceptanceReport.Decision != "review-ready" || !strings.Contains(report.AcceptanceReport.NextAction, "separate accept/reject decision") {
 		t.Fatalf("expected review-ready acceptance report, got %#v", report.AcceptanceReport)
 	}
+	if report.ClaimVerification.Status != "passed" || report.AcceptanceReport.ClaimVerification.Status != "passed" {
+		t.Fatalf("expected passed claim verification in pack and acceptance report, got pack=%#v acceptance=%#v", report.ClaimVerification, report.AcceptanceReport.ClaimVerification)
+	}
+	if len(report.ClaimVerification.Checks) == 0 {
+		t.Fatalf("expected claim verification checks, got %#v", report.ClaimVerification)
+	}
 	if len(report.AuthorizationMatrix) == 0 || !containsAuthorizationStatus(report.AuthorizationMatrix, "merge", "requires-separate-orchestrator-acceptance") {
 		t.Fatalf("expected merge authorization boundary, got %#v", report.AuthorizationMatrix)
 	}
@@ -2741,6 +2748,89 @@ func TestPackMergeReadinessWritesStandardLocalReport(t *testing.T) {
 	}
 	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
 		t.Fatalf("expected only local evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestRecordTaskStoresConstraintStack(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "CONSTRAINT-SNAPSHOT",
+		"--pending-worktree-id", "local:constraint",
+		"--package-id", "checkout-package",
+		"--allowed", "apps/customer-web/**",
+		"--forbidden", "services/payment/**",
+		"--gate", "npm test -- --runInBand",
+		"--constraint", "do not touch payment",
+		"--authority", "AGENTS.md",
+		"--user-instruction", "Continue checkout package only.",
+		"--evidence-boundary", "local/static only",
+		"--package-switch-reason", "same-package-continuation",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stack := updated.Tasks[0].ConstraintStack
+	if stack == nil {
+		t.Fatal("expected constraint stack")
+	}
+	if stack.PackageID != "checkout-package" || stack.PackageSwitchReason != "same-package-continuation" || stack.EvidenceBoundary != "local/static only" {
+		t.Fatalf("unexpected constraint stack: %#v", stack)
+	}
+	if got := strings.Join(stack.AllowedPaths, "\n"); !strings.Contains(got, "apps/customer-web/**") {
+		t.Fatalf("expected allowed path in constraint stack, got %#v", stack.AllowedPaths)
+	}
+}
+
+func TestMisalignmentRecordReportAndObserveTrustRisk(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdMisalignmentRecord([]string{
+		"--repo", project,
+		"--category", "inaccurate-self-report",
+		"--source", "user-pushback",
+		"--task-id", "UNKNOWN",
+		"--severity", "high",
+		"--note", "Worker claimed tests passed without command output.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	report, err := buildMisalignmentInsightsReport(project, ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Total != 1 || report.Status != "blocked" {
+		t.Fatalf("expected one high-risk blocked report, got %#v", report)
+	}
+	if report.TrustRisk.Status != "blocked" || len(report.TrustRisk.Items) == 0 {
+		t.Fatalf("expected blocked trust risk, got %#v", report.TrustRisk)
+	}
+	summary, err := observe(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.TrustRisk.Status != "blocked" {
+		t.Fatalf("expected observe trust risk blocked, got %#v", summary.TrustRisk)
+	}
+}
+
+func TestPolicyAuditFlagsClaimSelfReportWithoutVerification(t *testing.T) {
+	findings := auditOrchestrationPolicyText("docs/reviews/self-report.md", "If the worker says complete, trust it and merge directly without checking diff, gates, or command output.")
+	counts := countPolicyAuditFindings(findings)
+	if counts[policyRuleClaimVerification] != 1 {
+		t.Fatalf("expected OPA010 hit, got findings=%#v counts=%#v", findings, counts)
 	}
 }
 

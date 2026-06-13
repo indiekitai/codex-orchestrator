@@ -26,7 +26,7 @@ for target in darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64; d
   OUT="codex-orchestrator_${GOOS_VALUE}_${GOARCH_VALUE}${EXT}"
   echo "building $OUT for $TAG"
   GOOS=$GOOS_VALUE GOARCH=$GOARCH_VALUE CGO_ENABLED=0 \
-    go build -trimpath -ldflags="-s -w" -o "$DIST_DIR/$OUT" ./cmd/codex-orchestrator
+    go build -trimpath -ldflags="-s -w -X main.helperVersion=$TAG" -o "$DIST_DIR/$OUT" ./cmd/codex-orchestrator
 
   (
     cd "$DIST_DIR"

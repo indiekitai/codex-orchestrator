@@ -35,6 +35,10 @@ One Codex chat is enough for small edits. Larger work gets messy:
 - **Docs and templates**: project maps, package plans, orchestration policy,
   case studies, and routine specs.
 
+The helper now also tracks trust boundaries: it can record developer-agent
+misalignment events, snapshot each worker's constraint stack, verify completion
+claims against local evidence, and surface a `trustRisk` block in status pages.
+
 It is not a daemon, a package-manager-first product, a full agent operating
 system, or an unreviewed autonomous coding bot. Codex App still creates and
 runs the worker sessions.
@@ -134,6 +138,8 @@ The loop is intentionally conservative:
   real project orchestration example.
 - [Loop Engineering alignment notes](docs/research/loop-engineering-alignment.md):
   research framing and design tradeoffs.
+- [Developer-agent misalignment notes](docs/research/developer-agent-misalignment.md):
+  why the tool tracks constraints, self-report claims, and trust risk.
 - [Distribution package](docs/distribution-package.md): release assets and
   helper packaging details.
 

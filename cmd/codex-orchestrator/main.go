@@ -27,19 +27,22 @@ const (
 
 var inspectLaunchAgentLoadedFn = inspectLaunchAgentLoaded
 
+var helperVersion = "dev"
+
 type Ledger struct {
-	Version        int          `json:"version"`
-	ProjectRoot    string       `json:"projectRoot"`
-	DefaultBranch  string       `json:"defaultBranch"`
-	Remote         string       `json:"remote"`
-	PushPolicy     string       `json:"pushPolicy"`
-	DispatchMode   string       `json:"dispatchMode,omitempty"`
-	DispatchNote   string       `json:"dispatchNote,omitempty"`
-	MaxConcurrency int          `json:"maxConcurrency"`
-	CreatedAt      string       `json:"createdAt"`
-	UpdatedAt      string       `json:"updatedAt"`
-	Tasks          []Task       `json:"tasks"`
-	RoutineRuns    []RoutineRun `json:"routineRuns,omitempty"`
+	Version            int                 `json:"version"`
+	ProjectRoot        string              `json:"projectRoot"`
+	DefaultBranch      string              `json:"defaultBranch"`
+	Remote             string              `json:"remote"`
+	PushPolicy         string              `json:"pushPolicy"`
+	DispatchMode       string              `json:"dispatchMode,omitempty"`
+	DispatchNote       string              `json:"dispatchNote,omitempty"`
+	MaxConcurrency     int                 `json:"maxConcurrency"`
+	CreatedAt          string              `json:"createdAt"`
+	UpdatedAt          string              `json:"updatedAt"`
+	Tasks              []Task              `json:"tasks"`
+	RoutineRuns        []RoutineRun        `json:"routineRuns,omitempty"`
+	MisalignmentEvents []MisalignmentEvent `json:"misalignmentEvents,omitempty"`
 }
 
 type Task struct {
@@ -56,8 +59,34 @@ type Task struct {
 	WriteSet          map[string][]string `json:"writeSet,omitempty"`
 	Gates             []string            `json:"gates,omitempty"`
 	Evidence          map[string]any      `json:"evidence,omitempty"`
+	ConstraintStack   *ConstraintStack    `json:"constraintStack,omitempty"`
 	LastObservation   map[string]string   `json:"lastObservation,omitempty"`
 	History           []map[string]string `json:"history,omitempty"`
+}
+
+type ConstraintStack struct {
+	UserInstruction     string   `json:"userInstruction,omitempty"`
+	Constraints         []string `json:"constraints,omitempty"`
+	AllowedPaths        []string `json:"allowedPaths,omitempty"`
+	ForbiddenPaths      []string `json:"forbiddenPaths,omitempty"`
+	RequiredGates       []string `json:"requiredGates,omitempty"`
+	EvidenceBoundary    string   `json:"evidenceBoundary,omitempty"`
+	Authority           []string `json:"authority,omitempty"`
+	PackageID           string   `json:"packageId,omitempty"`
+	PackageSwitchReason string   `json:"packageSwitchReason,omitempty"`
+}
+
+type MisalignmentEvent struct {
+	At            string `json:"at"`
+	Category      string `json:"category"`
+	Source        string `json:"source,omitempty"`
+	TaskID        string `json:"taskId,omitempty"`
+	PackageID     string `json:"packageId,omitempty"`
+	Severity      string `json:"severity"`
+	Status        string `json:"status"`
+	EvidenceLabel string `json:"evidenceLabel"`
+	Note          string `json:"note,omitempty"`
+	Resolution    string `json:"resolution,omitempty"`
 }
 
 type BudgetMetadata struct {
@@ -116,6 +145,11 @@ type RecordTaskOptions struct {
 	Allowed             []string
 	Forbidden           []string
 	Gates               []string
+	Constraints         []string
+	Authority           []string
+	UserInstruction     string
+	EvidenceBoundary    string
+	PackageSwitchReason string
 }
 
 type TaskRecordResult struct {
@@ -384,6 +418,7 @@ type ObserveSummary struct {
 	BudgetPressure         BudgetPressureSummary  `json:"budgetPressure"`
 	Integration            IntegrationState       `json:"integration"`
 	RuntimeStatus          RuntimeStatusReport    `json:"runtimeStatus"`
+	TrustRisk              TrustRiskReport        `json:"trustRisk"`
 	JobSummary             JobSummary             `json:"jobSummary"`
 	PackageSummary         PackageSummary         `json:"packageSummary"`
 	PackageLaneGuard       PackageLaneGuard       `json:"packageLaneGuard"`
@@ -393,6 +428,45 @@ type ObserveSummary struct {
 	Timeline               []TimelineItem         `json:"timeline,omitempty"`
 	Observations           []Observation          `json:"observations"`
 	RecentRoutineRuns      []RoutineRun           `json:"recentRoutineRuns,omitempty"`
+}
+
+type TrustRiskReport struct {
+	EvidenceLabel      string          `json:"evidenceLabel"`
+	Status             string          `json:"status"`
+	Summary            string          `json:"summary"`
+	Items              []TrustRiskItem `json:"items,omitempty"`
+	RecommendedActions []string        `json:"recommendedActions,omitempty"`
+}
+
+type TrustRiskItem struct {
+	Kind          string `json:"kind"`
+	Severity      string `json:"severity"`
+	TaskID        string `json:"taskId,omitempty"`
+	PackageID     string `json:"packageId,omitempty"`
+	Summary       string `json:"summary"`
+	EvidenceLabel string `json:"evidenceLabel"`
+	NextAction    string `json:"nextAction,omitempty"`
+}
+
+type MisalignmentInsightsReport struct {
+	SchemaVersion       int                 `json:"schemaVersion"`
+	Command             string              `json:"command"`
+	GeneratedAt         string              `json:"generatedAt"`
+	Status              string              `json:"status"`
+	EvidenceLabel       string              `json:"evidenceLabel"`
+	Boundary            string              `json:"boundary"`
+	RepoPath            string              `json:"repoPath"`
+	LedgerPath          string              `json:"ledgerPath"`
+	Total               int                 `json:"total"`
+	CountsByCategory    map[string]int      `json:"countsByCategory"`
+	CountsByStatus      map[string]int      `json:"countsByStatus"`
+	Recent              []MisalignmentEvent `json:"recent,omitempty"`
+	TrustRisk           TrustRiskReport     `json:"trustRisk"`
+	Evidence            map[string][]string `json:"evidence"`
+	ActionsTaken        []string            `json:"actionsTaken"`
+	NeedsHuman          bool                `json:"needsHuman"`
+	BlockedReason       string              `json:"blockedReason,omitempty"`
+	NextSuggestedAction string              `json:"nextSuggestedAction"`
 }
 
 type HeartbeatStatus struct {
@@ -581,6 +655,7 @@ type MergeReadinessPack struct {
 	NextSuggestedAction  string                    `json:"nextSuggestedAction"`
 	AuthorizationMatrix  []AuthorizationCheck      `json:"authorizationMatrix"`
 	LiveProofGate        LiveProofGate             `json:"liveProofGate"`
+	ClaimVerification    ClaimVerificationReport   `json:"claimVerification"`
 	AcceptanceReport     AcceptanceReport          `json:"acceptanceReport"`
 }
 
@@ -623,6 +698,22 @@ type MergeReadinessSignals struct {
 	EvidenceLabel []string `json:"evidenceLabel,omitempty"`
 	DocsDrift     []string `json:"docsDrift,omitempty"`
 	Missing       []string `json:"missing,omitempty"`
+}
+
+type ClaimVerificationReport struct {
+	EvidenceLabel   string       `json:"evidenceLabel"`
+	Status          string       `json:"status"`
+	Summary         string       `json:"summary"`
+	Checks          []ClaimCheck `json:"checks,omitempty"`
+	MissingEvidence []string     `json:"missingEvidence,omitempty"`
+}
+
+type ClaimCheck struct {
+	Claim            string   `json:"claim"`
+	Status           string   `json:"status"`
+	RequiredEvidence string   `json:"requiredEvidence,omitempty"`
+	Evidence         []string `json:"evidence,omitempty"`
+	MissingEvidence  []string `json:"missingEvidence,omitempty"`
 }
 
 type ConsultationRequestPack struct {
@@ -683,14 +774,15 @@ type LiveProofGate struct {
 }
 
 type AcceptanceReport struct {
-	Decision            string               `json:"decision"`
-	Why                 []string             `json:"why"`
-	EvidenceReviewed    []string             `json:"evidenceReviewed"`
-	GatesReviewed       []string             `json:"gatesReviewed,omitempty"`
-	AuthorizationMatrix []AuthorizationCheck `json:"authorizationMatrix"`
-	LiveProofGate       LiveProofGate        `json:"liveProofGate"`
-	ResidualRisks       []string             `json:"residualRisks,omitempty"`
-	NextAction          string               `json:"nextAction"`
+	Decision            string                  `json:"decision"`
+	Why                 []string                `json:"why"`
+	EvidenceReviewed    []string                `json:"evidenceReviewed"`
+	GatesReviewed       []string                `json:"gatesReviewed,omitempty"`
+	AuthorizationMatrix []AuthorizationCheck    `json:"authorizationMatrix"`
+	LiveProofGate       LiveProofGate           `json:"liveProofGate"`
+	ClaimVerification   ClaimVerificationReport `json:"claimVerification"`
+	ResidualRisks       []string                `json:"residualRisks,omitempty"`
+	NextAction          string                  `json:"nextAction"`
 }
 
 type PackageAcceptanceReport struct {
@@ -712,6 +804,7 @@ type PackageAcceptanceReport struct {
 	GatesReviewed       []string                    `json:"gatesReviewed,omitempty"`
 	AuthorizationMatrix []AuthorizationCheck        `json:"authorizationMatrix"`
 	LiveProofGate       LiveProofGate               `json:"liveProofGate"`
+	ClaimVerification   ClaimVerificationReport     `json:"claimVerification"`
 	ResidualRisks       []string                    `json:"residualRisks,omitempty"`
 	NeedsHuman          bool                        `json:"needsHuman"`
 	BlockedReason       string                      `json:"blockedReason,omitempty"`
@@ -976,12 +1069,17 @@ func run(args []string) error {
 		return cmdEval(args[1:])
 	case "rules":
 		return cmdRules(args[1:])
+	case "misalignment":
+		return cmdMisalignment(args[1:])
 	case "record-routine-run":
 		return cmdRecordRoutineRun(args[1:])
 	case "self-update":
 		return cmdSelfUpdate(args[1:])
 	case "completion":
 		return cmdCompletion(args[1:])
+	case "version", "-v", "--version":
+		fmt.Println(helperVersion)
+		return nil
 	case "help", "-h", "--help":
 		usage()
 		return nil
@@ -991,14 +1089,14 @@ func run(args []string) error {
 }
 
 func usage() {
-	fmt.Println(`codex-orchestrator v2 helper
+	fmt.Printf("codex-orchestrator %s helper\n\n", helperVersion)
+	fmt.Println(`Usage:
 
-Usage:
   codex-orchestrator init [--ledger PATH] [--project-root PATH] [--write-templates]
   codex-orchestrator dispatch record --task-id TASK --pending-worktree-id ID [--package-id PKG] [--branch BRANCH] [--allowed PATH] [--forbidden PATH] [--gate CMD] [--json]
   codex-orchestrator dispatch reconcile --task-id TASK [--branch BRANCH | --worktree PATH] [--json]
   codex-orchestrator run-mode set --dispatch-mode active|drain|paused [--note TEXT] [--json]
-  codex-orchestrator record-task --id ID (--worktree PATH --branch BRANCH | --pending-worktree-id ID) [--package-id PKG] [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N]
+  codex-orchestrator record-task --id ID (--worktree PATH --branch BRANCH | --pending-worktree-id ID) [--package-id PKG] [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N] [--constraint TEXT] [--authority TEXT] [--user-instruction TEXT] [--evidence-boundary TEXT] [--package-switch-reason TEXT]
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--missed-after 15m] [--count 0] [--write-report PATH]
@@ -1028,10 +1126,13 @@ Usage:
   codex-orchestrator eval run [--suite orchestration-policy-auditor] [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval add-failure --id ID --text TEXT --expect OPA001=1 [--file README.md] [--suite orchestration-policy-auditor] [--repo PATH]
   codex-orchestrator rules propose (--from-review PATH | --text TEXT | --text-file PATH) [--write-report PATH] [--json]
+  codex-orchestrator misalignment record --category CAT [--task-id TASK] [--package-id PKG] [--source TEXT] [--severity low|medium|high] [--status open|resolved|blocked] [--note TEXT] [--resolution TEXT] [--json]
+  codex-orchestrator misalignment report [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator record-routine-run --routine ID --status passed|failed|blocked [--task-id TASK] [--package-id PKG] [--reviewer NAME] [--report-path PATH]
   codex-orchestrator record-routine-run --report-json PATH
   codex-orchestrator self-update [--source PATH|--from-github] [--repo-url URL] [--cache-dir PATH] [--skill-only|--helper-only|--with-helper|--no-helper] [--dry-run] [--json]
   codex-orchestrator completion bash|zsh|fish
+  codex-orchestrator version
 
 This helper is conservative: it does not create Codex sessions, merge, push,
 delete branches, or clean worktrees.`)
@@ -1274,7 +1375,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init dispatch run-mode record-task append-event observe heartbeat status preflight watchdog pack review validate-routines run-routine roadmap policy eval rules record-routine-run self-update completion help"
+  commands="init dispatch run-mode record-task append-event observe heartbeat status preflight watchdog pack review validate-routines run-routine roadmap policy eval rules misalignment record-routine-run self-update completion version help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report"
 
   case "$prev" in
@@ -1310,6 +1411,10 @@ _codex_orchestrator()
       COMPREPLY=( $(compgen -W "score" -- "$cur") )
       return 0
       ;;
+    misalignment)
+      COMPREPLY=( $(compgen -W "record report" -- "$cur") )
+      return 0
+      ;;
     completion)
       COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") )
       return 0
@@ -1337,7 +1442,7 @@ _codex_orchestrator()
       fi
       ;;
     record-task)
-      COMPREPLY=( $(compgen -W "--ledger --id --title --package-id --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--ledger --id --title --package-id --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --constraint --authority --user-instruction --evidence-boundary --package-switch-reason --help" -- "$cur") )
       ;;
     append-event)
       COMPREPLY=( $(compgen -W "--ledger --type --task-id --status --pending-worktree-id --worktree --branch --note --help" -- "$cur") )
@@ -1421,6 +1526,15 @@ _codex_orchestrator()
         COMPREPLY=( $(compgen -W "propose" -- "$cur") )
       fi
       ;;
+    misalignment)
+      if [[ ${COMP_WORDS[2]} == "record" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --ledger --events --category --source --task-id --package-id --severity --status --evidence-label --note --resolution --json --help" -- "$cur") )
+      elif [[ ${COMP_WORDS[2]} == "report" ]]; then
+        COMPREPLY=( $(compgen -W "--repo --ledger --write-report --json --help" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "record report" -- "$cur") )
+      fi
+      ;;
     record-routine-run)
       COMPREPLY=( $(compgen -W "--ledger --routine --status --task-id --package-id --reviewer --report-path --evidence-local --evidence-proxy --evidence-direct --evidence-blocked --action --next --needs-human --blocked-reason --report-json --help" -- "$cur") )
       ;;
@@ -1456,9 +1570,11 @@ commands=(
   'policy:run policy and eval checks'
   'eval:run local eval fixtures'
   'rules:propose review-only rule updates'
+  'misalignment:record and report orchestration misalignment events'
   'record-routine-run:record a routine report in the ledger'
   'self-update:update the installed local skill and optional helper'
   'completion:print shell completion'
+  'version:print helper version'
   'help:show help'
 )
 routines=(
@@ -1520,6 +1636,15 @@ case $state in
           _values 'options' --from-review --text --text-file --write-report --json --help
         fi
         ;;
+      misalignment)
+        if (( CURRENT == 3 )); then
+          _values 'subcommand' record report
+        elif [[ $words[3] == "record" ]]; then
+          _values 'options' --repo --ledger --events --category --source --task-id --package-id --severity --status --evidence-label --note --resolution --json --help
+        else
+          _values 'options' --repo --ledger --write-report --json --help
+        fi
+        ;;
       completion)
         _values 'shell' bash zsh fish
         ;;
@@ -1565,7 +1690,7 @@ case $state in
         fi
         ;;
       record-task)
-        _values 'options' --ledger --id --title --package-id --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --help
+        _values 'options' --ledger --id --title --package-id --thread-id --pending-worktree-id --worktree --branch --base-commit --allowed --forbidden --gate --evidence --max-runtime-minutes --review-budget-minutes --budget-note --constraint --authority --user-instruction --evidence-boundary --package-switch-reason --help
         ;;
       append-event)
         _values 'options' --ledger --type --task-id --status --pending-worktree-id --worktree --branch --note --help
@@ -1624,9 +1749,11 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'run-routine' -d 'R
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'policy' -d 'Run policy and eval checks'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'eval' -d 'Run local eval fixtures'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'rules' -d 'Propose review-only rule updates'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'misalignment' -d 'Record and report orchestration misalignment events'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'record-routine-run' -d 'Record a routine report in the ledger'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'self-update' -d 'Update the installed local skill and optional helper'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'version' -d 'Print helper version'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-routine' -a 'pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from dispatch' -a 'record reconcile'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from run-mode' -a 'set'
@@ -1636,6 +1763,7 @@ complete -c codex-orchestrator -n '__fish_seen_subcommand_from review' -a 'run i
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run add-failure'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from rules' -a 'propose'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from misalignment' -a 'record report'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
 complete -c codex-orchestrator -l ledger -d 'Ledger path'
 complete -c codex-orchestrator -l json -d 'Print JSON'
@@ -1671,6 +1799,11 @@ complete -c codex-orchestrator -l output -d 'Output directory'
 complete -c codex-orchestrator -l dry-run -d 'Print runner command without invoking reviewer'
 complete -c codex-orchestrator -l dispatch-mode -d 'Run-level dispatch mode: active, drain, or paused'
 complete -c codex-orchestrator -l write-templates -d 'Write starter project orchestration templates'
+complete -c codex-orchestrator -l constraint -d 'Task constraint or boundary'
+complete -c codex-orchestrator -l authority -d 'Task source-of-truth authority'
+complete -c codex-orchestrator -l user-instruction -d 'Latest user instruction snapshot'
+complete -c codex-orchestrator -l evidence-boundary -d 'Evidence boundary for this task'
+complete -c codex-orchestrator -l package-switch-reason -d 'Reason this task is allowed in the package lane'
 `
 }
 
@@ -2024,12 +2157,19 @@ func parseRecordTaskFlags(fs *flag.FlagSet, args []string, idFlag string) (Recor
 	reviewBudgetMinutes := fs.Int("review-budget-minutes", 0, "optional task review budget in minutes")
 	budgetNote := fs.String("budget-note", "", "optional budget note")
 	note := fs.String("note", "", "history note")
+	userInstruction := fs.String("user-instruction", "", "user instruction or task contract summary")
+	evidenceBoundary := fs.String("evidence-boundary", "", "evidence boundary to preserve for this task")
+	packageSwitchReason := fs.String("package-switch-reason", "", "why this task is allowed in or outside the current package lane")
 	var allowed stringList
 	var forbidden stringList
 	var gates stringList
+	var constraints stringList
+	var authority stringList
 	fs.Var(&allowed, "allowed", "allowed write path, repeatable")
 	fs.Var(&forbidden, "forbidden", "forbidden path, repeatable")
 	fs.Var(&gates, "gate", "verification gate, repeatable")
+	fs.Var(&constraints, "constraint", "task constraint or boundary, repeatable")
+	fs.Var(&authority, "authority", "source-of-truth instruction/doc, repeatable")
 	if err := fs.Parse(args); err != nil {
 		return RecordTaskOptions{}, err
 	}
@@ -2056,6 +2196,11 @@ func parseRecordTaskFlags(fs *flag.FlagSet, args []string, idFlag string) (Recor
 		Allowed:             []string(allowed),
 		Forbidden:           []string(forbidden),
 		Gates:               []string(gates),
+		Constraints:         []string(constraints),
+		Authority:           []string(authority),
+		UserInstruction:     *userInstruction,
+		EvidenceBoundary:    *evidenceBoundary,
+		PackageSwitchReason: *packageSwitchReason,
 	}, nil
 }
 
@@ -2124,6 +2269,7 @@ func recordLedgerTask(opts RecordTaskOptions) (TaskRecordResult, error) {
 			"labels":   []string{"direct", "proxy", "blocked"},
 			"notes":    opts.EvidenceNote,
 		},
+		ConstraintStack: taskConstraintStack(opts),
 		LastObservation: map[string]string{
 			"at":     now,
 			"result": taskStatus,
@@ -2141,6 +2287,9 @@ func recordLedgerTask(opts RecordTaskOptions) (TaskRecordResult, error) {
 	}
 	if task.PackageID != "" {
 		task.History[0]["packageId"] = task.PackageID
+	}
+	if task.ConstraintStack != nil && task.ConstraintStack.PackageSwitchReason != "" {
+		task.History[0]["packageSwitchReason"] = task.ConstraintStack.PackageSwitchReason
 	}
 	ledger.Tasks = append(ledger.Tasks, task)
 	if err := saveLedger(opts.LedgerPath, &ledger); err != nil {
@@ -2175,6 +2324,43 @@ func recordLedgerTask(opts RecordTaskOptions) (TaskRecordResult, error) {
 		return TaskRecordResult{}, err
 	}
 	return TaskRecordResult{Task: task, LedgerPath: opts.LedgerPath, EventsPath: resolvedEvents}, nil
+}
+
+func taskConstraintStack(opts RecordTaskOptions) *ConstraintStack {
+	stack := ConstraintStack{
+		UserInstruction:     strings.TrimSpace(opts.UserInstruction),
+		Constraints:         uniqueSortedStrings(trimmedStrings(opts.Constraints)),
+		AllowedPaths:        uniqueSortedStrings(trimmedStrings(opts.Allowed)),
+		ForbiddenPaths:      uniqueSortedStrings(trimmedStrings(opts.Forbidden)),
+		RequiredGates:       uniqueSortedStrings(trimmedStrings(opts.Gates)),
+		EvidenceBoundary:    strings.TrimSpace(firstNonEmpty(opts.EvidenceBoundary, opts.Evidence)),
+		Authority:           uniqueSortedStrings(trimmedStrings(opts.Authority)),
+		PackageID:           strings.TrimSpace(opts.PackageID),
+		PackageSwitchReason: strings.TrimSpace(opts.PackageSwitchReason),
+	}
+	if stack.UserInstruction == "" &&
+		len(stack.Constraints) == 0 &&
+		len(stack.AllowedPaths) == 0 &&
+		len(stack.ForbiddenPaths) == 0 &&
+		len(stack.RequiredGates) == 0 &&
+		stack.EvidenceBoundary == "" &&
+		len(stack.Authority) == 0 &&
+		stack.PackageID == "" &&
+		stack.PackageSwitchReason == "" {
+		return nil
+	}
+	return &stack
+}
+
+func trimmedStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 func cmdAppendEvent(args []string) error {
@@ -2258,6 +2444,326 @@ func cmdAppendEvent(args []string) error {
 	}
 	fmt.Printf("Appended event: %s\n", *eventType)
 	return nil
+}
+
+func cmdMisalignment(args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: codex-orchestrator misalignment record|report")
+	}
+	switch args[0] {
+	case "record":
+		return cmdMisalignmentRecord(args[1:])
+	case "report":
+		return cmdMisalignmentReport(args[1:])
+	case "help", "-h", "--help":
+		fmt.Println("usage: codex-orchestrator misalignment record|report")
+		return nil
+	default:
+		return fmt.Errorf("unknown misalignment subcommand: %s", args[0])
+	}
+}
+
+func cmdMisalignmentRecord(args []string) error {
+	fs := flag.NewFlagSet("misalignment record", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	eventsPath := fs.String("events", "", "events path")
+	category := fs.String("category", "", "misalignment category")
+	source := fs.String("source", "", "source of the event: user-pushback, reviewer, helper, worker, etc.")
+	taskID := fs.String("task-id", "", "task id")
+	packageID := fs.String("package-id", "", "package id")
+	severity := fs.String("severity", "medium", "severity: low, medium, or high")
+	status := fs.String("status", "open", "status: open, resolved, or blocked")
+	evidenceLabel := fs.String("evidence-label", "local/static", "evidence label")
+	note := fs.String("note", "", "event note")
+	resolution := fs.String("resolution", "", "resolution note")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*category) == "" {
+		return errors.New("misalignment record requires --category")
+	}
+	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
+	ledger, err := loadLedger(resolvedLedger)
+	if err != nil {
+		return err
+	}
+	event := MisalignmentEvent{
+		At:            nowISO(),
+		Category:      strings.TrimSpace(*category),
+		Source:        strings.TrimSpace(*source),
+		TaskID:        strings.TrimSpace(*taskID),
+		PackageID:     strings.TrimSpace(*packageID),
+		Severity:      normalizedMisalignmentSeverity(*severity),
+		Status:        normalizedMisalignmentStatus(*status),
+		EvidenceLabel: firstNonEmpty(strings.TrimSpace(*evidenceLabel), "local/static"),
+		Note:          strings.TrimSpace(*note),
+		Resolution:    strings.TrimSpace(*resolution),
+	}
+	if event.PackageID == "" && event.TaskID != "" {
+		if idx := findTaskIndex(ledger.Tasks, event.TaskID); idx >= 0 {
+			event.PackageID = ledger.Tasks[idx].PackageID
+		}
+	}
+	ledger.MisalignmentEvents = append(ledger.MisalignmentEvents, event)
+	if err := saveLedger(resolvedLedger, &ledger); err != nil {
+		return err
+	}
+	resolvedEvents := *eventsPath
+	if resolvedEvents == "" {
+		resolvedEvents = eventsPathForLedger(resolvedLedger)
+	}
+	if err := appendEvent(resolvedEvents, map[string]any{
+		"at":            event.At,
+		"type":          "misalignment",
+		"category":      event.Category,
+		"source":        emptyToNil(event.Source),
+		"taskId":        emptyToNil(event.TaskID),
+		"packageId":     emptyToNil(event.PackageID),
+		"severity":      event.Severity,
+		"status":        event.Status,
+		"evidenceLabel": event.EvidenceLabel,
+		"note":          event.Note,
+		"resolution":    emptyToNil(event.Resolution),
+	}); err != nil {
+		return err
+	}
+	result := map[string]any{
+		"ledger":        resolvedLedger,
+		"events":        resolvedEvents,
+		"evidenceLabel": "local/static",
+		"event":         event,
+	}
+	if *jsonOut {
+		return printJSON(result)
+	}
+	fmt.Printf("Recorded misalignment event: %s (%s)\n", event.Category, event.Status)
+	fmt.Printf("Ledger: %s\n", resolvedLedger)
+	fmt.Printf("Evidence: local/static event log only; no orchestration action was performed.\n")
+	return nil
+}
+
+func cmdMisalignmentReport(args []string) error {
+	fs := flag.NewFlagSet("misalignment report", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	writeReport := fs.String("write-report", "", "write report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
+	report, err := buildMisalignmentInsightsReport(expandPath(*repo), resolvedLedger)
+	if err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(expandPath(*writeReport), report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut {
+		return printJSON(report)
+	}
+	fmt.Printf("Misalignment status: %s\n", report.Status)
+	fmt.Printf("Events: %d\n", report.Total)
+	fmt.Printf("Trust risk: %s - %s\n", report.TrustRisk.Status, report.TrustRisk.Summary)
+	if *writeReport != "" {
+		fmt.Printf("Wrote report: %s\n", expandPath(*writeReport))
+	}
+	return nil
+}
+
+func normalizedMisalignmentSeverity(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "low", "medium", "high":
+		return strings.ToLower(strings.TrimSpace(value))
+	case "blocker", "critical":
+		return "high"
+	case "":
+		return "medium"
+	default:
+		return "medium"
+	}
+}
+
+func normalizedMisalignmentStatus(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "open", "resolved", "blocked":
+		return strings.ToLower(strings.TrimSpace(value))
+	case "closed", "fixed":
+		return "resolved"
+	case "":
+		return "open"
+	default:
+		return "open"
+	}
+}
+
+func buildMisalignmentInsightsReport(repoPath string, ledgerPath string) (MisalignmentInsightsReport, error) {
+	ledger, err := loadLedger(ledgerPath)
+	report := MisalignmentInsightsReport{
+		SchemaVersion:    1,
+		Command:          "misalignment report",
+		GeneratedAt:      nowISO(),
+		Status:           "passed",
+		EvidenceLabel:    "local/static",
+		Boundary:         "This report reads local ledger/status evidence only. It does not prove model intent, Codex App runtime delivery, direct device/runtime behavior, or production state.",
+		RepoPath:         repoPath,
+		LedgerPath:       ledgerPath,
+		CountsByCategory: map[string]int{},
+		CountsByStatus:   map[string]int{},
+		Evidence: normalizedEvidence(map[string][]string{
+			"local": {"Loaded local ledger misalignment events and local/static status heuristics."},
+		}),
+		ActionsTaken:        []string{"Generated local/static misalignment insights report"},
+		NextSuggestedAction: "Review open/high trust risks before accepting worker claims, dispatching more work, or closing a package.",
+	}
+	if err != nil {
+		report.Status = "blocked"
+		report.NeedsHuman = true
+		report.BlockedReason = "could not load ledger"
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], err.Error())
+		return report, nil
+	}
+	report.RepoPath = firstNonEmpty(ledger.ProjectRoot, repoPath)
+	events := append([]MisalignmentEvent(nil), ledger.MisalignmentEvents...)
+	report.Total = len(events)
+	for _, event := range events {
+		report.CountsByCategory[firstNonEmpty(event.Category, "unknown")]++
+		report.CountsByStatus[firstNonEmpty(event.Status, "unknown")]++
+	}
+	sort.SliceStable(events, func(i, j int) bool {
+		return events[i].At > events[j].At
+	})
+	if len(events) > 10 {
+		events = events[:10]
+	}
+	report.Recent = events
+	summary, observeErr := observe(ledgerPath)
+	if observeErr != nil {
+		report.Status = "warning"
+		report.NeedsHuman = true
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "Could not build observe trust-risk context: "+observeErr.Error())
+		report.TrustRisk = buildTrustRiskReport(ledger, nil, nil)
+		return report, nil
+	}
+	report.TrustRisk = buildTrustRiskReport(ledger, summary.Observations, summary.HeartbeatStatus)
+	if report.TrustRisk.Status == "blocked" {
+		report.Status = "blocked"
+		report.NeedsHuman = true
+	} else if report.TrustRisk.Status == "warning" && report.Status == "passed" {
+		report.Status = "warning"
+	}
+	return report, nil
+}
+
+func buildTrustRiskReport(ledger Ledger, observations []Observation, heartbeat *HeartbeatStatus) TrustRiskReport {
+	report := TrustRiskReport{
+		EvidenceLabel: "local/static",
+		Status:        "ok",
+		Summary:       "No open trust-risk signal found in local ledger/status evidence.",
+	}
+	addRisk := func(kind, severity, taskID, packageID, summary, next string) {
+		report.Items = append(report.Items, TrustRiskItem{
+			Kind:          kind,
+			Severity:      severity,
+			TaskID:        taskID,
+			PackageID:     packageID,
+			Summary:       summary,
+			EvidenceLabel: "local/static",
+			NextAction:    next,
+		})
+		if severity == "high" {
+			report.Status = "blocked"
+		} else if report.Status == "ok" {
+			report.Status = "warning"
+		}
+		if next != "" {
+			report.RecommendedActions = append(report.RecommendedActions, next)
+		}
+	}
+	for _, event := range ledger.MisalignmentEvents {
+		if normalizedMisalignmentStatus(event.Status) == "resolved" {
+			continue
+		}
+		severity := normalizedMisalignmentSeverity(event.Severity)
+		addRisk(
+			"misalignment-event",
+			severity,
+			event.TaskID,
+			event.PackageID,
+			fmt.Sprintf("%s: %s", firstNonEmpty(event.Category, "unknown"), firstNonEmpty(event.Note, "open misalignment event")),
+			"Resolve or explicitly accept this misalignment event before claiming the package is closed.",
+		)
+	}
+	for _, observation := range observations {
+		switch observation.Status {
+		case "completed-unreviewed":
+			addRisk("unverified-completion", "medium", observation.ID, "", "worker has a clean task commit but has not passed orchestrator acceptance", "Run merge-readiness/acceptance checks before merge/push/cleanup.")
+		case "stale-needs-inspection":
+			addRisk("stale-worker", "medium", observation.ID, "", "worker is stale and needs repo-truth inspection", "Inspect worktree truth; do not wait indefinitely or dispatch filler work.")
+		case "blocked":
+			addRisk("blocked-worker", "high", observation.ID, "", firstNonEmpty(observation.Note, "worker is blocked"), "Record the blocker and avoid claiming progress from weak evidence.")
+		}
+		if observation.PendingWorktreeID != "" && observation.Worktree == "" && observation.Status != "pending-setup" {
+			addRisk("setup-reconcile-gap", "medium", observation.ID, "", "pendingWorktreeId exists without a resolved worktree in local status", "Run dispatch reconcile after git worktree truth appears, or mark setup blocked.")
+		}
+	}
+	for _, task := range ledger.Tasks {
+		if task.ConstraintStack == nil {
+			continue
+		}
+		if task.ConstraintStack.PackageID != "" && task.PackageID != "" && task.ConstraintStack.PackageID != task.PackageID {
+			addRisk("constraint-stack-drift", "medium", task.ID, task.PackageID, "task package differs from its recorded constraint snapshot", "Review the task contract before using this ledger record for dispatch or acceptance.")
+		}
+		if task.Status == "completed-unreviewed" && len(task.Gates) == 0 {
+			addRisk("claim-without-gates", "medium", task.ID, task.PackageID, "completed-unreviewed task has no recorded gates", "Record credible gates or keep acceptance blocked.")
+		}
+	}
+	if heartbeat != nil && heartbeat.Status == "missed" {
+		addRisk("missed-heartbeat", "medium", "", "", fmt.Sprintf("heartbeat gap=%s estimatedMissedRuns=%d", heartbeat.Gap, heartbeat.EstimatedMissedRuns), "Report the missed wakeup before continuing normal dispatch/review work.")
+	}
+	sort.SliceStable(report.Items, func(i, j int) bool {
+		if report.Items[i].Severity != report.Items[j].Severity {
+			return riskSeverityRank(report.Items[i].Severity) < riskSeverityRank(report.Items[j].Severity)
+		}
+		return report.Items[i].Kind < report.Items[j].Kind
+	})
+	report.RecommendedActions = uniqueSortedStrings(report.RecommendedActions)
+	if len(report.Items) > 0 {
+		report.Summary = fmt.Sprintf("%d local/static trust-risk signal(s): %s.", len(report.Items), trustRiskKinds(report.Items))
+	}
+	return report
+}
+
+func riskSeverityRank(severity string) int {
+	switch normalizedMisalignmentSeverity(severity) {
+	case "high":
+		return 0
+	case "medium":
+		return 1
+	default:
+		return 2
+	}
+}
+
+func trustRiskKinds(items []TrustRiskItem) string {
+	counts := map[string]int{}
+	for _, item := range items {
+		counts[item.Kind]++
+	}
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", key, counts[key]))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func cmdObserve(args []string) error {
@@ -3162,6 +3668,7 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	renderMetricHTML(&b, "派发槽", slotLabel, slotClass)
 	dispatchLabel, dispatchClass := dispatchRecommendationDisplay(summary.DispatchRecommendation)
 	renderMetricHTML(&b, "派发建议", dispatchLabel, dispatchClass)
+	renderMetricHTML(&b, "信任风险", summary.TrustRisk.Status, statusClass(summary.TrustRisk.Status))
 	renderMetricHTML(&b, "待审/阻塞", fmt.Sprintf("%d / %d", summary.ReviewPressure.ReviewNeeded, summary.ReviewPressure.Blocked), pressureClass(summary.ReviewPressure.Blocked, summary.ReviewPressure.ReviewNeeded))
 	fmt.Fprintf(&b, "</section>\n")
 
@@ -3214,6 +3721,7 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	fmt.Fprintf(&b, "</section>\n")
 
 	renderPreflightHTML(&b, summary.Preflight)
+	renderTrustRiskHTML(&b, summary.TrustRisk)
 	renderPackageLaneGuardHTML(&b, summary.PackageLaneGuard)
 	renderTimelineHTML(&b, summary.Timeline)
 
@@ -3327,6 +3835,36 @@ func renderPreflightHTML(b *strings.Builder, report *PreflightReport) {
 			fmt.Fprintf(b, "</div>")
 		}
 		fmt.Fprintf(b, "</div>")
+	}
+	fmt.Fprintf(b, "</section>\n")
+}
+
+func renderTrustRiskHTML(b *strings.Builder, report TrustRiskReport) {
+	if report.EvidenceLabel == "" && len(report.Items) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "<section class=\"section\"><h2>信任风险 / Trust Risk</h2>")
+	fmt.Fprintf(b, "<p><span class=\"hero-status %s\">%s</span> %s</p>", escapeHTML(statusClass(report.Status)), escapeHTML(firstNonEmpty(report.Status, "ok")), escapeHTML(report.Summary))
+	fmt.Fprintf(b, "<p class=\"muted\">Evidence: %s. This is a local/static self-report and constraint-risk view, not proof of model intent or runtime behavior.</p>", escapeHTML(firstNonEmpty(report.EvidenceLabel, "local/static")))
+	if len(report.Items) > 0 {
+		for _, item := range report.Items {
+			fmt.Fprintf(b, "<div class=\"item\"><div class=\"item-title\">%s <span class=\"pill\">%s</span></div>", escapeHTML(item.Kind), escapeHTML(item.Severity))
+			fmt.Fprintf(b, "<div>%s</div>", escapeHTML(item.Summary))
+			meta := []string{}
+			if item.TaskID != "" {
+				meta = append(meta, "task="+item.TaskID)
+			}
+			if item.PackageID != "" {
+				meta = append(meta, "package="+item.PackageID)
+			}
+			if len(meta) > 0 {
+				fmt.Fprintf(b, "<div class=\"meta\">%s</div>", escapeHTML(strings.Join(meta, " · ")))
+			}
+			if item.NextAction != "" {
+				fmt.Fprintf(b, "<div class=\"action\">%s</div>", escapeHTML(item.NextAction))
+			}
+			fmt.Fprintf(b, "</div>")
+		}
 	}
 	fmt.Fprintf(b, "</section>\n")
 }
@@ -4698,6 +5236,11 @@ func finalizeMergeReadinessPack(report MergeReadinessPack) MergeReadinessPack {
 	report.Evidence = normalizedEvidence(report.Evidence)
 	report.LiveProofGate = mergeReadinessLiveProofGate(report)
 	report.AuthorizationMatrix = mergeReadinessAuthorizationMatrix(report)
+	report.ClaimVerification = mergeReadinessClaimVerification(report)
+	if report.ClaimVerification.Status != "passed" {
+		report.NeedsHuman = true
+		report.ResidualRisks = append(report.ResidualRisks, report.ClaimVerification.Summary)
+	}
 	if report.Status == "blocked" && report.BlockedReason == "" {
 		report.BlockedReason = "merge-readiness pack could not collect required local/static evidence"
 	}
@@ -4992,6 +5535,7 @@ func buildPackageAcceptanceReport(repoPath string, ledgerPath string, packageID 
 		}
 		report.Tasks = append(report.Tasks, pack.Task)
 		report.TaskReports = append(report.TaskReports, pack.AcceptanceReport)
+		report.ClaimVerification = mergeClaimVerificationReports(report.ClaimVerification, pack.ClaimVerification)
 		report.EvidenceReviewed = append(report.EvidenceReviewed, pack.AcceptanceReport.EvidenceReviewed...)
 		report.GatesReviewed = append(report.GatesReviewed, pack.AcceptanceReport.GatesReviewed...)
 		report.ResidualRisks = append(report.ResidualRisks, pack.AcceptanceReport.ResidualRisks...)
@@ -5014,6 +5558,18 @@ func buildPackageAcceptanceReport(repoPath string, ledgerPath string, packageID 
 			report.Decision = "needs-review"
 			report.NeedsHuman = true
 			report.Why = append(report.Why, "Task "+taskID+" still needs orchestrator review.")
+		}
+		if pack.ClaimVerification.Status == "failed" {
+			if report.Status != "blocked" {
+				report.Status = "failed"
+				report.Decision = "reject-for-fixup"
+			}
+			report.NeedsHuman = true
+			report.Why = append(report.Why, "Task "+taskID+" failed claim verification.")
+		} else if pack.ClaimVerification.Status == "needs-evidence" && report.Status == "passed" {
+			report.Decision = "needs-review"
+			report.NeedsHuman = true
+			report.Why = append(report.Why, "Task "+taskID+" needs additional claim evidence before package acceptance.")
 		}
 		report.LiveProofGate = mergeLiveProofGates(report.LiveProofGate, pack.AcceptanceReport.LiveProofGate)
 	}
@@ -5045,6 +5601,7 @@ func buildPackageAcceptanceReport(repoPath string, ledgerPath string, packageID 
 	report.GatesReviewed = uniqueSortedStrings(report.GatesReviewed)
 	report.ResidualRisks = uniqueSortedStrings(report.ResidualRisks)
 	report.ActionsTaken = uniqueSortedStrings(report.ActionsTaken)
+	report.ClaimVerification.MissingEvidence = uniqueSortedStrings(report.ClaimVerification.MissingEvidence)
 	report.Evidence = normalizedEvidence(report.Evidence)
 	if report.LiveProofGate.Status == "" {
 		report.LiveProofGate = LiveProofGate{
@@ -5162,6 +5719,36 @@ func mergeLiveProofGates(current LiveProofGate, next LiveProofGate) LiveProofGat
 	}
 	if current.Boundary == "" {
 		current.Boundary = next.Boundary
+	}
+	return current
+}
+
+func mergeClaimVerificationReports(current ClaimVerificationReport, next ClaimVerificationReport) ClaimVerificationReport {
+	if current.EvidenceLabel == "" {
+		current = ClaimVerificationReport{
+			EvidenceLabel: "local/static",
+			Status:        "passed",
+			Summary:       "All selected task claim checks passed.",
+		}
+	}
+	if next.EvidenceLabel == "" {
+		return current
+	}
+	current.Checks = append(current.Checks, next.Checks...)
+	current.MissingEvidence = append(current.MissingEvidence, next.MissingEvidence...)
+	if next.Status == "failed" {
+		current.Status = "failed"
+	} else if next.Status == "needs-evidence" && current.Status == "passed" {
+		current.Status = "needs-evidence"
+	}
+	current.MissingEvidence = uniqueSortedStrings(current.MissingEvidence)
+	switch current.Status {
+	case "failed":
+		current.Summary = fmt.Sprintf("One or more package task claim checks failed; missing evidence items=%d.", len(current.MissingEvidence))
+	case "needs-evidence":
+		current.Summary = fmt.Sprintf("One or more package task claim checks need evidence; missing evidence items=%d.", len(current.MissingEvidence))
+	default:
+		current.Summary = "All selected task claim checks passed with local/static evidence."
 	}
 	return current
 }
@@ -6075,6 +6662,108 @@ func consultationLiveProofGate(report ConsultationRequestPack) LiveProofGate {
 	return gate
 }
 
+func mergeReadinessClaimVerification(report MergeReadinessPack) ClaimVerificationReport {
+	verification := ClaimVerificationReport{
+		EvidenceLabel: "local/static",
+		Status:        "passed",
+		Summary:       "Core merge-readiness claims have local/static evidence.",
+	}
+	addCheck := func(claim, status, required string, evidence []string, missing []string) {
+		check := ClaimCheck{
+			Claim:            claim,
+			Status:           status,
+			RequiredEvidence: required,
+			Evidence:         uniqueSortedStrings(trimmedStrings(evidence)),
+			MissingEvidence:  uniqueSortedStrings(trimmedStrings(missing)),
+		}
+		verification.Checks = append(verification.Checks, check)
+		if len(check.MissingEvidence) > 0 {
+			verification.MissingEvidence = append(verification.MissingEvidence, check.MissingEvidence...)
+		}
+		if status == "failed" {
+			verification.Status = "failed"
+		} else if status == "needs-evidence" && verification.Status == "passed" {
+			verification.Status = "needs-evidence"
+		}
+	}
+	commitEvidence := []string{}
+	commitMissing := []string{}
+	commitStatus := "needs-evidence"
+	if report.CommitCountAfterBase != nil {
+		commitEvidence = append(commitEvidence, fmt.Sprintf("commitCountAfterBase=%d", *report.CommitCountAfterBase))
+		if *report.CommitCountAfterBase > 0 {
+			commitStatus = "passed"
+		} else {
+			commitMissing = append(commitMissing, "No commits after baseCommit; worker completion claim is not reviewable.")
+		}
+	} else {
+		commitMissing = append(commitMissing, "Commit count after baseCommit was not collected.")
+	}
+	addCheck("worker produced reviewable committed work", commitStatus, "commit count after baseCommit greater than zero", commitEvidence, commitMissing)
+
+	pathStatus := "passed"
+	pathMissing := []string{}
+	pathEvidence := []string{"pathCheck=" + report.PathCheck.Status}
+	if report.PathCheck.Status != "passed" {
+		pathStatus = "failed"
+		pathMissing = append(pathMissing, "Allowed/forbidden path check did not pass.")
+	}
+	addCheck("changed paths stayed inside task contract", pathStatus, "allowed/forbidden path check passed", pathEvidence, pathMissing)
+
+	diffStatus := "passed"
+	diffMissing := []string{}
+	diffEvidence := []string{"diffCheck=" + report.DiffCheck.Status}
+	if report.DiffCheck.Status != "passed" {
+		diffStatus = "failed"
+		diffMissing = append(diffMissing, "git diff --check did not pass.")
+	}
+	addCheck("diff is whitespace/conflict-marker clean", diffStatus, "git diff --check passed", diffEvidence, diffMissing)
+
+	gateStatus := "passed"
+	gateMissing := []string{}
+	gateEvidence := []string{}
+	if len(report.RecordedGates) == 0 {
+		gateStatus = "needs-evidence"
+		gateMissing = append(gateMissing, "No ledger gates were recorded for this task.")
+	} else {
+		gateEvidence = append(gateEvidence, "recordedGates="+strings.Join(report.RecordedGates, " | "))
+	}
+	addCheck("verification gates are recorded", gateStatus, "task ledger includes credible gate commands", gateEvidence, gateMissing)
+
+	selfReviewStatus := "passed"
+	selfReviewMissing := []string{}
+	selfReviewEvidence := append([]string{}, report.Signals.SelfReview...)
+	if len(selfReviewEvidence) == 0 {
+		selfReviewStatus = "needs-evidence"
+		selfReviewMissing = append(selfReviewMissing, "No self-review signal was found in local review/docs/artifact scan.")
+	}
+	addCheck("worker self-review exists", selfReviewStatus, "self-review signal in review docs, artifacts, or handoff material", selfReviewEvidence, selfReviewMissing)
+
+	evidenceStatus := "passed"
+	evidenceMissing := []string{}
+	evidenceEvidence := append([]string{}, report.Signals.EvidenceLabel...)
+	if len(evidenceEvidence) == 0 {
+		evidenceStatus = "needs-evidence"
+		evidenceMissing = append(evidenceMissing, "No evidence label signal was found.")
+	}
+	if report.LiveProofGate.Required && len(report.LiveProofGate.Evidence) == 0 {
+		evidenceStatus = "needs-evidence"
+		evidenceMissing = append(evidenceMissing, "Live proof gate requires direct proof or explicit waiver before direct/live claims.")
+	}
+	addCheck("evidence labels are present and bounded", evidenceStatus, "review material contains local/proxy/direct/blocked labels and live-proof gate is respected", evidenceEvidence, evidenceMissing)
+
+	verification.MissingEvidence = uniqueSortedStrings(verification.MissingEvidence)
+	switch verification.Status {
+	case "failed":
+		verification.Summary = fmt.Sprintf("Claim verifier failed: %d missing evidence item(s).", len(verification.MissingEvidence))
+	case "needs-evidence":
+		verification.Summary = fmt.Sprintf("Claim verifier needs evidence: %d missing evidence item(s).", len(verification.MissingEvidence))
+	default:
+		verification.Summary = "Claim verifier passed with local/static evidence for committed work, path boundaries, diff cleanliness, gates, self-review, and evidence labels."
+	}
+	return verification
+}
+
 func mergeReadinessAcceptanceReport(report MergeReadinessPack) AcceptanceReport {
 	decision := "review-ready"
 	next := "Review this pack, rerun appropriate gates, then record a separate accept/reject decision."
@@ -6107,6 +6796,9 @@ func mergeReadinessAcceptanceReport(report MergeReadinessPack) AcceptanceReport 
 	if report.LiveProofGate.Status != "" {
 		evidenceReviewed = append(evidenceReviewed, "live proof gate: "+report.LiveProofGate.Status)
 	}
+	if report.ClaimVerification.Status != "" {
+		evidenceReviewed = append(evidenceReviewed, "claim verification: "+report.ClaimVerification.Status)
+	}
 	return AcceptanceReport{
 		Decision:            decision,
 		Why:                 uniqueSortedStrings(why),
@@ -6114,6 +6806,7 @@ func mergeReadinessAcceptanceReport(report MergeReadinessPack) AcceptanceReport 
 		GatesReviewed:       append([]string(nil), report.RecordedGates...),
 		AuthorizationMatrix: append([]AuthorizationCheck(nil), report.AuthorizationMatrix...),
 		LiveProofGate:       report.LiveProofGate,
+		ClaimVerification:   report.ClaimVerification,
 		ResidualRisks:       append([]string(nil), report.ResidualRisks...),
 		NextAction:          next,
 	}
@@ -7732,7 +8425,7 @@ func runOrchestrationPolicyAuditorRoutine(repo string) RoutineRunReport {
 		}
 		findings = append(findings, auditOrchestrationPolicyText(path, string(data))...)
 	}
-	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static orchestration policy rules OPA001-OPA009")
+	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static orchestration policy rules OPA001-OPA010")
 	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Scanned %d repo-local orchestration policy input file(s).", len(paths)))
 	report.Evidence["local"] = append(report.Evidence["local"], summarizePolicyAuditFindings(findings))
 
@@ -8693,6 +9386,8 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	dispatchRecommendation := buildDispatchRecommendation(normalizedDispatchMode(ledger.DispatchMode), integration, pressure, packageSummary, laneGuard)
 	projectMap := inspectProjectMap(ledger.ProjectRoot)
 	timeline := buildTimeline(ledger.Tasks, observations, ledger.RoutineRuns, 12)
+	heartbeatStatus := loadRepoHeartbeatStatus(ledger.ProjectRoot)
+	trustRisk := buildTrustRiskReport(ledger, observations, heartbeatStatus)
 	overall, actions := summarizeObservations(ledger, integration, counts, pressure)
 	summary := ObserveSummary{
 		Ledger:                 ledgerPath,
@@ -8710,6 +9405,7 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		BudgetPressure:         budgetPressure,
 		Integration:            integration,
 		RuntimeStatus:          runtimeStatus,
+		TrustRisk:              trustRisk,
 		JobSummary:             jobSummary,
 		PackageSummary:         packageSummary,
 		PackageLaneGuard:       laneGuard,
@@ -8719,7 +9415,7 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		Observations:           observations,
 		RecentRoutineRuns:      recentRoutineRuns(ledger.RoutineRuns, 5),
 	}
-	if heartbeatStatus := loadRepoHeartbeatStatus(ledger.ProjectRoot); heartbeatStatus != nil {
+	if heartbeatStatus != nil {
 		summary.HeartbeatStatus = heartbeatStatus
 	}
 	return summary, nil
@@ -11166,6 +11862,7 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- cleanupNeeded: `%d`\n", summary.ReviewPressure.CleanupNeeded)
 	fmt.Fprintf(&b, "- availableSlots: `%d`\n", summary.ReviewPressure.AvailableSlots)
 	fmt.Fprintf(&b, "- runtimeStatus: `%s`\n", summary.RuntimeStatus.Summary)
+	fmt.Fprintf(&b, "- trustRisk: `%s` - %s\n", firstNonEmpty(summary.TrustRisk.Status, "ok"), firstNonEmpty(summary.TrustRisk.Summary, "No trust-risk report."))
 	fmt.Fprintf(&b, "- jobs: `total=%d %s`\n", summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
 	fmt.Fprintf(&b, "- packages: `total=%d`\n", summary.PackageSummary.Total)
 	fmt.Fprintf(&b, "- packageLaneGuard: `%s`", summary.PackageLaneGuard.Status)
@@ -11211,6 +11908,7 @@ func renderSummary(summary ObserveSummary) string {
 		}
 	}
 	renderRuntimeStatusMarkdown(&b, summary.RuntimeStatus)
+	renderTrustRiskMarkdown(&b, summary.TrustRisk)
 	renderDispatchRecommendationMarkdown(&b, summary.DispatchRecommendation)
 	renderPackageLaneGuardMarkdown(&b, summary.PackageLaneGuard)
 	renderPreflightMarkdownInto(&b, summary.Preflight)
@@ -11315,6 +12013,37 @@ func renderRuntimeStatusCategoryMarkdown(b *strings.Builder, title string, items
 		}
 		if item.LastUpdatedAt != "" {
 			fmt.Fprintf(b, "  - lastUpdatedAt: `%s`\n", item.LastUpdatedAt)
+		}
+	}
+}
+
+func renderTrustRiskMarkdown(b *strings.Builder, report TrustRiskReport) {
+	if report.EvidenceLabel == "" && len(report.Items) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\n## Trust Risk\n\n")
+	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", firstNonEmpty(report.EvidenceLabel, "local/static"))
+	fmt.Fprintf(b, "- status: `%s`\n", firstNonEmpty(report.Status, "ok"))
+	fmt.Fprintf(b, "- summary: %s\n", firstNonEmpty(report.Summary, "No open trust-risk signal found."))
+	if len(report.RecommendedActions) > 0 {
+		fmt.Fprintf(b, "- recommendedActions:\n")
+		for _, action := range report.RecommendedActions {
+			fmt.Fprintf(b, "  - %s\n", action)
+		}
+	}
+	if len(report.Items) > 0 {
+		fmt.Fprintf(b, "\n### Trust Risk Items\n\n")
+		for _, item := range report.Items {
+			fmt.Fprintf(b, "- `%s` `%s`: %s\n", item.Kind, item.Severity, item.Summary)
+			if item.TaskID != "" {
+				fmt.Fprintf(b, "  - taskId: `%s`\n", item.TaskID)
+			}
+			if item.PackageID != "" {
+				fmt.Fprintf(b, "  - packageId: `%s`\n", item.PackageID)
+			}
+			if item.NextAction != "" {
+				fmt.Fprintf(b, "  - nextAction: %s\n", item.NextAction)
+			}
 		}
 	}
 }
@@ -12660,6 +13389,7 @@ const (
 	policyRulePendingLedger     = "OPA007"
 	policyRuleBudgetBoundary    = "OPA008"
 	policyRulePackageContinuity = "OPA009"
+	policyRuleClaimVerification = "OPA010"
 )
 
 func newEvidenceAuditFinding(ruleID string, format string, args ...any) evidenceAuditFinding {
@@ -13012,7 +13742,8 @@ func isKnownPolicyRule(ruleID string) bool {
 		policyRuleHeartbeatBinding,
 		policyRulePendingLedger,
 		policyRuleBudgetBoundary,
-		policyRulePackageContinuity:
+		policyRulePackageContinuity,
+		policyRuleClaimVerification:
 		return true
 	default:
 		return false
@@ -13392,6 +14123,14 @@ func auditOrchestrationPolicyText(path string, text string) []policyAuditFinding
 			findings = append(findings, newPolicyAuditFinding(
 				policyRulePackageContinuity,
 				"%s:%d: continuous orchestration wording appears to fill capacity with unrelated safe backlog tasks instead of preserving a feature-package/product-module main line: %s",
+				path,
+				line,
+				compactForFinding(body),
+			))
+		case violatesClaimVerificationGuard(body):
+			findings = append(findings, newPolicyAuditFinding(
+				policyRuleClaimVerification,
+				"%s:%d: completion/self-report wording appears to trust worker claims without git, gate, diff, or evidence-bound verification: %s",
 				path,
 				line,
 				compactForFinding(body),
@@ -13926,6 +14665,58 @@ func violatesPendingLedgerGuard(text string) bool {
 	runningBeforeSetup := containsAnyFold(text, []string{"running worker", "active worker", "counted as running", "count as running", "treated as running", "treat as running", "worker slot"}) &&
 		containsAnyFold(text, []string{"before setup", "before confirmation", "before setup is confirmed", "without setup confirmation", "no real thread", "no worktree", "no branch", "without real thread"})
 	return transientOnly || runningBeforeSetup
+}
+
+func violatesClaimVerificationGuard(text string) bool {
+	if containsAnyFold(text, []string{"OPA010"}) {
+		return false
+	}
+	lower := strings.ToLower(text)
+	if containsAnyFold(text, []string{"claim verification", "claim verifier", "evidence-bound", "git truth", "repo truth", "diff", "gate", "gates", "git status", "git diff", "self-report", "self report"}) &&
+		containsAnyFold(text, []string{"do not trust", "verify", "must check", "must verify", "require", "requires", "不要只信", "必须验证", "需要验证"}) {
+		return false
+	}
+	trustsCompletion := containsAnyFold(text, []string{
+		"if the worker says complete",
+		"if worker says complete",
+		"when the worker says complete",
+		"worker says done",
+		"agent says done",
+		"final message says complete",
+		"thread says complete",
+		"只要 worker 说完成",
+		"只看 final",
+		"只信 final",
+		"说完成就",
+	})
+	skipsEvidence := containsAnyFold(text, []string{
+		"no need to rerun",
+		"without checking",
+		"skip review",
+		"skip gates",
+		"skip diff",
+		"trust it",
+		"可以直接 merge",
+		"不用验收",
+		"不用检查",
+		"不用跑测试",
+		"直接合并",
+	})
+	claimsTestsPassed := containsAnyFold(text, []string{
+		"tests passed",
+		"gates passed",
+		"all checks passed",
+		"测试通过",
+		"检查通过",
+	}) && containsAnyFold(text, []string{
+		"without output",
+		"without logs",
+		"no command output",
+		"没有输出",
+		"没记录命令",
+		"没贴日志",
+	})
+	return (trustsCompletion && skipsEvidence) || claimsTestsPassed || (strings.Contains(lower, "self-report") && strings.Contains(lower, "enough"))
 }
 
 func compactForFinding(text string) string {

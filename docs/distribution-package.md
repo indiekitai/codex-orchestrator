@@ -8,20 +8,15 @@ package-manager distribution routes are out of scope for this product path.
 
 ## Status
 
-Current published package: `v0.3.5` GitHub release
+Current published package: `v0.3.6` GitHub release
 
-`v0.3.5` publishes the current App-first beta package: self-update, shorter
-human-facing README onboarding, missed heartbeat detection, macOS watchdog
-fallback, watchdog status inspection, reusable status snapshots, package
-ledger/status visibility, package review workflows, package closeout status,
-onboarding templates, clearer current-action rows, terminal drain status, and
-state-dir-only merge-readiness handling.
+`v0.3.6` publishes the current App-first beta package: misalignment event logging, constraint-stack task snapshots, evidence-bound claim verification, trust-risk status output, OPA010 claim-verification eval coverage, helper version reporting, self-update, status snapshots, package review workflows, and state-dir-only merge-readiness handling.
 
 Implemented:
 
-- `v0.3.5` git tag source install path.
+- `v0.3.6` git tag source install path.
 - GitHub release with darwin/linux/windows assets:
-  https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.5
+  https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.6
 - `scripts/install.sh` source install path for users with Go.
 - `codex-orchestrator self-update` for local skill/helper refresh.
 - Release asset download smoke for `darwin_arm64`.
@@ -58,9 +53,9 @@ or build the helper only when the run benefits from durable local state.
 
 The intended release-asset path is:
 
-https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.5
+https://github.com/indiekitai/codex-orchestrator/releases/tag/v0.3.6
 
-`v0.3.5` is published as a GitHub Release with release assets for:
+`v0.3.6` is published as a GitHub Release with release assets for:
 
 - `darwin_amd64`
 - `darwin_arm64`
@@ -76,7 +71,7 @@ smoked with `--help` plus bash/zsh/fish completion generation.
 ```bash
 git clone https://github.com/indiekitai/codex-orchestrator.git
 cd codex-orchestrator
-git checkout v0.3.5
+git checkout v0.3.6
 scripts/install.sh
 codex-orchestrator --help
 ```
@@ -143,8 +138,8 @@ failure.
 Use the helper scripts when GitHub Release API credentials are available:
 
 ```bash
-scripts/build-release-assets.sh v0.3.5 /tmp/codex-orchestrator-dist
-scripts/publish-release.sh v0.3.5 /tmp/codex-orchestrator-dist
+scripts/build-release-assets.sh v0.3.6 /tmp/codex-orchestrator-dist
+scripts/publish-release.sh v0.3.6 /tmp/codex-orchestrator-dist
 ```
 
 `scripts/publish-release.sh` intentionally checks
@@ -171,11 +166,12 @@ Before announcing a distribution package:
 ```bash
 go test ./...
 go build -trimpath -ldflags='-s -w' -o /tmp/codex-orchestrator ./cmd/codex-orchestrator
+/tmp/codex-orchestrator version
 /tmp/codex-orchestrator completion bash >/tmp/codex-orchestrator.bash
 /tmp/codex-orchestrator completion zsh >/tmp/_codex-orchestrator
 /tmp/codex-orchestrator completion fish >/tmp/codex-orchestrator.fish
 go run ./cmd/codex-orchestrator validate-routines --dir routines
-go run ./cmd/codex-orchestrator run-routine release-verifier --tag v0.3.5 --repo . --json
+go run ./cmd/codex-orchestrator run-routine release-verifier --tag v0.3.6 --repo . --json
 ```
 
 Evidence labels:

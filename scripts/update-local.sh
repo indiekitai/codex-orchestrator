@@ -83,7 +83,8 @@ install_helper() {
     return 0
   fi
   mkdir -p "$BIN_DIR"
-  go build -trimpath -ldflags="-s -w" -o "$BIN_DIR/$BIN_NAME" "$ROOT_DIR/cmd/codex-orchestrator"
+  VERSION=$(cd "$ROOT_DIR" && git describe --tags --always --dirty 2>/dev/null || echo dev)
+  go build -trimpath -ldflags="-s -w -X main.helperVersion=$VERSION" -o "$BIN_DIR/$BIN_NAME" "$ROOT_DIR/cmd/codex-orchestrator"
   echo "Updated helper: $BIN_DIR/$BIN_NAME"
 }
 

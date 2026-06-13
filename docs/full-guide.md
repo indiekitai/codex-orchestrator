@@ -455,7 +455,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator dispatch record --task-id TASK --package-id PACKAGE --pending-worktree-id PENDING_ID --branch codex/task --gate "go test ./..."
 ./codex-orchestrator dispatch reconcile --task-id TASK
 ./codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch only"
-./codex-orchestrator record-task --id TASK --package-id PACKAGE --worktree /path/to/wt --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
+./codex-orchestrator record-task --id TASK --package-id PACKAGE --worktree /path/to/wt --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25 --constraint "do not touch payments" --authority "worker may commit only"
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
@@ -470,6 +470,8 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator review policy check --package-id PKG --risk medium --task-count 4 --json
 ./codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --write-report /tmp/pi-review-run.json
 ./codex-orchestrator review import --package-id PKG --reviewer deepseek --file /tmp/deepseek-review.md --status passed
+./codex-orchestrator misalignment record --category self-report-mismatch --task-id TASK --note "claimed tests passed without command evidence"
+./codex-orchestrator misalignment report --repo . --write-report /tmp/misalignment-insights.json
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
 ./codex-orchestrator validate-routines --dir routines
 ./codex-orchestrator run-routine pr-reviewer --task-id TASK --write-report /tmp/pr-reviewer-report.json
@@ -523,6 +525,13 @@ pressure is computed from local ledger timestamps; review pressure is computed
 only when a review-ready timestamp is recorded. Missing or indeterminate budget
 data is labeled as local/static helper evidence. The helper does not kill
 processes, schedule sessions, or enforce budgets.
+
+`record-task` can also persist the active worker constraint stack with
+`--constraint`, `--authority`, `--user-instruction`, `--evidence-boundary`, and
+`--package-switch-reason`. This captures the contract the worker and reviewer
+should be judged against after a long session or context compaction. It is
+local/static orchestration state, not proof that the worker followed the
+contract.
 
 `status --html` writes a local/static HTML status page to stdout. It starts with
 a human-readable `当前进度` panel that summarizes current status, the active
@@ -654,6 +663,14 @@ for the same package, then emits one decision such as `review-ready`,
 not a merge command: merge, push, cleanup, release, deploy, and direct proof
 still require a separate orchestrator closeout decision.
 
+`misalignment record` and `misalignment report` are local/static trust-loop
+tools. Use them to preserve developer pushback, setup failures, unsupported
+completion claims, package drift, heartbeat gaps, and other orchestrator
+self-corrections in the ledger instead of leaving them only in chat. The report
+groups recent events by category, status, severity, related task/package, and
+recommended follow-up. It does not upload transcripts, infer model intent,
+mutate git, dispatch sessions, or authorize merge/release work.
+
 `pack review --package-id PKG` now also defaults to the tasks recorded with that
 package when explicit `--task-id` flags are omitted. Use it at a feature-package
 boundary to create a portable handoff for Pi, Claude, DeepSeek, a human reviewer,
@@ -779,12 +796,14 @@ evidence is `local` or `blocked`.
 MVP. It is read-only and does not load or update the ledger. It scans
 repo-local orchestration docs, prompts, routine specs, routine reports, and
 ledger/event files for deterministic orchestration policy rules (`OPA001`-
-`OPA009`): dry-run dispatch barrier, no-main-checkout fallback guard, heartbeat
+`OPA010`): dry-run dispatch barrier, no-main-checkout fallback guard, heartbeat
 continuation guard, delegated worker boundaries, evidence promotion boundaries,
 heartbeat target binding guard, pending worktree ledger guard, budget-policy
-evidence/control boundary drift, and unrelated safe-backlog dispatch that breaks
-feature-package continuity. The heartbeat lifecycle checks also flag repeated
-generic heartbeat prompt updates that should have been ledger/status changes.
+evidence/control boundary drift, unrelated safe-backlog dispatch that breaks
+feature-package continuity, and completion/self-report claims that are not
+bound to command, diff, gate, or artifact evidence. The heartbeat lifecycle
+checks also flag repeated generic heartbeat prompt updates that should have
+been ledger/status changes.
 Findings are
 local/static suspicions, not proof of wrongdoing. It
 does not stage, commit, merge, push, tag, release, clean worktrees, dispatch
@@ -803,6 +822,7 @@ a stale fixed task id, foreground sleep/polling used instead of Codex App
 heartbeat wakeups, duplicate heartbeat creation, heartbeat creation without
 persisted automation truth verification, pending worktree ids kept only in
 prompt/chat state or counted as running before setup is confirmed,
+tests/completion claims without evidence-bound verification,
 setup-failure cases where the
 orchestrator writes delegated worker implementation code itself, and
 budget-policy helper control or evidence overclaims. It does not dispatch

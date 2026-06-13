@@ -214,12 +214,14 @@ ledger over chat-only state:
 
 ```bash
 codex-orchestrator init --write-templates
-codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25
+codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25 --constraint "do not touch payment" --authority "worker may commit only"
 codex-orchestrator observe --json
 codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
 codex-orchestrator preflight --repo . --write-report .codex-orchestrator/preflight.json --write-summary .codex-orchestrator/preflight.md
 codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch; do not dispatch new workers"
 codex-orchestrator heartbeat --count 1 --interval 20m --missed-after 45m --write-report .codex-orchestrator/heartbeat-report.json --write-summary .codex-orchestrator/heartbeat-summary.md
+codex-orchestrator misalignment record --category self-report-mismatch --task-id TASK --note "claimed completion without evidence"
+codex-orchestrator misalignment report --repo . --json
 codex-orchestrator append-event --task-id TASK --type review --status completed-unreviewed --note "Ready for orchestrator review."
 ```
 
@@ -227,6 +229,12 @@ codex-orchestrator append-event --task-id TASK --type review --status completed-
 `.codex-orchestrator/` without overwriting existing files: an orchestration
 policy, package plan, and project map. Use them to keep the current product
 lane, worker queue, blocked proof, and source-of-truth docs out of chat memory.
+
+When a worker is dispatched or discovered, record the active constraint stack:
+latest user instruction, repo/skill rules, allowed/forbidden paths, required
+gates, evidence boundary, merge/push/cleanup authority, package lane, and
+package switch reason. Treat this as local/static contract state for later
+review, not proof that the worker followed the contract.
 
 The helper is not a session launcher and must not be treated as one. It is a
 state and heartbeat tool. The Codex App orchestrator still owns worker dispatch,
@@ -409,12 +417,13 @@ runtime proof.
 The orchestration policy auditor runner is the first V4 policy/eval checker.
 It is read-only and does not load or update the ledger. It scans repo-local
 orchestration docs, prompts, routine specs, routine reports, and ledger/event
-files for deterministic policy rules (`OPA001`-`OPA009`): dry-run dispatch
+files for deterministic policy rules (`OPA001`-`OPA010`): dry-run dispatch
 barrier, no-main-checkout fallback guard, heartbeat continuation guard,
 delegated worker boundary, evidence promotion boundary, heartbeat target binding
 guard, pending worktree ledger guard, budget-policy evidence/control boundary
-drift, and unrelated safe-backlog dispatch that breaks feature-package
-continuity. Findings are
+drift, unrelated safe-backlog dispatch that breaks feature-package continuity,
+and completion/self-report claims that are not bound to command, diff, gate, or
+artifact evidence. Findings are
 local/static suspicions until a reviewer confirms them. Its MVP report uses
 only `local` and `blocked` evidence; it does not stage, commit, merge, push,
 tag, release, clean worktrees, dispatch sessions, mutate the ledger, or claim
@@ -784,14 +793,17 @@ codex-orchestrator pack merge-readiness --task-id TASK --json
 codex-orchestrator pack consultation --task-id TASK --json
 codex-orchestrator pack review --package-id PKG --task-id TASK --json
 codex-orchestrator pack status --package-id PKG --json
+codex-orchestrator pack acceptance --package-id PKG --json
 codex-orchestrator review policy check --package-id PKG --risk medium --task-count 4 --json
 codex-orchestrator review run --package-id PKG --reviewer pi --pack /tmp/review-pack/PKG --dry-run
 codex-orchestrator review import --package-id PKG --reviewer deepseek --file /tmp/deepseek-review.md --status passed
 ```
 
 `pack merge-readiness` is local/static review evidence. Its
-`acceptanceReport`, `authorizationMatrix`, and `liveProofGate` are review aids,
-not automatic authorization.
+`acceptanceReport`, `claimVerification`, `authorizationMatrix`, and
+`liveProofGate` are review aids, not automatic authorization. If
+`claimVerification` is missing required command, diff, gate, self-review, or
+evidence-label support, do not accept the worker without human review.
 
 `pack consultation` is a local/static owner decision brief. Its
 `ownerDecisionBrief`, `authorizationMatrix`, and `liveProofGate` help format the

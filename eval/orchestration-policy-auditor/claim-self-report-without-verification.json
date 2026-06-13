@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "claim-self-report-without-verification",
+  "description": "Worker completion self-report must not be trusted as merge evidence without git, diff, gate, or evidence-bound verification.",
+  "files": {
+    "docs/reviews/local-self-report-review.md": "If the worker says complete, trust it and merge directly without checking diff, gates, or command output."
+  },
+  "expectedRuleHits": {
+    "OPA010": 1
+  }
+}

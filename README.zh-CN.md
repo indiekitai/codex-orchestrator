@@ -32,6 +32,10 @@ worktree，并继续推进路线图。
   准备审查包、运行策略检查，以及更新本地安装。
 - **文档和模板**：项目地图、功能包计划、编排策略、案例和 routine 规范。
 
+辅助命令现在也会显式跟踪信任边界：它可以记录 developer-agent misalignment 事件，
+保存 worker 的约束栈快照，把完成声明和本地证据绑定起来，并在状态页里显示
+`trustRisk` 风险块。
+
 它不是后台守护进程，不是以包管理器为中心的产品，也不是完整的 Agent 操作系统；更不是
 不经审查就自动写代码的机器人。Codex App 仍然负责创建和运行 worker 会话。
 
@@ -120,6 +124,8 @@ flowchart LR
 - [路线图](docs/roadmap.md)：当前产品方向和已完成阶段。
 - [餐厅 POS 重写案例](docs/case-studies/restaurant-pos-orchestration.md)：真实项目编排案例。
 - [Loop Engineering 对齐笔记](docs/research/loop-engineering-alignment.md)：研究背景和设计取舍。
+- [Developer-agent misalignment 笔记](docs/research/developer-agent-misalignment.md)：
+  为什么工具需要记录约束、完成声明和信任风险。
 - [分发包说明](docs/distribution-package.md)：release 资产和辅助命令打包细节。
 
 ## 同名项目说明

@@ -151,42 +151,71 @@ At dispatch time, write a compact snapshot of the active constraints:
 The worker and reviewer should be judged against this snapshot, not against
 whatever the orchestrator remembers after a long thread.
 
+## Implementation Status
+
+2026-06-13 alpha implementation landed the first local/static loop:
+
+- `misalignment record` appends developer pushback, setup failures,
+  unsupported completion claims, package drift, heartbeat gaps, and
+  orchestrator self-corrections to the ledger and event stream.
+- `misalignment report` groups those events by category, status, severity, and
+  related task/package, and includes local/static trust-risk observations.
+- `record-task` can persist a compact `constraintStack` through
+  `--constraint`, `--authority`, `--user-instruction`, `--evidence-boundary`,
+  and `--package-switch-reason`.
+- `pack merge-readiness`, `pack acceptance`, and orchestrator acceptance
+  reports include `claimVerification`, which binds completion claims to local
+  evidence such as task commits, path checks, `git diff --check`, recorded
+  gates, self-review signals, evidence labels, and live-proof boundaries.
+- `observe` and `status` expose `trustRisk`, a local/static warning block for
+  open/high-severity misalignment events, stale or blocked workers, setup
+  reconcile gaps, missing gates/self-review, heartbeat gaps, and constraint
+  drift.
+- The policy/eval suite now includes `OPA010`, a deterministic guard for
+  completion or test-success claims that are not backed by command, diff, gate,
+  or artifact evidence.
+
+This is not a full agent-safety system. It is a reviewable local harness for
+making repeated orchestration failures visible, auditable, and easier to turn
+into fixtures. It still avoids automatic transcript upload, model-intent
+claims, external telemetry, and automatic merge authority.
+
 ## Recommended Development Queue
 
-1. **Misalignment Event Log / Pushback Capture**
+1. **Misalignment Event Log / Pushback Capture** - alpha implemented.
    - Outcome: ledger can record local/static misalignment events with category,
      source, evidence, and resolution.
    - Why first: without durable events, repeated failures stay in chat.
    - Evidence: unit tests, sample ledger events, status summary.
 
-2. **Claim Verifier / Evidence-Bound Self-Report**
+2. **Claim Verifier / Evidence-Bound Self-Report** - alpha implemented.
    - Outcome: merge-readiness and acceptance reports list important claims and
      whether each claim has supporting evidence.
    - Why next: inaccurate self-reporting directly erodes trust and is common in
      long agent workflows.
    - Evidence: fixtures for missing test/build/push/direct-proof evidence.
 
-3. **Misalignment Taxonomy Policy Fixtures**
+3. **Misalignment Taxonomy Policy Fixtures** - alpha implemented.
    - Outcome: policy/eval has a paper-aligned suite for constraint violation,
      overreach, setup failure, package drift, and evidence promotion.
    - Why next: repeated orchestration mistakes become regression tests.
    - Evidence: deterministic eval fixtures; no private transcript dependency.
 
-4. **Trust-Risk Status Block**
+4. **Trust-Risk Status Block** - alpha implemented.
    - Outcome: `status --html` and `status --write-summary` show trust risks in
      plain language before machine rows.
    - Why next: users need to know whether the loop is trustworthy, not only
      whether tasks are active.
    - Evidence: snapshot tests or golden status output.
 
-5. **Constraint Stack / Worker Contract Snapshot**
+5. **Constraint Stack / Worker Contract Snapshot** - alpha implemented.
    - Outcome: dispatch records include the active constraint stack used for
      later review.
    - Why next: it prevents constraint drift across long sessions and context
      compression.
    - Evidence: ledger schema update, dispatch record tests, reviewer output.
 
-6. **Misalignment Insights Report**
+6. **Misalignment Insights Report** - alpha implemented.
    - Outcome: a read-only report groups recent misalignment events by category,
      resolution, and recurring rule proposal.
    - Why later: useful after the event log and claim verifier produce data.

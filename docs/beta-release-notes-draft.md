@@ -1,97 +1,120 @@
-# v0.3.5 Release Notes
+# v0.3.6 Release Notes
 
-`v0.3.5` is a public-usability and real-run hardening release for the
-Codex App-first orchestration workflow. It keeps the same product boundary:
-Codex App runs the supervised multi-session loop, while the helper provides
-local ledger, status, review, update, and policy evidence.
+`v0.3.6` is a trust-loop hardening release for the Codex App-first
+orchestration workflow. It turns recent research and real project feedback into
+local/static controls for developer-agent misalignment: constraint drift,
+unsupported completion claims, overreach, setup mistakes, heartbeat gaps, and
+package-lane drift.
 
 ## Highlights
 
-- Added a local self-update path:
-  - `codex-orchestrator self-update`;
-  - `codex-orchestrator self-update --from-github`;
-  - `codex-orchestrator self-update --with-helper`.
-- Split the public README into a short human-facing homepage plus full English
-  and Chinese guides.
-- Simplified the install/update surface around the App-first workflow:
-  - users can paste one bootstrap prompt into Codex App;
-  - release binaries remain optional helper assets;
-  - Homebrew/npm/tap/package-manager routes stay out of scope.
-- Anonymized the public restaurant POS case study and review notes so the repo
-  no longer exposes the private project name.
-- Hardened status and review behavior from real overnight orchestration:
-  - terminal `drain` mode now says the queue is stopped instead of highlighting
-    raw spare capacity;
-  - `pack merge-readiness` no longer fails solely because a worker has
-    untracked `.codex-orchestrator/` local state files;
-  - package switches must record concrete reasons instead of following idle
-    capacity.
+- Added a local misalignment event log:
+  - `codex-orchestrator misalignment record`;
+  - `codex-orchestrator misalignment report`.
+- Added constraint-stack snapshots on recorded tasks:
+  - latest user instruction;
+  - active constraints and authorities;
+  - evidence boundary;
+  - package switch reason.
+- Added `claimVerification` to merge-readiness, package acceptance, and
+  orchestrator acceptance reports, so completion claims are checked against
+  local evidence before acceptance.
+- Added a `trustRisk` block to `observe`, `status --write-summary`, and
+  `status --html`.
+- Added `OPA010`, a deterministic policy/eval rule for tests/completion claims
+  made without evidence-bound verification.
+- Added `codex-orchestrator version` / `--version` and release-build ldflags so
+  published helper binaries can report the tag they were built from.
+- Updated English and Chinese docs, the roadmap, and the installed skill
+  guidance for the new trust-loop surfaces.
 
 ## Why This Release
 
-Real project usage exposed two usability gaps:
+Long-running coding-agent work does not only fail through bad code. It often
+fails through loop misalignment: the agent forgets constraints, overstates
+evidence, treats setup failures as pending work, jumps product lanes, or says
+something is complete before the repo/worktree/gate evidence supports it.
 
-1. Public readers saw a README that was useful for agents but too long for
-   humans.
-2. Long-running orchestration status could confuse capacity with permission:
-   `availableSlots` looked dispatchable even when the run was drained, and
-   local `.codex-orchestrator/` state files could make merge-readiness look
-   failed even when business code was clean.
-
-`v0.3.5` turns those lessons into default behavior and documentation.
+`v0.3.6` makes those failure modes visible in the local ledger and status
+surface. The goal is not automatic trust. The goal is reviewable trust: a
+human or orchestrator can see which claims are supported, which are missing
+evidence, and which pushback events still need resolution.
 
 ## New / Changed Commands
 
-Self-update the installed Codex skill and, when requested, the helper binary:
+Record a local/static misalignment event:
 
 ```bash
-codex-orchestrator self-update
-codex-orchestrator self-update --from-github
-codex-orchestrator self-update --with-helper
+codex-orchestrator misalignment record \
+  --category self-report-mismatch \
+  --task-id TASK \
+  --note "claimed tests passed without command evidence"
 ```
 
-`self-update` updates the local skill/helper only. It does not dispatch
-sessions, mutate project ledgers, merge, push, deploy, or clean worktrees.
+Generate a read-only misalignment insights report:
 
-`pack merge-readiness` now separates state-dir-only local changes:
-
-```text
-.codex-orchestrator/ changes are local orchestration state only
+```bash
+codex-orchestrator misalignment report --repo . --json
 ```
 
-That remains local/static evidence and a residual risk, but it no longer blocks
-a merge-readiness pack as business dirty work.
+Record a worker contract snapshot:
+
+```bash
+codex-orchestrator record-task \
+  --id TASK \
+  --package-id PACKAGE \
+  --worktree /path/to/worktree \
+  --branch codex/task \
+  --constraint "do not touch payments" \
+  --authority "worker may commit only" \
+  --evidence-boundary "local/static only"
+```
+
+The existing review commands now include `claimVerification`:
+
+```bash
+codex-orchestrator pack merge-readiness --task-id TASK --json
+codex-orchestrator pack acceptance --package-id PACKAGE --json
+```
+
+`policy check` and `eval run` now include `OPA010`.
+
+Check the helper binary version:
+
+```bash
+codex-orchestrator version
+codex-orchestrator --version
+```
 
 ## Evidence Boundary
 
-All new helper outputs in this release are still `local/static` evidence. They
-can help a Codex App orchestrator decide what to inspect, but they do not
-authorize implementation, merge, push, cleanup, release, deploy, provider
-actions, external-service mutation, direct runtime proof, or OS wake proof.
+All new outputs in this release are still `local/static` evidence. They do not
+prove model intent, production behavior, live device behavior, external
+provider state, or Codex App runtime delivery.
 
-External model review remains `proxy/advisory` evidence. It can block or inform
-a package closeout decision, but the orchestrator owns the final
-accept/reject/block decision.
+`claimVerification` can block or require human review, but it is not automatic
+merge authority. Missing evidence should be treated as `blocked` or
+`needs-human`, not silently upgraded to direct proof.
 
 ## Verification Before Publishing
 
 Checks used for this release:
 
 - `go test ./...`
-- `go run ./cmd/codex-orchestrator policy check --repo . --json`
-- `go run ./cmd/codex-orchestrator eval run --repo . --json`
+- `go run ./cmd/codex-orchestrator eval run --json`
+- `go run ./cmd/codex-orchestrator policy check --json`
 - `go run ./cmd/codex-orchestrator run-routine docs-drift-checker --repo . --json`
 - `go run ./cmd/codex-orchestrator run-routine evidence-label-auditor --repo . --json`
-- `go run ./cmd/codex-orchestrator status --repo . --json`
-- `go run ./cmd/codex-orchestrator preflight --repo . --json`
-- `go run ./cmd/codex-orchestrator self-update --source . --dry-run --json`
+- `go run ./cmd/codex-orchestrator run-routine orchestration-policy-auditor --repo . --json`
+- `go run ./cmd/codex-orchestrator help`
 - `git diff --check`
 
-The local helper was rebuilt and the installed Codex skill was synced before
+The local helper should be rebuilt and the installed Codex skill synced before
 publishing.
 
 ## Suggested Announcement
 
-`codex-orchestrator v0.3.5` makes the App-first loop easier to adopt and safer
-to leave running: self-update, a shorter README, anonymized public case studies,
-clearer drain status, and merge-readiness that ignores local state-dir noise.
+`codex-orchestrator v0.3.6` adds a trust-loop layer for Codex App orchestration:
+misalignment events, constraint snapshots, evidence-bound claim verification,
+trust-risk status, and an OPA010 regression guard for unsupported completion
+claims.
