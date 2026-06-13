@@ -63,8 +63,8 @@ start with a dry run.
 
 Deep dives:
 [project story](https://indiekit.ai/blog/2026-06-09-codex-orchestrator-loop-engineering-en),
-[TastyFuture case study](case-studies/tastyfuture-orchestration.md), and
-[case article](articles/tastyfuture-loop-engineering-case.md).
+[restaurant POS rewrite case study](case-studies/restaurant-pos-orchestration.md), and
+[case article](articles/restaurant-pos-loop-engineering-case.md).
 
 ## 🚀 Quick Start
 
@@ -112,7 +112,7 @@ If you are evaluating the workflow for the first time, use this order:
 5. Treat the Go helper as optional support for ledger state, heartbeat reports,
    and routines, not something you must learn before the trial.
 6. If you want a real-project example first, read
-   [docs/case-studies/tastyfuture-orchestration.md](case-studies/tastyfuture-orchestration.md).
+   [docs/case-studies/restaurant-pos-orchestration.md](case-studies/restaurant-pos-orchestration.md).
 7. When the project is ready for durable state, Codex can run
    `codex-orchestrator init --write-templates` to create starter local files
    for the project map, package plan, and orchestration policy.
@@ -855,7 +855,7 @@ codex-orchestrator roadmap score --repo . --config roadmap-score.json --ledger .
 
 By default it reads explicit project planning surfaces such as
 `docs/roadmap.md`, `PROGRESS.md`, and
-`docs/TastyFuture-整体开发计划与进度.md` when those files exist. It does not scan
+`docs/整体开发计划与进度.md` when those files exist. It does not scan
 all review docs by default, because review notes often contain risks and
 postmortem wording that should not become dispatchable work. A config file may
 provide a simple JSON `sources` list when a project wants to include selected
@@ -965,7 +965,7 @@ codex-orchestrator/
 │   ├── beta-release-notes-draft.md
 │   ├── beta-usability-package.md
 │   ├── case-studies/
-│   │   └── tastyfuture-orchestration.md
+│   │   └── restaurant-pos-orchestration.md
 │   ├── distribution-package.md
 │   ├── roadmap.md
 │   ├── research/

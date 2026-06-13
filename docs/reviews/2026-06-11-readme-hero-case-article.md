@@ -7,7 +7,7 @@ Task ID: TF-CODEX-ORCH-DOCS-README-HERO-CASE-ARTICLE-LOCAL
 
 - `README.md`
 - `README.zh-CN.md`
-- `docs/articles/tastyfuture-loop-engineering-case.md`
+- `docs/articles/restaurant-pos-loop-engineering-case.md`
 - `docs/reviews/2026-06-11-readme-hero-case-article.md`
 
 ## Evidence Basis
@@ -22,8 +22,8 @@ Task ID: TF-CODEX-ORCH-DOCS-README-HERO-CASE-ARTICLE-LOCAL
 
 Primary source docs read:
 
-- `docs/case-studies/tastyfuture-orchestration.md`
-- `docs/reviews/2026-06-11-tastyfuture-orchestration-feedback.md`
+- `docs/case-studies/restaurant-pos-orchestration.md`
+- `docs/reviews/2026-06-11-restaurant-pos-orchestration-feedback.md`
 - `docs/research/loop-engineering-alignment.md`
 - `docs/research/agentic-engineering-feature-notes.md`
 - `README.md`
@@ -61,7 +61,7 @@ The Chinese README mirrors the same positioning in natural Chinese rather than
 a sentence-by-sentence stiff translation.
 
 The new article explains the progression from ad-hoc AI coding chats to a
-supervised engineering loop through the TastyFuture case: bounded contracts,
+supervised engineering loop through the restaurant POS rewrite case: bounded contracts,
 worktree isolation, repo-truth heartbeat checks, completed-unreviewed review
 state, reviewer-owned merge/cleanup, practical workflow steps, evidence labels,
 and explicit limits.

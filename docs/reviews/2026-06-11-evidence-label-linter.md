@@ -9,7 +9,7 @@ Evidence label: `local/static`
 ## Outcome
 
 `run-routine evidence-label-auditor` now has a narrower linter surface for the
-TastyFuture evidence-promotion failure mode. It still runs read-only, but it now
+restaurant POS rewrite evidence-promotion failure mode. It still runs read-only, but it now
 also scans `docs/reviews/*.md` review and handoff notes and applies `ELA010` for
 weak evidence wording promoted to direct, pre, prod, device, runtime, hardware,
 or payment proof without explicit direct evidence wording.

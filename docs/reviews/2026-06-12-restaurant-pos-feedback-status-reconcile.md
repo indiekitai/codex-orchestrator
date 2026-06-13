@@ -1,8 +1,8 @@
-# 2026-06-12 TastyFuture Feedback Status Reconcile
+# 2026-06-12 Restaurant POS Rewrite Feedback Status Reconcile
 
 ## Scope
 
-Addressed the latest TastyFuture orchestration feedback around status truth and
+Addressed the latest restaurant POS rewrite orchestration feedback around status truth and
 operator visibility:
 
 - surface a real git worktree when ledger still records only a

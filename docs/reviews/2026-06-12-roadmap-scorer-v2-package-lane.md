@@ -12,7 +12,7 @@ available slots with unrelated safe tasks.
 
 - Default roadmap score sources now stay on explicit project planning surfaces:
   `docs/roadmap.md`, `PROGRESS.md`, and
-  `docs/TastyFuture-整体开发计划与进度.md`.
+  `docs/整体开发计划与进度.md`.
 - `docs/reviews/*.md` is no longer scanned by default. Review docs can still be
   included with `--config` when a project intentionally wants a selected review
   note to provide planning input.

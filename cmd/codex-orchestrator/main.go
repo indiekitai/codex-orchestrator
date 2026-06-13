@@ -7906,7 +7906,7 @@ func roadmapScoreSources(repo string, configPath string) ([]string, error) {
 		}
 		return cleanRoadmapScoreSources(config.Sources), nil
 	}
-	sources := []string{"docs/roadmap.md", "PROGRESS.md", "docs/TastyFuture-整体开发计划与进度.md"}
+	sources := []string{"docs/roadmap.md", "PROGRESS.md", "docs/整体开发计划与进度.md"}
 	return cleanRoadmapScoreSources(sources), nil
 }
 
@@ -13504,7 +13504,7 @@ func violatesWorkerBoundary(text string) bool {
 	if containsAnyFold(text, []string{"OPA004"}) {
 		return false
 	}
-	if !containsAnyFold(text, []string{"codex_delegation", "worker prompt:", "delegated implementation worker", "delegated proof/implementation worker", "你是 delegated", "你是 TastyFuture 的 delegated"}) {
+	if !containsAnyFold(text, []string{"codex_delegation", "worker prompt:", "delegated implementation worker", "delegated proof/implementation worker", "你是 delegated", "你是项目的 delegated"}) {
 		return false
 	}
 	if !containsAnyFold(text, []string{"worktree", "branch", "session", "工作树", "分支"}) {

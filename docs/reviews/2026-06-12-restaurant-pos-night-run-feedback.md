@@ -1,8 +1,8 @@
-# TastyFuture Night Run Feedback
+# Restaurant POS Rewrite Night Run Feedback
 
 Date: 2026-06-12
 
-This note records a read-only retrospective from a TastyFuture overnight
+This note records a read-only retrospective from a restaurant POS rewrite overnight
 Codex App orchestration run. It is local/project feedback for
 `codex-orchestrator`; it is not direct proof of Codex App automation internals,
 production runtime, payment, hardware, or provider behavior.
@@ -11,7 +11,7 @@ Evidence label: `local/project-feedback`.
 
 ## Facts Reported By The Orchestrator
 
-- The TastyFuture ledger had 20 tasks: 19 `cleaned` and 1 `blocked`.
+- The restaurant POS rewrite ledger had 20 tasks: 19 `cleaned` and 1 `blocked`.
 - `main` matched `origin/main`; no `codex/*` task branches or worker worktrees
   remained.
 - The heartbeat automation had been deleted by the time of the retrospective.
@@ -143,5 +143,5 @@ Remaining improvement:
 - `local`: repo/ledger/docs/test evidence from this repository.
 - `blocked`: Codex App automation delivery internals, machine sleep, scheduler
   truth, and exact missed-wakeup cause.
-- `blocked`: no direct TastyFuture runtime, payment, hardware, provider,
+- `blocked`: no direct restaurant POS rewrite runtime, payment, hardware, provider,
   pre/prod, or device proof is claimed here.

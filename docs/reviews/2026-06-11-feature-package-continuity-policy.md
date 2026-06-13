@@ -4,7 +4,7 @@ Date: 2026-06-11
 
 ## Scope
 
-Capture a real TastyFuture orchestration failure mode: unattended continuous
+Capture a real restaurant POS rewrite orchestration failure mode: unattended continuous
 runs can become "safe backlog sweepers" that dispatch unrelated tasks only
 because they are local, mergeable, and write-set disjoint. That is safe for git,
 but poor for product progress and daily reporting.
@@ -36,7 +36,7 @@ but poor for product progress and daily reporting.
 ## Boundaries
 
 - No Codex App worker was dispatched.
-- No TastyFuture business code was changed.
+- No restaurant POS rewrite business code was changed.
 - No package-manager distribution, Homebrew, npm, tap, release, tag, or
   external service work was done.
 - This is local/static policy evidence, not runtime proof that future

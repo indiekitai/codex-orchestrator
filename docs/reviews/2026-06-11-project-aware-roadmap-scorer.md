@@ -4,7 +4,7 @@
 
 - Implemented `codex-orchestrator roadmap score --repo . [--config PATH] [--json] [--write-report PATH]`.
 - The command reads local roadmap/progress/review docs only.
-- Default sources are existing `docs/roadmap.md`, `PROGRESS.md`, `docs/TastyFuture-整体开发计划与进度.md`, and `docs/reviews/*.md`.
+- Default sources are existing `docs/roadmap.md`, `PROGRESS.md`, `docs/整体开发计划与进度.md`, and `docs/reviews/*.md`.
 - Optional config is a small JSON file with a `sources` array.
 - Rework added optional read-only ledger awareness via `--ledger PATH`, defaulting to repo-local `.codex-orchestrator/ledger.json` when present.
 

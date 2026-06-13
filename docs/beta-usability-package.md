@@ -25,7 +25,7 @@ App to inspect the repository and produce a dry run.
 
 If a new user wants proof before trying it, point them to the sanitized project
 example in
-`docs/case-studies/tastyfuture-orchestration.md`. That case study is local
+`docs/case-studies/restaurant-pos-orchestration.md`. That case study is local
 workflow evidence only; it is not a production, payment, hardware, daemon, or
 direct runtime claim.
 
@@ -81,7 +81,7 @@ The human should not need to understand the helper CLI first. The helper is a
 tool Codex App may use to keep durable state and generate reports.
 
 If the user asks what this looks like in a real project, Codex App should point
-to `docs/case-studies/tastyfuture-orchestration.md` before widening into helper
+to `docs/case-studies/restaurant-pos-orchestration.md` before widening into helper
 or release-asset details.
 
 ### Disposable Demo Codex Can Run

@@ -3,7 +3,7 @@
 Date: 2026-06-11
 
 Evidence boundary: `local/case-study`. This article is based on repository
-docs, local review notes, and the sanitized TastyFuture orchestration case
+docs, local review notes, and the sanitized restaurant POS rewrite orchestration case
 study in this repository. It does not claim direct production, payment,
 hardware, device, pre/prod, daemon, SEO, adoption, or external runtime proof.
 
@@ -27,9 +27,9 @@ to merge, what to clean up, and what must remain blocked.
 
 That is the practice behind `codex-orchestrator`.
 
-## What Changed In The TastyFuture Run
+## What Changed In The Restaurant POS Rewrite Run
 
-TastyFuture was a useful case because it looked like real product work, not a
+The restaurant POS rewrite was a useful case because it looked like real product work, not a
 toy demo. The project involved restaurant POS, web/cloud, mobile, payment, and
 operational workflows. Several tasks could be moved forward locally, but some
 proof surfaces were outside the agent's reach: payment terminals, physical
@@ -87,7 +87,7 @@ too fragile to be the only state store for long-running orchestration.
 
 ### 4. `completed-unreviewed` Became A First-Class State
 
-One important TastyFuture lesson was that a clean worker commit is not the same
+One important lesson from the restaurant POS rewrite was that a clean worker commit is not the same
 as accepted work. It is also not nothing.
 
 Treating that state as `completed-unreviewed` kept the queue moving without
@@ -180,7 +180,7 @@ Evidence label: `local/blocked` depending on the reason.
 
 ## Evidence Labels Are The Product Discipline
 
-The TastyFuture case made evidence labels non-negotiable:
+The restaurant POS rewrite case made evidence labels non-negotiable:
 
 - `direct`: the relevant surface itself was exercised and recorded;
 - `proxy`: indirect evidence supports the claim but does not prove the final
@@ -234,8 +234,8 @@ is more useful than a bot that pretends they disappeared.
 
 Start with these repo-local materials:
 
-- [TastyFuture Orchestration Case Study](../case-studies/tastyfuture-orchestration.md)
-- [TastyFuture Orchestration Feedback](../reviews/2026-06-11-tastyfuture-orchestration-feedback.md)
+- [Restaurant POS Rewrite Orchestration Case Study](../case-studies/restaurant-pos-orchestration.md)
+- [Restaurant POS Rewrite Orchestration Feedback](../reviews/2026-06-11-restaurant-pos-orchestration-feedback.md)
 - [Loop Engineering Alignment](../research/loop-engineering-alignment.md)
 - [Agentic Engineering Feature Notes](../research/agentic-engineering-feature-notes.md)
 

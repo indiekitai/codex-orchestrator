@@ -2,7 +2,7 @@
 
 ## Scope
 
-Converted the latest TastyFuture usage feedback into helper and skill changes:
+Converted the latest restaurant POS rewrite usage feedback into helper and skill changes:
 
 - added a first-class `dispatchRecommendation` block so raw `availableSlots`
   is no longer treated as permission to dispatch;

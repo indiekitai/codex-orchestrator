@@ -34,7 +34,7 @@ The project is no longer just a prompt skill. It now has five real layers:
 
 The strongest areas are state visibility, review/acceptance discipline, and
 policy/eval checks. These directly address repeated real failures from
-TastyFuture: pending setup confusion, child-task completion stopping the larger
+restaurant POS rewrite: pending setup confusion, child-task completion stopping the larger
 queue, local/proxy proof being overstated, and heartbeat prompt churn.
 
 ## Findings fixed in this audit
@@ -80,7 +80,7 @@ still needs stronger source filtering and feature-package grouping.
    - after deciding whether post-`v0.3.2` watchdog/status/review work is stable
      enough, cut the next release and update release notes.
 4. Real-app proof:
-   - continue using TastyFuture as the main case study, but measure by coherent
+   - continue using restaurant POS rewrite as the main case study, but measure by coherent
      feature-package lanes rather than by count of small cleaned tasks.
 
 ## Verification

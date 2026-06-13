@@ -1,11 +1,11 @@
-# TastyFuture Orchestration Case Study
+# Restaurant POS Rewrite Orchestration Case Study
 
 Date: 2026-06-11
 Project type: large restaurant POS rewrite and adjacent web/cloud work
 Evidence label for this page: `local/project-case-study`
 
 This is a sanitized public case study based on real Codex App orchestration
-feedback from the TastyFuture project. It shows what `codex-orchestrator`
+feedback from a restaurant POS rewrite. It shows what `codex-orchestrator`
 looked like when used against a large ongoing codebase. It does not claim
 direct runtime, production, payment, hardware, daemon, or standalone session
 runtime proof.
@@ -74,7 +74,7 @@ decisions still belonged to the reviewing Codex App orchestrator:
 
 ## Evidence labels mattered
 
-TastyFuture was the kind of project where evidence drift would be dangerous.
+The restaurant POS rewrite was the kind of project where evidence drift would be dangerous.
 Many slices had useful closure, but not the same kind of closure.
 
 - `local`: source, test, git, routine, and local workflow proof
@@ -100,7 +100,7 @@ limits stayed visible.
 
 ## Practical takeaways for a new user
 
-If you want to try `codex-orchestrator`, the TastyFuture lesson is simple:
+If you want to try `codex-orchestrator`, the lesson is simple:
 
 1. Give Codex App the GitHub repository.
 2. Let Codex read `README.md`, `SKILL.md`, and the setup docs.
@@ -131,4 +131,4 @@ Not claimed here:
 - fully autonomous session scheduler proof.
 
 For the raw local feedback that informed this case study, see
-`docs/reviews/2026-06-11-tastyfuture-orchestration-feedback.md`.
+`docs/reviews/2026-06-11-restaurant-pos-orchestration-feedback.md`.

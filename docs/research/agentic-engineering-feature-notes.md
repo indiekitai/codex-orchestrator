@@ -66,7 +66,7 @@ Evidence boundary:
 
 Why it matters:
 
-- Real TastyFuture runs still relied on heartbeat text and chat summaries for
+- Real restaurant POS rewrite runs still relied on heartbeat text and chat summaries for
   pending ids and setup facts.
 - Heartbeats should recover from ledger truth before reading stale prompt text.
 - This is the base layer for reliable long-running App-first orchestration.
@@ -184,7 +184,7 @@ Evidence boundary:
 
 Why it matters:
 
-- In TastyFuture, many local readiness pages were valid but could hide the
+- In restaurant POS rewrite, many local readiness pages were valid but could hide the
   higher-value blocked work that actually moves the product forward.
 - The tool should help the orchestrator avoid "safe but shallow" task churn.
 - Feature-package candidates should rank ahead of unrelated safe task fillers,
@@ -220,7 +220,7 @@ Why it matters:
 
 - This makes the project self-improving without pretending rules can update
   themselves automatically.
-- It connects real TastyFuture and codex-orchestrator failures to V4 policy/eval
+- It connects real restaurant POS rewrite and codex-orchestrator failures to V4 policy/eval
   work.
 - It creates a practical evaluation layer for "loop quality", not just code
   correctness.

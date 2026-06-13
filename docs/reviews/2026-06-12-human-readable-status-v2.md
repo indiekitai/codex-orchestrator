@@ -27,7 +27,7 @@ is happening without reading ledger internals.
 
 ## Evidence
 
-- local/static: generated a TastyFuture status snapshot from a real ledger:
+- local/static: generated a restaurant POS rewrite status snapshot from a real ledger:
   - `/tmp/tf-status-v2.html`
   - `/tmp/tf-status-v2b.md`
 - local/static: focused Go test passed:

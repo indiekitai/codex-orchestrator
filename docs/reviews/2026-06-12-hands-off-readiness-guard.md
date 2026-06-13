@@ -2,7 +2,7 @@
 
 Date: 2026-06-12
 
-This change generalizes the TastyFuture night-run lesson: missed wakeups are not
+This change generalizes the restaurant POS rewrite night-run lesson: missed wakeups are not
 only an overnight risk. They apply whenever a user starts orchestration and then
 walks away from the computer.
 

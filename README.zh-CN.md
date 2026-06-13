@@ -118,7 +118,7 @@ flowchart LR
   `orchestration-policy-auditor`、`roadmap-next-task-suggester` 和
   `budget-policy-report`。
 - [路线图](docs/roadmap.md)：当前产品方向和已完成阶段。
-- [TastyFuture 案例](docs/case-studies/tastyfuture-orchestration.md)：真实项目编排案例。
+- [餐厅 POS 重写案例](docs/case-studies/restaurant-pos-orchestration.md)：真实项目编排案例。
 - [Loop Engineering 对齐笔记](docs/research/loop-engineering-alignment.md)：研究背景和设计取舍。
 - [分发包说明](docs/distribution-package.md)：release assets 和 helper 打包细节。
 

@@ -1,14 +1,14 @@
-# TastyFuture Orchestration Feedback
+# Restaurant POS Rewrite Orchestration Feedback
 
 Date: 2026-06-11
 
-This note records feedback from a live TastyFuture Codex App orchestrator
+This note records feedback from a live restaurant POS rewrite Codex App orchestrator
 session. It is local/project feedback for `codex-orchestrator`; it is not a
 claim of direct runtime, production, payment, hardware, or daemon proof.
 
 ## Context
 
-The TastyFuture orchestrator was running real delegated work across multiple
+The restaurant POS rewrite orchestrator was running real delegated work across multiple
 Codex App worktree sessions. It paused dispatch and reported only on observed
 workflow behavior: worktree state, branch state, review/merge/cleanup flow,
 evidence labeling, and recurring failure modes.
@@ -25,7 +25,7 @@ Evidence label: `local/project-feedback`.
   child thread state was ambiguous.
 - Review, gates, merge, push, and cleanup formed a usable loop for real
   feature slices.
-- Evidence labels were especially important for TastyFuture: many tasks were
+- Evidence labels were especially important for restaurant POS rewrite: many tasks were
   only `local`, `proxy`, or `blocked`, and should not be promoted to `direct`,
   `pre`, `prod`, `device`, or payment proof.
 
@@ -77,9 +77,9 @@ outer loop more observable and harder to misuse:
    After accepted merges, report whether central progress/roadmap docs need an
    orchestrator-owned update or whether docs are explicitly not needed.
 
-## Delta Feedback After Longer TastyFuture Run
+## Delta Feedback After Longer Restaurant POS Rewrite Run
 
-Later TastyFuture orchestration added a sharper point: several earlier risks
+Later restaurant POS rewrite orchestration added a sharper point: several earlier risks
 are now covered by v0.3.0/V4 policy checks, but the live workflow still depends
 too much on chat memory and manual judgment.
 
@@ -132,7 +132,7 @@ Highest-priority improvements from this delta:
    merge decision, and residual risks.
 
 3. Project-aware roadmap scorer.
-   Support custom source-of-truth docs such as TastyFuture's `PROGRESS.md`,
+   Support custom source-of-truth docs such as restaurant POS rewrite's `PROGRESS.md`,
    Chinese roadmap, and `docs/reviews/`. Candidate tasks should be classified
    as `vertical-completion`, `runtime-proof`, `blocked-removal`,
    `shallow-risk`, or `owner-gated`.
@@ -143,7 +143,7 @@ project-aware next-task scoring."
 
 ## Push-Confirmation Stop Incident
 
-A later TastyFuture orchestrator run exposed a narrower continuation failure.
+A later restaurant POS rewrite orchestrator run exposed a narrower continuation failure.
 The orchestrator completed and cleaned its first two worker tasks, observed that
 the default branch was ahead of `origin/main`, then deleted the heartbeat
 because it thought it needed user confirmation before push or before dispatching
@@ -164,7 +164,7 @@ blocked state.
 
 ## Foreground Sleep / Heartbeat Lifecycle Incident
 
-The same live TastyFuture orchestration later exposed a second heartbeat misuse
+The same live restaurant POS rewrite orchestration later exposed a second heartbeat misuse
 pattern. After creating a Codex App heartbeat, the orchestrator stayed in the
 same turn and used shell sleep plus repeated `observe` checks to wait for
 worker state changes. It also relied on the heartbeat create response without

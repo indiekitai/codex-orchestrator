@@ -129,7 +129,7 @@ The loop is intentionally conservative:
   `orchestration-policy-auditor`, `roadmap-next-task-suggester`, and
   `budget-policy-report`.
 - [Roadmap](docs/roadmap.md): current product direction and completed phases.
-- [TastyFuture case study](docs/case-studies/tastyfuture-orchestration.md): a
+- [restaurant POS rewrite case study](docs/case-studies/restaurant-pos-orchestration.md): a
   real project orchestration example.
 - [Loop Engineering alignment notes](docs/research/loop-engineering-alignment.md):
   research framing and design tradeoffs.

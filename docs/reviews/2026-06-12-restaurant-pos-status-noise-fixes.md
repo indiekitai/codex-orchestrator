@@ -1,8 +1,8 @@
-# TastyFuture status noise fixes
+# Restaurant POS Rewrite Status Noise Fixes
 
 ## Scope
 
-This change addresses three issues found during real TastyFuture
+This change addresses three issues found during real restaurant POS rewrite
 `codex-orchestrator` use:
 
 - Chinese/non-ASCII paths could be quoted by Git and misread by path-boundary
