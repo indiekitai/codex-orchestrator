@@ -1958,11 +1958,21 @@ func TestIntegrationStateDirOnlyAndDrainSlotDisplay(t *testing.T) {
 		},
 	}
 	label, className := dispatchSlotDisplay(summary)
+	if label != "队列已停，不派发" || className != "ok" {
+		t.Fatalf("expected terminal drain dispatch slot label, got label=%q class=%q", label, className)
+	}
+	activeDrain := summary
+	activeDrain.ReviewPressure.Active = 1
+	label, className = dispatchSlotDisplay(activeDrain)
 	if !strings.Contains(label, "排空中，不派发") || className != "warn" {
-		t.Fatalf("expected drain dispatch slot warning, got label=%q class=%q", label, className)
+		t.Fatalf("expected active drain dispatch slot warning, got label=%q class=%q", label, className)
 	}
 	if got := humanDispatchModeLabel("drain"); got != "drain / 只收口，不派发" {
 		t.Fatalf("expected human drain label, got %q", got)
+	}
+	progress := buildHumanProgressSummary(summary)
+	if progress.Headline != "队列已停，不再派发" || !strings.Contains(progress.NextStep, "run-mode=drain") {
+		t.Fatalf("expected terminal drain human summary, got %#v", progress)
 	}
 	if got := humanDispatchModeExplanation("paused"); !strings.Contains(got, "暂停编排") || !strings.Contains(got, "不派发") {
 		t.Fatalf("expected human paused explanation, got %q", got)
@@ -2731,6 +2741,59 @@ func TestPackMergeReadinessWritesStandardLocalReport(t *testing.T) {
 	}
 	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 || len(report.Evidence["blocked"]) != 0 {
 		t.Fatalf("expected only local evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestPackMergeReadinessAllowsStateDirOnlyChanges(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/state-dir-only", worker, "HEAD")
+	if err := os.WriteFile(filepath.Join(worker, "feature.txt"), []byte("feature\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "feature.txt")
+	git(t, worker, "commit", "-q", "-m", "feature ready")
+	if err := os.MkdirAll(filepath.Join(worker, ".codex-orchestrator"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, ".codex-orchestrator", "status.md"), []byte("local status\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "PACK-STATE-DIR",
+		"--worktree", worker,
+		"--branch", "codex/state-dir-only",
+		"--base-commit", base,
+		"--allowed", "feature.txt",
+		"--forbidden", "secrets/**",
+		"--gate", "git diff --check",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "review", "--task-id", "PACK-STATE-DIR", "--status", "completed-unreviewed", "--note", "ready"}); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := buildMergeReadinessPack(project, ledger, "PACK-STATE-DIR")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "passed" {
+		t.Fatalf("expected state-dir-only changes not to fail merge-readiness, got %#v", report)
+	}
+	local := strings.Join(report.Evidence["local"], "\n")
+	if !strings.Contains(local, ".codex-orchestrator/ changes are local orchestration state only") {
+		t.Fatalf("expected state-dir-only local evidence, got:\n%s", local)
+	}
+	if got := strings.Join(report.ResidualRisks, "\n"); !strings.Contains(got, "local/static orchestration state changes") {
+		t.Fatalf("expected residual risk for local state dir, got %#v", report.ResidualRisks)
 	}
 }
 

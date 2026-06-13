@@ -3477,6 +3477,9 @@ func renderMetricHTML(b *strings.Builder, label string, value string, className 
 func dispatchSlotDisplay(summary ObserveSummary) (string, string) {
 	switch normalizedDispatchMode(summary.DispatchMode) {
 	case "drain":
+		if !hasOpenWorkerPressure(summary.ReviewPressure) {
+			return "队列已停，不派发", "ok"
+		}
 		return fmt.Sprintf("排空中，不派发（底层槽位 %d / %d）", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency), "warn"
 	case "paused":
 		return fmt.Sprintf("已暂停，不派发（底层槽位 %d / %d）", summary.RuntimeStatus.AvailableDispatchSlots, summary.RuntimeStatus.MaxConcurrency), "warn"
@@ -4544,14 +4547,23 @@ func buildMergeReadinessPack(repoPath string, ledgerPath string, taskID string) 
 		}
 		report.Evidence["local"] = append(report.Evidence["local"], "Branch matches ledger branch: "+actualBranch)
 	}
-	if hasDirtyChanges(statusOut) {
+	if hasDirtyChangesIgnoringStateDir(statusOut) {
 		report.Status = "failed"
 		report.Evidence["local"] = append(report.Evidence["local"], "Worktree has uncommitted changes; pack did not stage, commit, or modify them.")
 		report.ResidualRisks = append(report.ResidualRisks, "Uncommitted worker changes must be classified before merge readiness can be accepted.")
 		report.NeedsHuman = true
 		return finalizeMergeReadinessPack(report), nil
 	}
-	report.Evidence["local"] = append(report.Evidence["local"], "Worktree is clean.")
+	if hasDirtyChanges(statusOut) {
+		stateDirLines := stateDirStatusLines(statusOut)
+		report.Evidence["local"] = append(report.Evidence["local"], defaultStateDir+"/ changes are local orchestration state only and do not count as business dirty work for merge-readiness.")
+		if len(stateDirLines) > 0 {
+			report.Evidence["local"] = append(report.Evidence["local"], defaultStateDir+"/ status:\n"+strings.Join(stateDirLines, "\n"))
+		}
+		report.ResidualRisks = append(report.ResidualRisks, defaultStateDir+"/ contains local/static orchestration state changes; do not treat them as product proof or committed business changes.")
+	} else {
+		report.Evidence["local"] = append(report.Evidence["local"], "Worktree is clean.")
+	}
 
 	base := strings.TrimSpace(task.BaseCommit)
 	if base == "" || allZeros(base) {
@@ -10840,6 +10852,14 @@ func buildHumanProgressSummary(summary ObserveSummary) humanProgressSummary {
 		progress.NextStep = "完成 cleanup 后刷新 ledger/status。"
 	} else if summary.ReviewPressure.Active > 0 || summary.ReviewPressure.PendingSetup > 0 {
 		progress.NextStep = "等待当前 worker 产出或下一次 heartbeat 刷新；不要为了填满并发槽派无关模块任务。"
+	} else if !hasRepoAttention && !hasWorkerPressure && normalizedDispatchMode(summary.DispatchMode) == "drain" {
+		progress.Headline = "队列已停，不再派发"
+		progress.StatusClass = "ok"
+		progress.NextStep = "run-mode=drain 且没有活动、待审、阻塞或待清理 worker；保持收口状态，除非用户恢复 active。"
+	} else if !hasRepoAttention && !hasWorkerPressure && normalizedDispatchMode(summary.DispatchMode) == "paused" {
+		progress.Headline = "编排已暂停"
+		progress.StatusClass = "warn"
+		progress.NextStep = "run-mode=paused；不要验收推进或派发新 worker，除非用户明确恢复。"
 	} else if !hasRepoAttention && !hasWorkerPressure && summary.JobSummary.Total == 0 {
 		progress.Headline = "当前空闲"
 		progress.StatusClass = ""
@@ -11032,6 +11052,15 @@ func humanNextAction(summary ObserveSummary) string {
 		return summary.RecommendedActions[0]
 	}
 	return "根据当前产品包选择下一步，不要从全局 backlog 随机抓无关任务。"
+}
+
+func hasOpenWorkerPressure(pressure ReviewPressure) bool {
+	return pressure.Active > 0 ||
+		pressure.PendingSetup > 0 ||
+		pressure.ReviewNeeded > 0 ||
+		pressure.Blocked > 0 ||
+		pressure.CleanupNeeded > 0 ||
+		pressure.Stale > 0
 }
 
 func humanStatusLabel(status string) string {

@@ -453,6 +453,8 @@ session 或强制执行预算。
 “是不是还在同一个产品模块里推进”和“最近发生了什么”。它是为了让人快速看懂当前进度，
 而不必直接读 JSON。它不会启动 server、daemon、scheduler，也不会 merge、push、
 cleanup 或监控 runtime。
+当 `run-mode=drain` 且没有 active、pending、待审、阻塞或待清理 worker 时，状态页
+首屏会明确显示“队列已停，不再派发”，而不是继续用 available slots 暗示还能补任务。
 推荐编排 session 每轮都运行 `status --write-html .codex-orchestrator/status.html
 --write-summary .codex-orchestrator/status.md`，把固定状态页和摘要刷新出来，并在中文
 汇报里带上路径。这样用户不需要自己记命令，也不用猜“现在到底跑到哪一步”。
@@ -529,8 +531,10 @@ local/static 验收包。JSON report 会包含 task metadata、git status、
 self-review/evidence-label/docs-drift 信号、已记录 gates、建议复跑 gates、
 residual risks，以及证据缺失时的 `needsHuman`。它不会 merge、push、cleanup、
 dispatch、修改 git state，也不会声称 runtime、production、device 或 direct worker
-proof。它还会输出 `authorizationMatrix`、`liveProofGate` 和 `acceptanceReport`
-草案，把“已有本地审查证据”和“是否授权 merge/push/cleanup/release”分开。
+proof。如果未提交变化只在 `.codex-orchestrator/` 本地状态目录内，它会把这些变化记录成
+local/static 编排状态风险，而不会把 merge-readiness 直接判成业务代码 dirty failure。
+它还会输出 `authorizationMatrix`、`liveProofGate` 和 `acceptanceReport` 草案，把“已有
+本地审查证据”和“是否授权 merge/push/cleanup/release”分开。
 
 `pack consultation` 会把 blocked、stale、需要产品决策或需要人做物理动作的
 ledger task 转成简洁的 local/static 求助包。JSON report 会包含 task metadata、

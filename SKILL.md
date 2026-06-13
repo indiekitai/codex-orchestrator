@@ -741,9 +741,12 @@ after a worker is merged and cleaned, first ask "what is the next useful worker
 inside the current package?" Only switch packages when the current package is
 blocked by owner/hardware/provider/pre/prod dependencies, when its local/proxy
 scope is genuinely drained, or when the user explicitly asks to change focus.
-Record the package switch and blocker in the ledger/status report. Do not
-optimize only for "safe and mergeable"; optimize for a coherent product/module
-story that a human can summarize in a daily report.
+Record the package switch reason in the ledger/status report using concrete
+language such as `package-closed`, `local-scope-drained`, `blocked`,
+`owner-gated`, or `shared-blocker-removal`. Do not switch packages just because
+there is an available slot or another safe task exists. Do not optimize only
+for "safe and mergeable"; optimize for a coherent product/module story that a
+human can summarize in a daily report.
 
 Treat raw `availableSlots` as capacity only, not as permission to dispatch.
 Before creating a new worker, read `dispatchRecommendation.recommended` and

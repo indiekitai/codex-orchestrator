@@ -537,9 +537,11 @@ just happened?" from the same page. It
 intentionally keeps dispatch-slot and raw ledger jargon below the first screen.
 When `run-mode` is `drain` or `paused`, the status page labels dispatch slots
 as non-dispatchable even if raw capacity is available, so the page does not
-encourage unrelated filler workers. It also treats untracked
-`.codex-orchestrator/` files as local orchestration state rather than business
-code dirtiness.
+encourage unrelated filler workers. When `drain` has no active, pending,
+review, blocked, stale, or cleanup work left, the first screen says the queue is
+stopped instead of implying the orchestrator is waiting to dispatch. It also
+treats untracked `.codex-orchestrator/` files as local orchestration state
+rather than business code dirtiness.
 It is meant for a quick human scan without reading raw JSON.
 It does not start a server, daemon, scheduler, merge, push, cleanup, or runtime
 monitor.
@@ -639,7 +641,9 @@ also emits an `authorizationMatrix`, a `liveProofGate`, and an
 `acceptanceReport` draft so the orchestrator can separate "review evidence
 exists" from "merge/push/cleanup/release is authorized." It does not merge,
 push, cleanup, dispatch, edit git state, or claim runtime, production, device,
-or direct worker proof.
+or direct worker proof. If the only uncommitted files are under
+`.codex-orchestrator/`, merge-readiness records them as local/static
+orchestration state and does not fail the pack as business dirty work.
 
 `pack acceptance --package-id PKG` aggregates the selected package workers into
 a package-level local/static acceptance report. If no `--task-id` is provided,
