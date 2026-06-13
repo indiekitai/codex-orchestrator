@@ -226,10 +226,12 @@ should only be used for the current package. A separate
 `dispatchRecommendation` block is the action signal: `recommended=false` means
 do not dispatch even when raw `availableSlots` is greater than zero, and
 `reason` / `nextAction` explain whether to wait, reconcile setup, review, clean
-up, or continue inside the same package lane. A compact `timeline` gives the
-recent task/routine sequence without reading raw ledger events. This is still
-local/static ledger and git evidence; it does not attach to live Codex App
-sessions.
+up, or continue inside the same package lane. Reports also expose
+`capacityOnly=true` and `capacityWarning` so UIs and agents do not treat
+`availableSlots` as permission to dispatch unrelated filler work. A compact
+`timeline` gives the recent task/routine sequence without reading raw ledger
+events. This is still local/static ledger and git evidence; it does not attach
+to live Codex App sessions.
 
 Markdown and HTML status outputs start with a human-first `当前进度` section,
 not raw ledger fields. It answers the questions a project owner usually has:
@@ -392,6 +394,14 @@ copying a long list of task ids out of chat. External reviewer output is
 `proxy/advisory`; the package acceptance report is `local/static`. Neither one
 merges, pushes, cleans worktrees, deploys, or produces direct runtime/device/
 provider proof by itself.
+
+If a selected task has already been accepted, merged, pushed, and cleaned,
+the worker worktree may be gone. `pack acceptance` treats terminal
+`merged` / `released` / `cleaned` ledger tasks in post-cleanup mode: the report
+uses terminal ledger state and recorded gates as local/static evidence, labels
+fresh worktree diff proof as unavailable, and tells the orchestrator to rerun
+integration gates when fresh proof is needed. A removed worktree after cleanup
+is no longer a package-acceptance failure by itself.
 
 ## Run A Heartbeat
 

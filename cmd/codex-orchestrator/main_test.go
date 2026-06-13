@@ -1322,13 +1322,17 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 		return cmdStatus([]string{"--ledger", ledger, "--json"})
 	})
 	var statusPayload struct {
-		RuntimeStatus RuntimeStatusReport `json:"runtimeStatus"`
+		RuntimeStatus          RuntimeStatusReport    `json:"runtimeStatus"`
+		DispatchRecommendation DispatchRecommendation `json:"dispatchRecommendation"`
 	}
 	if err := json.Unmarshal([]byte(statusJSON), &statusPayload); err != nil {
 		t.Fatalf("expected status JSON, got %q: %v", statusJSON, err)
 	}
 	if len(statusPayload.RuntimeStatus.CleanupNeeded) != 1 || len(statusPayload.RuntimeStatus.RecentMergedOrCleaned) != 1 {
 		t.Fatalf("expected status JSON runtime categories, got %#v", statusPayload.RuntimeStatus)
+	}
+	if !statusPayload.DispatchRecommendation.CapacityOnly || statusPayload.DispatchRecommendation.CapacityWarning == "" {
+		t.Fatalf("expected dispatch capacity warning in status JSON, got %#v", statusPayload.DispatchRecommendation)
 	}
 
 	statusHTML := captureStdout(t, func() error {
@@ -1378,6 +1382,20 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 	}
 	if !strings.Contains(string(writtenSummary), "## Runtime Status") {
 		t.Fatalf("expected written status summary, got:\n%s", string(writtenSummary))
+	}
+	writtenJSON, err := os.ReadFile(filepath.Join(root, "status.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var writtenPayload struct {
+		RuntimeStatus          RuntimeStatusReport    `json:"runtimeStatus"`
+		DispatchRecommendation DispatchRecommendation `json:"dispatchRecommendation"`
+	}
+	if err := json.Unmarshal(writtenJSON, &writtenPayload); err != nil {
+		t.Fatalf("expected written status JSON, got %q: %v", string(writtenJSON), err)
+	}
+	if len(writtenPayload.RuntimeStatus.CleanupNeeded) != 1 || !writtenPayload.DispatchRecommendation.CapacityOnly {
+		t.Fatalf("expected synchronized status JSON payload, got %#v", writtenPayload)
 	}
 	if err := cmdStatus([]string{"--ledger", ledger, "--json", "--html"}); err == nil {
 		t.Fatal("expected mutually exclusive JSON/HTML status flags to fail")
@@ -3034,6 +3052,23 @@ func TestPackReviewWritesPortablePackageReviewPack(t *testing.T) {
 	if !containsAuthorizationStatus(acceptance.AuthorizationMatrix, "merge", "requires-separate-orchestrator-decision") {
 		t.Fatalf("expected package acceptance merge boundary, got %#v", acceptance.AuthorizationMatrix)
 	}
+	if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "cleanup", "--task-id", "TASK-PACKAGE", "--status", "cleaned", "--note", "worktree removed after accepted merge"}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "remove", "-f", worker)
+	postCleanupAcceptance, err := buildPackageAcceptanceReport(project, ledger, "PKG-REVIEW", []string{"TASK-PACKAGE"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if postCleanupAcceptance.Status != "passed" || postCleanupAcceptance.Decision != "review-ready" || postCleanupAcceptance.NeedsHuman {
+		t.Fatalf("expected post-cleanup package acceptance not to fail on removed worktree, got %#v", postCleanupAcceptance)
+	}
+	if got := strings.Join(postCleanupAcceptance.EvidenceReviewed, "\n"); !strings.Contains(got, "post-cleanup boundary") {
+		t.Fatalf("expected post-cleanup evidence, got %#v", postCleanupAcceptance.EvidenceReviewed)
+	}
+	if got := strings.Join(postCleanupAcceptance.ResidualRisks, "\n"); !strings.Contains(got, "Post-cleanup mode cannot rerun worker worktree diff") {
+		t.Fatalf("expected post-cleanup residual risk, got %#v", postCleanupAcceptance.ResidualRisks)
+	}
 	if err := cmdRecordTask([]string{
 		"--ledger", ledger,
 		"--id", "OTHER-PACKAGE-TASK",
@@ -4288,6 +4323,73 @@ func TestRoadmapScoreDemotesExplicitReviewNextAction(t *testing.T) {
 	}
 	if demoted.Title == "" || demoted.LedgerMatch == "" || demoted.Score >= report.Candidates[0].Score {
 		t.Fatalf("expected explicit but completed review next action to be demoted, top=%#v demoted=%#v", report.Candidates[0], demoted)
+	}
+}
+
+func TestRoadmapScoreDemotesResolvedBlockerByLedgerOverlap(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	if err := os.MkdirAll(filepath.Join(project, "docs", "reviews"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "docs", "roadmap.md"), []byte(`# Roadmap
+
+## 下一阶段优先级
+
+- KDS route snapshot package：待做。
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "docs", "reviews", "old-cloud-sync.md"), []byte(`# Old Cloud Sync Review
+
+## Next Actions
+
+- Cloud sync outbox projection deployed readback blocker remains.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	config := `{"sources":["docs/roadmap.md","docs/reviews/old-cloud-sync.md"]}`
+	if err := os.WriteFile(filepath.Join(project, "roadmap-score.json"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ledgerPath := filepath.Join(project, defaultLedger)
+	ledger := Ledger{
+		Version:     1,
+		ProjectRoot: project,
+		Tasks: []Task{{
+			ID:     "TF-PRE-PROJECTION-CLOSEOUT",
+			Title:  "Cloud projection readback closeout",
+			Status: "cleaned",
+			History: []map[string]string{{
+				"type":   "review",
+				"status": "cleaned",
+				"note":   "Outbox deployed correlation was resolved with local/static evidence.",
+			}},
+		}},
+	}
+	if err := writeJSON(ledgerPath, ledger); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runRoadmapScore(project, "roadmap-score.json", ledgerPath)
+	if report.Status != "passed" {
+		t.Fatalf("expected passed report, got %#v", report)
+	}
+	if !strings.Contains(report.NextSuggestedAction, "KDS route snapshot package") {
+		t.Fatalf("expected current roadmap package to rank first, got %q with candidates %#v", report.NextSuggestedAction, report.Candidates)
+	}
+	var stale RoadmapScoreCandidate
+	for _, candidate := range report.Candidates {
+		if strings.Contains(candidate.Title, "Cloud sync outbox projection") {
+			stale = candidate
+			break
+		}
+	}
+	if stale.Title == "" || stale.LedgerMatch == "" || stale.Score >= report.Candidates[0].Score {
+		t.Fatalf("expected stale blocker to be demoted by terminal ledger overlap, top=%#v stale=%#v", report.Candidates[0], stale)
+	}
+	if got := strings.Join(stale.RiskHints, "\n"); !strings.Contains(got, "possibly resolved stale blocker") {
+		t.Fatalf("expected resolved stale blocker risk hint, got %#v", stale.RiskHints)
 	}
 }
 

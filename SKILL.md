@@ -216,7 +216,7 @@ ledger over chat-only state:
 codex-orchestrator init --write-templates
 codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25 --constraint "do not touch payment" --authority "worker may commit only"
 codex-orchestrator observe --json
-codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
+codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md --write-report .codex-orchestrator/status.json
 codex-orchestrator preflight --repo . --write-report .codex-orchestrator/preflight.json --write-summary .codex-orchestrator/preflight.md
 codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch; do not dispatch new workers"
 codex-orchestrator heartbeat --count 1 --interval 20m --missed-after 45m --write-report .codex-orchestrator/heartbeat-report.json --write-summary .codex-orchestrator/heartbeat-summary.md
@@ -296,11 +296,14 @@ For long-running Codex App orchestrator sessions, refresh fixed status artifacts
 on every visible monitor, review, merge, cleanup, or dispatch turn:
 
 ```bash
-codex-orchestrator status --repo . --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
+codex-orchestrator status --repo . --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md --write-report .codex-orchestrator/status.json
 ```
 
 Include those paths in Chinese user-facing status updates and handoffs. The user
-should not need to remember helper commands to see overall progress.
+should not need to remember helper commands to see overall progress. If
+`--write-report` is omitted while writing HTML or Markdown, the helper writes a
+sibling `status.json` by default so stale machine snapshots do not survive from
+older runs.
 
 If the repository includes v2.5 routine contracts, validate them before relying
 on routine names in a plan:
@@ -759,11 +762,13 @@ human can summarize in a daily report.
 
 Treat raw `availableSlots` as capacity only, not as permission to dispatch.
 Before creating a new worker, read `dispatchRecommendation.recommended` and
-`dispatchRecommendation.reason` from `status`/`observe` when available. If a
-current package worker is active, pending setup, dirty, or waiting for the next
-heartbeat, do not fill the free slot with an unrelated "safe" task. Wait,
-reconcile setup truth, review, or dispatch only a task that clearly belongs to
-the same package lane.
+`dispatchRecommendation.reason` from `status`/`observe` when available. Newer
+helpers also expose `dispatchRecommendation.capacityOnly` and
+`dispatchRecommendation.capacityWarning`; surface those to the user and treat
+them as a guardrail against filling slots. If a current package worker is
+active, pending setup, dirty, or waiting for the next heartbeat, do not fill the
+free slot with an unrelated "safe" task. Wait, reconcile setup truth, review, or
+dispatch only a task that clearly belongs to the same package lane.
 
 ## Decision Brief / Authorization / Live Proof Discipline
 
@@ -828,6 +833,13 @@ built-in defaults. The command is local/static planning evidence only: it checks
 reviewer command availability and recommends zero, one, or two reviewers for the
 package risk level. It does not run reviewers or decide acceptance.
 
+If a configured reviewer is unavailable because of quota, auth, or local
+installation state, do not stop a continuous package closeout solely to wait for
+that reviewer unless the project policy explicitly requires it. Use the
+available reviewer, such as Pi, record the unavailable reviewer as
+proxy/advisory context, and keep the merge decision separate from the review
+tool result.
+
 Also check the package row in `status` / `observe`. Package rows now expose
 `reviewRequired`, `reviewDecision`, and `reviewNextAction` derived from the
 local/static review policy. If a package has enough related workers or matches a
@@ -841,6 +853,12 @@ embeds package acceptance and package-summary state, and can report
 `blocked`, or `reject-for-fixup`. It is still local/static guidance only; the
 orchestrator must separately decide and execute merge, push, cleanup, release,
 deploy, and any direct proof.
+
+If a task has already been accepted, merged, pushed, and cleaned, its worker
+worktree may be gone. Treat terminal `merged`, `released`, or `cleaned` tasks in
+`pack acceptance` post-cleanup mode as ledger closeout evidence, not as a fresh
+worktree diff check. A missing worker worktree after cleanup is not by itself a
+package acceptance failure; rerun integration gates when fresh proof is needed.
 
 ## Dynamic Heartbeat Prompt Pattern
 

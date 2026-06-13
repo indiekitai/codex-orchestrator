@@ -377,6 +377,8 @@ type DispatchRecommendation struct {
 	Reason           string `json:"reason"`
 	NextAction       string `json:"nextAction"`
 	AvailableSlots   int    `json:"availableSlots"`
+	CapacityOnly     bool   `json:"capacityOnly"`
+	CapacityWarning  string `json:"capacityWarning,omitempty"`
 	CurrentPackageID string `json:"currentPackageId,omitempty"`
 }
 
@@ -1100,7 +1102,7 @@ func usage() {
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--missed-after 15m] [--count 0] [--write-report PATH]
-  codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--write-html PATH] [--write-summary PATH] [--stale-after 15m]
+  codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--write-html PATH] [--write-summary PATH] [--write-report PATH] [--stale-after 15m]
   codex-orchestrator preflight [--repo PATH] [--ledger PATH] [--interval 20m] [--missed-after 45m] [--stale-after 15m] [--fail-on-warning] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator watchdog status [--repo PATH] [--label-suffix SUFFIX] [--json]
   codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
@@ -1451,7 +1453,7 @@ _codex_orchestrator()
       COMPREPLY=( $(compgen -W "--repo --ledger --json --write-report --write-summary --stale-after --help" -- "$cur") )
       ;;
     status)
-      COMPREPLY=( $(compgen -W "--repo --ledger --json --html --write-html --write-summary --stale-after --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--repo --ledger --json --html --write-html --write-summary --write-report --stale-after --help" -- "$cur") )
       ;;
     preflight)
       COMPREPLY=( $(compgen -W "--repo --ledger --interval --missed-after --stale-after --fail-on-warning --json --write-report --write-summary --help" -- "$cur") )
@@ -1699,7 +1701,7 @@ case $state in
         _values 'options' --repo --ledger --json --write-report --write-summary --stale-after --help
         ;;
       status)
-        _values 'options' --repo --ledger --json --html --write-html --write-summary --stale-after --help
+        _values 'options' --repo --ledger --json --html --write-html --write-summary --write-report --stale-after --help
         ;;
       preflight)
         _values 'options' --repo --ledger --interval --missed-after --stale-after --fail-on-warning --json --write-report --write-summary --help
@@ -2883,6 +2885,7 @@ func cmdStatus(args []string) error {
 	htmlOut := fs.Bool("html", false, "print local/static HTML status page")
 	writeHTML := fs.String("write-html", "", "write local/static HTML status page")
 	writeSummary := fs.String("write-summary", "", "write Markdown status summary")
+	writeReport := fs.String("write-report", "", "write JSON status report; defaults to status.json next to --write-summary or --write-html")
 	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale threshold")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -2946,6 +2949,15 @@ func cmdStatus(args []string) error {
 			return err
 		}
 	}
+	statusReportPath := strings.TrimSpace(*writeReport)
+	if statusReportPath == "" {
+		statusReportPath = defaultStatusReportPath(*writeSummary, *writeHTML)
+	}
+	if statusReportPath != "" {
+		if err := writeJSON(statusReportPath, result); err != nil {
+			return err
+		}
+	}
 	if *jsonOut {
 		return printJSON(result)
 	}
@@ -2967,6 +2979,9 @@ func cmdStatus(args []string) error {
 		fmt.Printf(" reason=%q", summary.DispatchRecommendation.Reason)
 	}
 	fmt.Println()
+	if summary.DispatchRecommendation.CapacityWarning != "" {
+		fmt.Printf("Dispatch capacity warning: %s\n", summary.DispatchRecommendation.CapacityWarning)
+	}
 	fmt.Printf("Jobs: total=%d counts=%s\n", summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
 	fmt.Printf("Packages: total=%d\n", summary.PackageSummary.Total)
 	fmt.Printf("Lane guard (%s): %s", summary.PackageLaneGuard.EvidenceLabel, summary.PackageLaneGuard.Status)
@@ -2995,7 +3010,20 @@ func cmdStatus(args []string) error {
 	if *writeSummary != "" {
 		fmt.Printf("Status summary: %s\n", *writeSummary)
 	}
+	if statusReportPath != "" {
+		fmt.Printf("Status JSON: %s\n", statusReportPath)
+	}
 	return nil
+}
+
+func defaultStatusReportPath(writeSummary string, writeHTML string) string {
+	if strings.TrimSpace(writeSummary) != "" {
+		return filepath.Join(filepath.Dir(expandPath(writeSummary)), "status.json")
+	}
+	if strings.TrimSpace(writeHTML) != "" {
+		return filepath.Join(filepath.Dir(expandPath(writeHTML)), "status.json")
+	}
+	return ""
 }
 
 func cmdPreflight(args []string) error {
@@ -3708,6 +3736,9 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 
 	fmt.Fprintf(&b, "<section class=\"section\"><h2>下一步建议 / Next</h2><p>%s</p>", escapeHTML(nextAction))
 	fmt.Fprintf(&b, "<p><strong>dispatchRecommended=%t</strong> · reason=%s</p>", summary.DispatchRecommendation.Recommended, escapeHTML(summary.DispatchRecommendation.Reason))
+	if summary.DispatchRecommendation.CapacityWarning != "" {
+		fmt.Fprintf(&b, "<p class=\"warn\">%s</p>", escapeHTML(summary.DispatchRecommendation.CapacityWarning))
+	}
 	if summary.DispatchRecommendation.NextAction != "" {
 		fmt.Fprintf(&b, "<p>%s</p>", escapeHTML(summary.DispatchRecommendation.NextAction))
 	}
@@ -5529,9 +5560,26 @@ func buildPackageAcceptanceReport(repoPath string, ledgerPath string, packageID 
 	}
 	report.RepoPath = firstNonEmpty(ledger.ProjectRoot, repoPath)
 	for _, taskID := range uniqueSortedStrings(taskIDs) {
-		pack, err := buildMergeReadinessPack(repoPath, ledgerPath, taskID)
-		if err != nil {
-			return report, err
+		taskIndex := findTaskIndex(ledger.Tasks, taskID)
+		if taskIndex < 0 {
+			report.Status = "blocked"
+			report.Decision = "blocked"
+			report.NeedsHuman = true
+			report.BlockedReason = firstNonEmpty(report.BlockedReason, "one or more selected tasks are missing from the ledger")
+			report.Why = append(report.Why, "Task "+taskID+" is missing from the ledger.")
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], "Task not found in ledger: "+taskID)
+			continue
+		}
+		task := ledger.Tasks[taskIndex]
+		var pack MergeReadinessPack
+		if packageAcceptanceShouldUsePostCleanupMode(task) {
+			pack = buildPostCleanupMergeReadinessPack(report.RepoPath, ledgerPath, task)
+		} else {
+			var err error
+			pack, err = buildMergeReadinessPack(repoPath, ledgerPath, taskID)
+			if err != nil {
+				return report, err
+			}
 		}
 		report.Tasks = append(report.Tasks, pack.Task)
 		report.TaskReports = append(report.TaskReports, pack.AcceptanceReport)
@@ -5613,6 +5661,144 @@ func buildPackageAcceptanceReport(repoPath string, ledgerPath string, packageID 
 	}
 	report.AuthorizationMatrix = packageAcceptanceAuthorizationMatrix()
 	return report, nil
+}
+
+func packageAcceptanceShouldUsePostCleanupMode(task Task) bool {
+	if !packageAcceptanceTerminalCleanupStatus(task.Status) {
+		return false
+	}
+	worktree := strings.TrimSpace(task.Worktree)
+	if worktree == "" {
+		return true
+	}
+	if _, err := os.Stat(expandPath(worktree)); err != nil {
+		return os.IsNotExist(err)
+	}
+	return false
+}
+
+func packageAcceptanceTerminalCleanupStatus(status string) bool {
+	switch strings.TrimSpace(status) {
+	case "merged", "released", "cleaned":
+		return true
+	default:
+		return false
+	}
+}
+
+func buildPostCleanupMergeReadinessPack(repoPath string, ledgerPath string, task Task) MergeReadinessPack {
+	report := newMergeReadinessPack(repoPath, ledgerPath, task.ID)
+	report.Status = "passed"
+	report.RepoPath = repoPath
+	report.Task = mergeReadinessTaskSummary(task)
+	report.ObservedStatus = firstNonEmpty(task.Status, "terminal")
+	report.RecordedGates = append([]string(nil), task.Gates...)
+	report.PathCheck = MergeReadinessPathCheck{
+		Status:  "post-cleanup-skipped",
+		Summary: "Skipped committed path inspection because the worker worktree has already been cleaned after a terminal ledger closeout.",
+	}
+	report.DiffCheck = CommandResult{
+		Command: "git diff --check",
+		Status:  "post-cleanup-skipped",
+		Output:  "Worker worktree is absent after terminal ledger closeout; rerun integration-level gates if fresh proof is required.",
+	}
+	report.Evidence["local"] = append(report.Evidence["local"],
+		"Loaded terminal ledger task record: "+task.ID+" status="+firstNonEmpty(task.Status, "unknown"),
+		"Using post-cleanup acceptance mode because the task worktree is already absent or intentionally not recorded after closeout.",
+	)
+	if len(task.Gates) > 0 {
+		report.Evidence["local"] = append(report.Evidence["local"], "Recorded gates before cleanup: "+strings.Join(task.Gates, " | "))
+	}
+	report.ActionsTaken = append(report.ActionsTaken,
+		"Classified terminal ledger task in post-cleanup mode",
+		"Did not recreate or inspect the removed worker worktree",
+	)
+	report.ResidualRisks = append(report.ResidualRisks,
+		"Post-cleanup mode cannot rerun worker worktree diff or path checks; rely on prior orchestrator acceptance evidence and rerun integration gates if needed.",
+	)
+	report.ClaimVerification = postCleanupClaimVerification(task)
+	report.LiveProofGate = LiveProofGate{
+		Status:          "not-collected-by-post-cleanup-report",
+		Required:        false,
+		MissingEvidence: []string{"Post-cleanup reports do not provide fresh direct runtime/device/provider proof."},
+		Boundary:        "This report is local/static ledger evidence after cleanup. It does not reconstruct removed worker worktrees or authorize direct proof claims.",
+	}
+	report.AuthorizationMatrix = packageAcceptanceAuthorizationMatrix()
+	report.AcceptanceReport = postCleanupAcceptanceReport(report)
+	report.RecordedGates = uniqueSortedStrings(report.RecordedGates)
+	report.ResidualRisks = uniqueSortedStrings(report.ResidualRisks)
+	report.ActionsTaken = uniqueSortedStrings(report.ActionsTaken)
+	report.Evidence = normalizedEvidence(report.Evidence)
+	return report
+}
+
+func postCleanupClaimVerification(task Task) ClaimVerificationReport {
+	report := ClaimVerificationReport{
+		EvidenceLabel: "local/static",
+		Status:        "passed",
+		Summary:       "Terminal ledger closeout exists; fresh worker worktree checks were intentionally skipped in post-cleanup mode.",
+		Checks: []ClaimCheck{
+			{
+				Claim:            "task has terminal closeout state",
+				Status:           "passed",
+				RequiredEvidence: "ledger task status is merged, released, or cleaned",
+				Evidence:         []string{"status=" + firstNonEmpty(task.Status, "unknown")},
+			},
+			{
+				Claim:            "post-cleanup mode did not recreate worker state",
+				Status:           "passed",
+				RequiredEvidence: "report explicitly labels worktree proof as unavailable after cleanup",
+				Evidence:         []string{"local/static post-cleanup ledger evidence only"},
+			},
+		},
+	}
+	if len(task.Gates) == 0 {
+		report.Status = "needs-evidence"
+		report.Summary = "Terminal ledger closeout exists, but no recorded gates were available in the task ledger."
+		report.MissingEvidence = []string{"No ledger gates were recorded before cleanup."}
+		report.Checks = append(report.Checks, ClaimCheck{
+			Claim:            "verification gates were recorded before cleanup",
+			Status:           "needs-evidence",
+			RequiredEvidence: "task ledger includes credible gate commands",
+			MissingEvidence:  []string{"No ledger gates were recorded before cleanup."},
+		})
+	} else {
+		report.Checks = append(report.Checks, ClaimCheck{
+			Claim:            "verification gates were recorded before cleanup",
+			Status:           "passed",
+			RequiredEvidence: "task ledger includes credible gate commands",
+			Evidence:         []string{"recordedGates=" + strings.Join(task.Gates, " | ")},
+		})
+	}
+	return report
+}
+
+func postCleanupAcceptanceReport(report MergeReadinessPack) AcceptanceReport {
+	decision := "review-ready"
+	next := "Use this post-cleanup ledger report for package closeout; rerun integration gates if fresh diff proof is required."
+	if report.ClaimVerification.Status == "needs-evidence" {
+		decision = "needs-review"
+		next = "Review prior closeout evidence or rerun integration gates because recorded task gates are missing."
+	}
+	return AcceptanceReport{
+		Decision: decision,
+		Why: uniqueSortedStrings([]string{
+			"Task is in a terminal ledger state and its worktree may have been removed as part of accepted cleanup.",
+			"Post-cleanup package acceptance treats missing worker worktree as expected cleanup state, not a failure.",
+		}),
+		EvidenceReviewed: uniqueSortedStrings([]string{
+			"ledger task metadata",
+			"terminal task status",
+			"recorded gates before cleanup",
+			"post-cleanup boundary",
+		}),
+		GatesReviewed:       append([]string(nil), report.RecordedGates...),
+		AuthorizationMatrix: append([]AuthorizationCheck(nil), report.AuthorizationMatrix...),
+		LiveProofGate:       report.LiveProofGate,
+		ClaimVerification:   report.ClaimVerification,
+		ResidualRisks:       append([]string(nil), report.ResidualRisks...),
+		NextAction:          next,
+	}
 }
 
 func buildPackageCloseoutReport(repoPath string, ledgerPath string, packageID string, taskIDs []string) (PackageCloseoutReport, error) {
@@ -8842,7 +9028,78 @@ func applyRoadmapScoreLedgerDemotion(candidate RoadmapScoreCandidate, tasks []Ta
 		}
 		return candidate
 	}
+	if roadmapScoreCandidateLooksLikeBlocker(candidate) {
+		for _, task := range tasks {
+			if !roadmapScoreTaskTerminal(task) {
+				continue
+			}
+			if matched, overlap := roadmapScoreTaskTokenOverlap(task, candidate.Title); matched {
+				match := fmt.Sprintf("%s status=%s overlap=%s", task.ID, emptyToUnknown(task.Status), strings.Join(overlap, ","))
+				candidate.LedgerMatch = match
+				candidate.RiskHints = append(candidate.RiskHints, "matched terminal ledger task by blocker token overlap; demoted as possibly resolved stale blocker")
+				candidate.SuggestedAction = "skip or re-verify; blocker may already be represented by terminal ledger task"
+				if candidate.Score > 25 {
+					candidate.Score = 25
+				}
+				return candidate
+			}
+		}
+	}
 	return candidate
+}
+
+func roadmapScoreCandidateLooksLikeBlocker(candidate RoadmapScoreCandidate) bool {
+	lower := strings.ToLower(candidate.Title + " " + candidate.Classification + " " + candidate.EvidenceSnippet)
+	return containsAny(lower, []string{"blocked", "blocker", "unblock", "阻塞", "解锁"})
+}
+
+func roadmapScoreTaskTokenOverlap(task Task, candidateTitle string) (bool, []string) {
+	candidateTokens := roadmapScoreMeaningfulTokens(candidateTitle)
+	if len(candidateTokens) == 0 {
+		return false, nil
+	}
+	taskTokens := map[string]bool{}
+	for _, value := range roadmapScoreTaskMatchValues(task) {
+		for token := range roadmapScoreMeaningfulTokens(value) {
+			taskTokens[token] = true
+		}
+	}
+	overlap := []string{}
+	for token := range candidateTokens {
+		if taskTokens[token] {
+			overlap = append(overlap, token)
+		}
+	}
+	sort.Strings(overlap)
+	return len(overlap) >= 3, overlap
+}
+
+func roadmapScoreMeaningfulTokens(value string) map[string]bool {
+	stop := map[string]bool{
+		"task": true, "package": true, "local": true, "proof": true, "readiness": true,
+		"blocked": true, "blocker": true, "unblock": true, "needs": true, "need": true,
+		"next": true, "todo": true, "done": true, "cleaned": true, "merged": true,
+		"status": true, "worker": true, "pre": true, "prod": true,
+	}
+	tokens := map[string]bool{}
+	var b strings.Builder
+	flush := func() {
+		token := strings.ToLower(strings.TrimSpace(b.String()))
+		b.Reset()
+		if len(token) < 4 || stop[token] {
+			return
+		}
+		tokens[token] = true
+	}
+	for _, r := range value {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+			continue
+		}
+		flush()
+	}
+	flush()
+	return tokens
 }
 
 func roadmapScoreTaskTerminal(task Task) bool {
@@ -9727,6 +9984,8 @@ func buildDispatchRecommendation(dispatchMode string, integration IntegrationSta
 		Reason:           "not evaluated",
 		NextAction:       "Inspect repo, ledger, package lane, and worker state before dispatch.",
 		AvailableSlots:   pressure.AvailableSlots,
+		CapacityOnly:     true,
+		CapacityWarning:  "availableSlots is local/static capacity only; dispatch only when dispatchRecommended is true and the next worker belongs to the current or selected package lane.",
 		CurrentPackageID: laneGuard.CurrentPackageID,
 	}
 	mode := normalizedDispatchMode(dispatchMode)
@@ -11829,6 +12088,10 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- dispatchMode: `%s`\n", summary.DispatchMode)
 	fmt.Fprintf(&b, "- dispatchModeLabel: `%s`\n", humanDispatchModeLabel(summary.DispatchMode))
 	fmt.Fprintf(&b, "- dispatchRecommended: `%t`\n", summary.DispatchRecommendation.Recommended)
+	fmt.Fprintf(&b, "- dispatchCapacityOnly: `%t`\n", summary.DispatchRecommendation.CapacityOnly)
+	if summary.DispatchRecommendation.CapacityWarning != "" {
+		fmt.Fprintf(&b, "- dispatchCapacityWarning: %s\n", summary.DispatchRecommendation.CapacityWarning)
+	}
 	if summary.DispatchRecommendation.Reason != "" {
 		fmt.Fprintf(&b, "- dispatchReason: %s\n", summary.DispatchRecommendation.Reason)
 	}
@@ -12053,6 +12316,10 @@ func renderDispatchRecommendationMarkdown(b *strings.Builder, rec DispatchRecomm
 	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", rec.EvidenceLabel)
 	fmt.Fprintf(b, "- dispatchRecommended: `%t`\n", rec.Recommended)
 	fmt.Fprintf(b, "- availableSlots: `%d`\n", rec.AvailableSlots)
+	fmt.Fprintf(b, "- capacityOnly: `%t`\n", rec.CapacityOnly)
+	if rec.CapacityWarning != "" {
+		fmt.Fprintf(b, "- capacityWarning: %s\n", rec.CapacityWarning)
+	}
 	if rec.CurrentPackageID != "" {
 		fmt.Fprintf(b, "- currentPackageId: `%s`\n", rec.CurrentPackageID)
 	}

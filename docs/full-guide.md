@@ -461,7 +461,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator status
 ./codex-orchestrator preflight --repo . --write-summary .codex-orchestrator/preflight.md
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
-./codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md
+./codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md --write-report .codex-orchestrator/status.json
 ./codex-orchestrator watchdog status --repo .
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
 ./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
@@ -509,9 +509,10 @@ required and what review pack/import action is next. `observe`, `status`, and
 heartbeat summaries also expose a `packageLaneGuard` block that warns when
 workers are ungrouped, multiple package lanes are active, or an available slot
 should only be filled with work from the current lane. Reports also include a
-`dispatchRecommendation` block with `recommended`, `reason`, `nextAction`, and
-`availableSlots`; treat this as the action signal and treat raw slots as
-capacity only. If one package worker is active or pending, `recommended=false`
+`dispatchRecommendation` block with `recommended`, `reason`, `nextAction`,
+`availableSlots`, `capacityOnly`, and `capacityWarning`; treat this as the
+action signal and treat raw slots as capacity only. If one package worker is
+active or pending, `recommended=false`
 keeps the orchestrator from filling the free slot with unrelated safe work.
 The compact `timeline` shows the recent task/routine sequence without reading
 raw ledger events. `observe`, `status`, and heartbeat summaries also expose a read-only
@@ -555,10 +556,13 @@ It is meant for a quick human scan without reading raw JSON.
 It does not start a server, daemon, scheduler, merge, push, cleanup, or runtime
 monitor.
 `status --write-html .codex-orchestrator/status.html --write-summary
-.codex-orchestrator/status.md` is the recommended per-cycle snapshot for a
-Codex App orchestrator: refresh it during every monitor/review/dispatch turn and
-include the paths in the user-facing status update so humans do not need to run
-helper commands manually.
+.codex-orchestrator/status.md --write-report .codex-orchestrator/status.json`
+is the recommended per-cycle snapshot for a Codex App orchestrator: refresh it
+during every monitor/review/dispatch turn and include the paths in the
+user-facing status update so humans do not need to run helper commands
+manually. If `--write-report` is omitted while `--write-html` or
+`--write-summary` is present, the helper writes a sibling `status.json` by
+default so stale JSON snapshots do not linger.
 
 Hands-off runs are not only overnight. Use the same readiness checks whenever a
 human starts work and walks away for lunch, meetings, errands, or the end of the
@@ -663,6 +667,14 @@ for the same package, then emits one decision such as `review-ready`,
 not a merge command: merge, push, cleanup, release, deploy, and direct proof
 still require a separate orchestrator closeout decision.
 
+After a task has already been accepted and cleaned, its worker worktree may no
+longer exist. Package acceptance handles terminal `merged`, `released`, and
+`cleaned` ledger tasks in post-cleanup mode: it uses terminal ledger state and
+recorded gates as local/static evidence, says fresh worktree diff proof is
+unavailable, and recommends rerunning integration gates if fresh proof is
+needed. A removed worktree after cleanup is not a package-acceptance failure by
+itself.
+
 `misalignment record` and `misalignment report` are local/static trust-loop
 tools. Use them to preserve developer pushback, setup failures, unsupported
 completion claims, package drift, heartbeat gaps, and other orchestrator
@@ -706,6 +718,13 @@ ledger. All external-review output is
 authorizes implementation, merge, push, cleanup, release, deploy, or direct
 runtime/device/provider proof by itself. For the design rationale, see
 [docs/research/package-review-policy.md](research/package-review-policy.md).
+
+If one configured reviewer is unavailable because of quota, auth, or local
+installation state, do not stop a continuous package closeout solely to wait for
+that reviewer unless the project policy explicitly requires it. Use the
+available reviewer, such as Pi, record the missing reviewer as unavailable
+proxy/advisory evidence, and keep the merge decision separate from the review
+tool result.
 
 Codex App worktree dispatch is App-first. Save the repository as a Codex App
 project before relying on project worktree sessions. If dispatch fails because
