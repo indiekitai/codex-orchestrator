@@ -9,9 +9,11 @@ visible when the Mac is awake and `launchd` can run a local check.
 ## Change
 
 - Added `scripts/macos-watchdog-run.sh`, a one-shot runner that invokes
-  `codex-orchestrator heartbeat --count 1`, writes watchdog heartbeat report
-  and summary files, and sends a macOS notification when the report says
-  `heartbeatStatus.status=missed`.
+  `codex-orchestrator heartbeat --check-only --count 1`, writes watchdog
+  heartbeat report and summary files, and sends a macOS notification when the
+  report says `heartbeatStatus.status=missed`. `--check-only` keeps the
+  external watchdog from appending App heartbeat events and masking missed
+  Codex App wakeups.
 - Added `scripts/install-macos-watchdog.sh`, which installs a per-project user
   LaunchAgent for the runner.
 - Updated `SKILL.md`, English/Chinese README, `docs/v2-usage.md`, roadmap, and

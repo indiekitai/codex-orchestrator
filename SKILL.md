@@ -204,6 +204,12 @@ Before dispatching hands-off work:
   evidence: it can notify about missed Codex App heartbeats while the Mac is
   awake, but it does not create sessions, review, merge, push, cleanup, keep the
   Mac awake, or prove why the App heartbeat was missed.
+- keep App heartbeat evidence separate from watchdog evidence. The Codex App
+  monitor turn may run `codex-orchestrator heartbeat --count 1` to append a
+  heartbeat event after it wakes. The external macOS watchdog must use
+  `codex-orchestrator heartbeat --check-only --count 1`, via
+  `scripts/macos-watchdog-run.sh`, so it can inspect/report missed App wakeups
+  without writing a fresh heartbeat event that would mask the gap.
 
 ## Orchestrator State Ledger
 

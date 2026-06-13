@@ -488,7 +488,7 @@ codex-orchestrator watchdog status --repo /path/to/project --json
 ```
 
 The LaunchAgent runs `scripts/macos-watchdog-run.sh`, which performs one
-`heartbeat --count 1` check, writes:
+`heartbeat --check-only --count 1` check, writes:
 
 - `.codex-orchestrator/watchdog-heartbeat-report.json`
 - `.codex-orchestrator/watchdog-heartbeat-summary.md`
@@ -504,6 +504,11 @@ dispatch workers, review, merge, push, cleanup, or keep a sleeping Mac awake.
 Its evidence is `local/static`: it can show that heartbeat checks were missed,
 but not prove whether the cause was Codex App automation delivery, machine
 sleep, OS power state, or thread scheduling.
+
+The `--check-only` part is important. The App heartbeat turn may append a
+normal heartbeat event after Codex App wakes the thread. The external watchdog
+must not append that same event, because doing so would make the local ledger
+look fresh even when Codex App did not actually wake the orchestrator thread.
 
 ## Run Read-Only Routines
 
@@ -608,6 +613,9 @@ During monitoring, use `codex-orchestrator heartbeat --count 1` or
 `codex-orchestrator observe --json` to classify tasks. Review completed branches
 before merge. After review/merge/reject/cleanup, append an event with
 `codex-orchestrator append-event`.
+
+For external watchdogs, use `codex-orchestrator heartbeat --check-only --count 1`
+so the watchdog can write reports without appending a heartbeat event.
 
 Do not let the helper create sessions, merge, push, delete branches, or relabel
 evidence. The Codex App orchestrator owns those decisions.

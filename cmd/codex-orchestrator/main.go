@@ -1101,7 +1101,7 @@ func usage() {
   codex-orchestrator record-task --id ID (--worktree PATH --branch BRANCH | --pending-worktree-id ID) [--package-id PKG] [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N] [--constraint TEXT] [--authority TEXT] [--user-instruction TEXT] [--evidence-boundary TEXT] [--package-switch-reason TEXT]
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
-  codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--missed-after 15m] [--count 0] [--write-report PATH]
+  codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--missed-after 15m] [--count 0] [--check-only] [--write-report PATH]
   codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--write-html PATH] [--write-summary PATH] [--write-report PATH] [--stale-after 15m]
   codex-orchestrator preflight [--repo PATH] [--ledger PATH] [--interval 20m] [--missed-after 45m] [--stale-after 15m] [--fail-on-warning] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator watchdog status [--repo PATH] [--label-suffix SUFFIX] [--json]
@@ -1490,7 +1490,7 @@ _codex_orchestrator()
       fi
       ;;
     heartbeat)
-      COMPREPLY=( $(compgen -W "--repo --ledger --interval --missed-after --count --write-report --write-summary --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--repo --ledger --interval --missed-after --count --check-only --write-report --write-summary --help" -- "$cur") )
       ;;
     validate-routines)
       COMPREPLY=( $(compgen -W "--dir --json --help" -- "$cur") )
@@ -1714,7 +1714,7 @@ case $state in
         fi
         ;;
       heartbeat)
-        _values 'options' --repo --ledger --interval --missed-after --count --write-report --write-summary --help
+        _values 'options' --repo --ledger --interval --missed-after --count --check-only --write-report --write-summary --help
         ;;
       validate-routines)
         _values 'options' --dir --json --help
@@ -1792,6 +1792,7 @@ complete -c codex-orchestrator -l expected-asset -d 'Expected release asset'
 complete -c codex-orchestrator -l heartbeat-report -d 'Optional heartbeat report path'
 complete -c codex-orchestrator -l interval -d 'Heartbeat/preflight interval'
 complete -c codex-orchestrator -l missed-after -d 'Missed heartbeat threshold'
+complete -c codex-orchestrator -l check-only -d 'Inspect heartbeat gap without appending heartbeat event'
 complete -c codex-orchestrator -l fail-on-warning -d 'Exit non-zero when preflight returns warning'
 complete -c codex-orchestrator -l label-suffix -d 'macOS watchdog LaunchAgent label suffix'
 complete -c codex-orchestrator -l package-id -d 'Feature package id'
@@ -2813,6 +2814,7 @@ func cmdHeartbeat(args []string) error {
 	missedAfter := fs.Duration("missed-after", 0, "missed heartbeat threshold; defaults to 3x interval")
 	count := fs.Int("count", 1, "number of checks; 0 runs forever")
 	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale threshold")
+	checkOnly := fs.Bool("check-only", false, "inspect heartbeat gap and write reports without appending a heartbeat event")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -2848,17 +2850,19 @@ func cmdHeartbeat(args []string) error {
 				return err
 			}
 		}
-		event := map[string]any{
-			"at":     summary.ObservedAt,
-			"type":   "heartbeat",
-			"status": summary.OverallStatus,
-			"note":   strings.Join(summary.RecommendedActions, " | "),
-		}
-		if summary.HeartbeatStatus != nil && summary.HeartbeatStatus.Status == "missed" {
-			event["missedHeartbeat"] = summary.HeartbeatStatus
-		}
-		if err := appendEvent(resolvedEvents, event); err != nil {
-			return err
+		if !*checkOnly {
+			event := map[string]any{
+				"at":     summary.ObservedAt,
+				"type":   "heartbeat",
+				"status": summary.OverallStatus,
+				"note":   strings.Join(summary.RecommendedActions, " | "),
+			}
+			if summary.HeartbeatStatus != nil && summary.HeartbeatStatus.Status == "missed" {
+				event["missedHeartbeat"] = summary.HeartbeatStatus
+			}
+			if err := appendEvent(resolvedEvents, event); err != nil {
+				return err
+			}
 		}
 		if *jsonOut {
 			if err := printJSON(summary); err != nil {

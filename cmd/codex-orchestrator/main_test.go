@@ -935,6 +935,59 @@ func TestHeartbeatWritesReportAndEvent(t *testing.T) {
 	}
 }
 
+func TestHeartbeatCheckOnlyDoesNotAppendEvent(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	eventsPath := eventsPathForLedger(ledger)
+	report := filepath.Join(project, ".codex-orchestrator", "watchdog-heartbeat-report.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := appendEvent(eventsPath, map[string]any{
+		"at":     time.Now().Add(-2 * time.Hour).Format(time.RFC3339),
+		"type":   "heartbeat",
+		"status": "quiet",
+		"note":   "app heartbeat",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(eventsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdHeartbeat([]string{
+		"--ledger", ledger,
+		"--events", eventsPath,
+		"--interval", "10m",
+		"--missed-after", "25m",
+		"--count", "1",
+		"--check-only",
+		"--write-report", report,
+		"--json",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(eventsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("check-only heartbeat must not append events\nbefore:\n%s\nafter:\n%s", string(before), string(after))
+	}
+	data, err := os.ReadFile(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var observed ObserveSummary
+	if err := json.Unmarshal(data, &observed); err != nil {
+		t.Fatal(err)
+	}
+	if observed.HeartbeatStatus == nil || observed.HeartbeatStatus.Status != "missed" {
+		t.Fatalf("expected check-only report to preserve missed heartbeat status, got %#v", observed.HeartbeatStatus)
+	}
+}
+
 func TestTaskBudgetMetadataSurfacesInObserveAndHeartbeat(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))

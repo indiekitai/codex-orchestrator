@@ -3,6 +3,8 @@ set -eu
 
 # One-shot macOS watchdog runner for hands-off orchestration.
 # Intended for launchd. It does not dispatch, merge, push, or clean worktrees.
+# It uses heartbeat --check-only so the external watchdog does not append an App
+# heartbeat event and mask a missed Codex App wakeup.
 
 REPO=${REPO:-}
 BIN=${BIN:-codex-orchestrator}
@@ -34,6 +36,7 @@ ERROR_LOG="$STATE_DIR/watchdog-last-error.log"
 if ! "$BIN" heartbeat \
   --repo "$REPO" \
   --count 1 \
+  --check-only \
   --interval "$INTERVAL" \
   --missed-after "$MISSED_AFTER" \
   --write-report "$REPORT" \
