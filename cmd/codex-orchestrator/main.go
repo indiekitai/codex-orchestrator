@@ -170,6 +170,14 @@ type DispatchResult struct {
 	NextActions   []string          `json:"nextActions,omitempty"`
 }
 
+type ObserveReconciliationReport struct {
+	EvidenceLabel string   `json:"evidenceLabel"`
+	Status        string   `json:"status"`
+	Updated       int      `json:"updated"`
+	Actions       []string `json:"actions,omitempty"`
+	Warnings      []string `json:"warnings,omitempty"`
+}
+
 type GitWorktreeEntry struct {
 	Path   string `json:"path"`
 	Head   string `json:"head,omitempty"`
@@ -404,32 +412,33 @@ type routineBudgetCoverage struct {
 }
 
 type ObserveSummary struct {
-	Ledger                 string                 `json:"ledger"`
-	Version                int                    `json:"version"`
-	ProjectRoot            string                 `json:"projectRoot"`
-	DefaultBranch          string                 `json:"defaultBranch"`
-	DispatchMode           string                 `json:"dispatchMode,omitempty"`
-	DispatchNote           string                 `json:"dispatchNote,omitempty"`
-	HeartbeatStatus        *HeartbeatStatus       `json:"heartbeatStatus,omitempty"`
-	ObservedAt             string                 `json:"observedAt"`
-	OverallStatus          string                 `json:"overallStatus"`
-	RecommendedActions     []string               `json:"recommendedActions"`
-	Counts                 map[string]int         `json:"counts"`
-	ReviewPressure         ReviewPressure         `json:"reviewPressure"`
-	BudgetSummary          BudgetSummary          `json:"budgetSummary"`
-	BudgetPressure         BudgetPressureSummary  `json:"budgetPressure"`
-	Integration            IntegrationState       `json:"integration"`
-	RuntimeStatus          RuntimeStatusReport    `json:"runtimeStatus"`
-	TrustRisk              TrustRiskReport        `json:"trustRisk"`
-	JobSummary             JobSummary             `json:"jobSummary"`
-	PackageSummary         PackageSummary         `json:"packageSummary"`
-	PackageLaneGuard       PackageLaneGuard       `json:"packageLaneGuard"`
-	DispatchRecommendation DispatchRecommendation `json:"dispatchRecommendation"`
-	ProjectMap             ProjectMapStatus       `json:"projectMap"`
-	Preflight              *PreflightReport       `json:"preflight,omitempty"`
-	Timeline               []TimelineItem         `json:"timeline,omitempty"`
-	Observations           []Observation          `json:"observations"`
-	RecentRoutineRuns      []RoutineRun           `json:"recentRoutineRuns,omitempty"`
+	Ledger                 string                       `json:"ledger"`
+	Version                int                          `json:"version"`
+	ProjectRoot            string                       `json:"projectRoot"`
+	DefaultBranch          string                       `json:"defaultBranch"`
+	DispatchMode           string                       `json:"dispatchMode,omitempty"`
+	DispatchNote           string                       `json:"dispatchNote,omitempty"`
+	HeartbeatStatus        *HeartbeatStatus             `json:"heartbeatStatus,omitempty"`
+	ObservedAt             string                       `json:"observedAt"`
+	OverallStatus          string                       `json:"overallStatus"`
+	RecommendedActions     []string                     `json:"recommendedActions"`
+	Counts                 map[string]int               `json:"counts"`
+	ReviewPressure         ReviewPressure               `json:"reviewPressure"`
+	BudgetSummary          BudgetSummary                `json:"budgetSummary"`
+	BudgetPressure         BudgetPressureSummary        `json:"budgetPressure"`
+	Integration            IntegrationState             `json:"integration"`
+	RuntimeStatus          RuntimeStatusReport          `json:"runtimeStatus"`
+	TrustRisk              TrustRiskReport              `json:"trustRisk"`
+	JobSummary             JobSummary                   `json:"jobSummary"`
+	PackageSummary         PackageSummary               `json:"packageSummary"`
+	PackageLaneGuard       PackageLaneGuard             `json:"packageLaneGuard"`
+	DispatchRecommendation DispatchRecommendation       `json:"dispatchRecommendation"`
+	ProjectMap             ProjectMapStatus             `json:"projectMap"`
+	Preflight              *PreflightReport             `json:"preflight,omitempty"`
+	Timeline               []TimelineItem               `json:"timeline,omitempty"`
+	Observations           []Observation                `json:"observations"`
+	Reconciliation         *ObserveReconciliationReport `json:"reconciliation,omitempty"`
+	RecentRoutineRuns      []RoutineRun                 `json:"recentRoutineRuns,omitempty"`
 }
 
 type TrustRiskReport struct {
@@ -688,6 +697,8 @@ type MergeReadinessPathCheck struct {
 	Status            string   `json:"status"`
 	AllowedPatterns   []string `json:"allowedPatterns,omitempty"`
 	ForbiddenPatterns []string `json:"forbiddenPatterns,omitempty"`
+	AllowedMatches    []string `json:"allowedMatches,omitempty"`
+	ForbiddenMatches  []string `json:"forbiddenMatches,omitempty"`
 	OutsideAllowed    []string `json:"outsideAllowed,omitempty"`
 	ForbiddenHits     []string `json:"forbiddenHits,omitempty"`
 	Summary           string   `json:"summary"`
@@ -1100,7 +1111,7 @@ func usage() {
   codex-orchestrator run-mode set --dispatch-mode active|drain|paused [--note TEXT] [--json]
   codex-orchestrator record-task --id ID (--worktree PATH --branch BRANCH | --pending-worktree-id ID) [--package-id PKG] [--allowed PATH] [--forbidden PATH] [--gate CMD] [--max-runtime-minutes N] [--review-budget-minutes N] [--constraint TEXT] [--authority TEXT] [--user-instruction TEXT] [--evidence-boundary TEXT] [--package-switch-reason TEXT]
   codex-orchestrator append-event --type TYPE [--task-id ID] [--status STATUS] [--worktree PATH] [--branch BRANCH] [--pending-worktree-id ID] [--note TEXT]
-  codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH]
+  codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--reconcile --write] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--missed-after 15m] [--count 0] [--check-only] [--write-report PATH]
   codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--write-html PATH] [--write-summary PATH] [--write-report PATH] [--stale-after 15m]
   codex-orchestrator preflight [--repo PATH] [--ledger PATH] [--interval 20m] [--missed-after 45m] [--stale-after 15m] [--fail-on-warning] [--json] [--write-report PATH] [--write-summary PATH]
@@ -1450,7 +1461,7 @@ _codex_orchestrator()
       COMPREPLY=( $(compgen -W "--ledger --type --task-id --status --pending-worktree-id --worktree --branch --note --help" -- "$cur") )
       ;;
     observe)
-      COMPREPLY=( $(compgen -W "--repo --ledger --json --write-report --write-summary --stale-after --help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "--repo --ledger --json --reconcile --write --write-report --write-summary --stale-after --help" -- "$cur") )
       ;;
     status)
       COMPREPLY=( $(compgen -W "--repo --ledger --json --html --write-html --write-summary --write-report --stale-after --help" -- "$cur") )
@@ -1698,7 +1709,7 @@ case $state in
         _values 'options' --ledger --type --task-id --status --pending-worktree-id --worktree --branch --note --help
         ;;
       observe)
-        _values 'options' --repo --ledger --json --write-report --write-summary --stale-after --help
+        _values 'options' --repo --ledger --json --reconcile --write --write-report --write-summary --stale-after --help
         ;;
       status)
         _values 'options' --repo --ledger --json --html --write-html --write-summary --write-report --stale-after --help
@@ -1773,6 +1784,8 @@ complete -c codex-orchestrator -l html -d 'Print local/static HTML status page'
 complete -c codex-orchestrator -l write-html -d 'Write local/static HTML status page'
 complete -c codex-orchestrator -l write-report -d 'Write JSON report'
 complete -c codex-orchestrator -l write-summary -d 'Write Markdown summary'
+complete -c codex-orchestrator -l reconcile -d 'Reconcile deterministic observe truth into ledger'
+complete -c codex-orchestrator -l write -d 'Allow observe reconciliation to mutate ledger/events'
 complete -c codex-orchestrator -l stale-after -d 'Stale threshold'
 complete -c codex-orchestrator -l task-id -d 'Task id'
 complete -c codex-orchestrator -l pending-worktree-id -d 'Opaque Codex App pending worktree setup id'
@@ -2777,13 +2790,33 @@ func cmdObserve(args []string) error {
 	writeReport := fs.String("write-report", "", "write JSON report")
 	writeSummary := fs.String("write-summary", "", "write Markdown summary")
 	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale threshold")
+	reconcile := fs.Bool("reconcile", false, "reconcile deterministic local git truth into the ledger")
+	write := fs.Bool("write", false, "allow observe --reconcile to update ledger and events")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *write && !*reconcile {
+		return errors.New("observe --write requires --reconcile")
 	}
 	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
 	summary, err := observeWithOptions(resolvedLedger, *staleAfter)
 	if err != nil {
 		return err
+	}
+	if *reconcile {
+		if !*write {
+			return errors.New("observe --reconcile requires --write to mutate ledger state")
+		}
+		resolvedEvents := eventsPathForLedger(resolvedLedger)
+		reconciliation, err := reconcileObserveSummary(resolvedLedger, resolvedEvents, summary)
+		if err != nil {
+			return err
+		}
+		summary, err = observeWithOptions(resolvedLedger, *staleAfter)
+		if err != nil {
+			return err
+		}
+		summary.Reconciliation = reconciliation
 	}
 	if *writeReport != "" {
 		if err := writeJSON(*writeReport, summary); err != nil {
@@ -2800,6 +2833,96 @@ func cmdObserve(args []string) error {
 	}
 	printObservations(summary)
 	return nil
+}
+
+func reconcileObserveSummary(ledgerPath string, eventsPath string, summary ObserveSummary) (*ObserveReconciliationReport, error) {
+	ledger, err := loadLedger(ledgerPath)
+	if err != nil {
+		return nil, err
+	}
+	report := &ObserveReconciliationReport{
+		EvidenceLabel: "local/static",
+		Status:        "unchanged",
+	}
+	observationsByID := map[string]Observation{}
+	for _, observation := range summary.Observations {
+		if observation.ID != "" {
+			observationsByID[observation.ID] = observation
+		}
+	}
+	now := nowISO()
+	for index := range ledger.Tasks {
+		task := &ledger.Tasks[index]
+		if isTerminalStatus(task.Status) || task.Status == "blocked" {
+			continue
+		}
+		observation, ok := observationsByID[task.ID]
+		if !ok {
+			continue
+		}
+		changes := []string{}
+		if task.Worktree == "" && observation.Worktree != "" {
+			task.Worktree = observation.Worktree
+			changes = append(changes, "recorded worktree")
+		}
+		if task.Branch == "" && observation.Branch != "" {
+			task.Branch = observation.Branch
+			changes = append(changes, "recorded branch")
+		}
+		nextStatus := ""
+		switch observation.Status {
+		case "completed-unreviewed":
+			if task.Status != "completed-unreviewed" {
+				nextStatus = "completed-unreviewed"
+			}
+		case "active":
+			if task.Status == "" || task.Status == "pending-setup" {
+				nextStatus = "active"
+			}
+		}
+		if nextStatus != "" {
+			task.Status = nextStatus
+			changes = append(changes, "status="+nextStatus)
+		}
+		if len(changes) == 0 {
+			continue
+		}
+		note := "Observe reconciled deterministic local git truth: " + strings.Join(changes, ", ") + "."
+		task.LastObservation = map[string]string{
+			"at":     now,
+			"result": task.Status,
+			"note":   note,
+		}
+		event := map[string]any{
+			"at":       now,
+			"type":     "observe-reconcile",
+			"taskId":   task.ID,
+			"status":   task.Status,
+			"worktree": task.Worktree,
+			"branch":   task.Branch,
+			"note":     note,
+		}
+		if task.PendingWorktreeID != "" {
+			event["pendingWorktreeId"] = task.PendingWorktreeID
+		}
+		task.History = append(task.History, compactEvent(event))
+		if err := appendEvent(eventsPath, event); err != nil {
+			return nil, err
+		}
+		report.Updated++
+		report.Actions = append(report.Actions, fmt.Sprintf("%s: %s", task.ID, strings.Join(changes, ", ")))
+	}
+	if report.Updated > 0 {
+		ledger.UpdatedAt = now
+		if err := saveLedger(ledgerPath, &ledger); err != nil {
+			return nil, err
+		}
+		report.Status = "updated"
+	}
+	if report.Updated == 0 {
+		report.Actions = append(report.Actions, "No deterministic observe reconciliation was needed.")
+	}
+	return report, nil
 }
 
 func cmdHeartbeat(args []string) error {
@@ -4973,12 +5096,18 @@ func evaluateReviewChecklist(task Task, changedPaths []string) ([]string, []stri
 				failures = append(failures, "Automated review checklist failed: changed path(s) outside ledger allowed writeSet: "+formatStringList(outsideAllowed)+".")
 			} else {
 				warnings = append(warnings, "Automated review checklist: all changed paths fit the ledger allowed writeSet.")
+				if matches := pathsMatchingPatternRules(changedPaths, allowed); len(matches) > 0 {
+					warnings = append(warnings, "Automated review checklist: allowed path matches="+formatStringList(matches)+".")
+				}
 			}
 		}
 		if len(forbidden) > 0 {
 			forbiddenHits := pathsMatchingPatterns(changedPaths, forbidden)
 			if len(forbiddenHits) > 0 {
 				failures = append(failures, "Automated review checklist failed: changed path(s) match ledger forbidden writeSet: "+formatStringList(forbiddenHits)+".")
+				if matches := pathsMatchingPatternRules(changedPaths, forbidden); len(matches) > 0 {
+					failures = append(failures, "Automated review checklist failed: forbidden path matches="+formatStringList(matches)+".")
+				}
 			} else {
 				warnings = append(warnings, "Automated review checklist: no changed paths matched the ledger forbidden writeSet.")
 			}
@@ -7457,9 +7586,11 @@ func evaluateMergeReadinessPathCheck(task Task, changedPaths []string) MergeRead
 	}
 	if len(allowed) > 0 {
 		check.OutsideAllowed = pathsOutsidePatterns(changedPaths, allowed)
+		check.AllowedMatches = pathsMatchingPatternRules(changedPaths, allowed)
 	}
 	if len(forbidden) > 0 {
 		check.ForbiddenHits = pathsMatchingPatterns(changedPaths, forbidden)
+		check.ForbiddenMatches = pathsMatchingPatternRules(changedPaths, forbidden)
 	}
 	if len(check.OutsideAllowed) > 0 || len(check.ForbiddenHits) > 0 {
 		check.Status = "failed"
@@ -7473,7 +7604,14 @@ func evaluateMergeReadinessPathCheck(task Task, changedPaths []string) MergeRead
 		check.Summary = "Path check failed: " + strings.Join(parts, "; ") + "."
 		return check
 	}
-	check.Summary = fmt.Sprintf("Path check passed: changed paths fit allowed=%s forbidden=%s.", formatStringList(allowed), formatStringList(forbidden))
+	matchSummary := ""
+	if len(check.AllowedMatches) > 0 {
+		matchSummary += " allowed matches=" + formatStringList(check.AllowedMatches) + "."
+	}
+	if len(check.ForbiddenMatches) > 0 {
+		matchSummary += " forbidden matches=" + formatStringList(check.ForbiddenMatches) + "."
+	}
+	check.Summary = fmt.Sprintf("Path check passed: changed paths fit allowed=%s forbidden=%s.%s", formatStringList(allowed), formatStringList(forbidden), matchSummary)
 	return check
 }
 
@@ -7590,13 +7728,28 @@ func pathsMatchingPatterns(paths []string, patterns []string) []string {
 	return uniqueSortedStrings(matches)
 }
 
-func pathMatchesAnyPattern(path string, patterns []string) bool {
-	for _, pattern := range patterns {
-		if repoPathMatchesPattern(path, pattern) {
-			return true
+func pathsMatchingPatternRules(paths []string, patterns []string) []string {
+	matches := []string{}
+	for _, path := range paths {
+		if pattern, ok := firstMatchingPattern(path, patterns); ok {
+			matches = append(matches, normalizeRepoPath(path)+" <= "+pattern)
 		}
 	}
-	return false
+	return uniqueSortedStrings(matches)
+}
+
+func pathMatchesAnyPattern(path string, patterns []string) bool {
+	_, ok := firstMatchingPattern(path, patterns)
+	return ok
+}
+
+func firstMatchingPattern(path string, patterns []string) (string, bool) {
+	for _, pattern := range patterns {
+		if repoPathMatchesPattern(path, pattern) {
+			return pattern, true
+		}
+	}
+	return "", false
 }
 
 func repoPathMatchesPattern(path string, pattern string) bool {
@@ -7610,18 +7763,42 @@ func repoPathMatchesPattern(path string, pattern string) bool {
 	}
 	if strings.HasSuffix(pattern, "/**") {
 		prefix := strings.TrimSuffix(pattern, "/**")
-		return path == prefix || strings.HasPrefix(path, prefix+"/")
+		if !strings.ContainsAny(prefix, "*?[") {
+			return path == prefix || strings.HasPrefix(path, prefix+"/")
+		}
 	}
 	if strings.HasSuffix(pattern, "/") {
 		prefix := strings.TrimSuffix(pattern, "/")
-		return path == prefix || strings.HasPrefix(path, prefix+"/")
+		if !strings.ContainsAny(prefix, "*?[") {
+			return path == prefix || strings.HasPrefix(path, prefix+"/")
+		}
 	}
 	if strings.ContainsAny(pattern, "*?[") {
-		if matched, err := filepath.Match(pattern, path); err == nil && matched {
+		if repoPathSegmentsMatch(strings.Split(pattern, "/"), strings.Split(path, "/")) {
 			return true
 		}
 	}
 	return path == pattern || strings.HasPrefix(path, pattern+"/")
+}
+
+func repoPathSegmentsMatch(patternSegments []string, pathSegments []string) bool {
+	if len(patternSegments) == 0 {
+		return len(pathSegments) == 0
+	}
+	if patternSegments[0] == "**" {
+		if repoPathSegmentsMatch(patternSegments[1:], pathSegments) {
+			return true
+		}
+		return len(pathSegments) > 0 && repoPathSegmentsMatch(patternSegments, pathSegments[1:])
+	}
+	if len(pathSegments) == 0 {
+		return false
+	}
+	matched, err := filepath.Match(patternSegments[0], pathSegments[0])
+	if err != nil || !matched {
+		return false
+	}
+	return repoPathSegmentsMatch(patternSegments[1:], pathSegments[1:])
 }
 
 func normalizeRepoPath(path string) string {
@@ -11741,6 +11918,9 @@ func statusAtAGlanceLines(summary ObserveSummary) []string {
 	lines = append(lines, "当前状态: "+progress.Headline)
 	lines = append(lines, "当前主线: "+progress.CurrentLane)
 	lines = append(lines, "派发模式: "+humanDispatchModeExplanation(summary.DispatchMode))
+	if summary.DispatchNote != "" {
+		lines = append(lines, "最新用户意图: "+summary.DispatchNote)
+	}
 	if len(progress.CurrentWork) > 0 {
 		lines = append(lines, "正在跑: "+strings.Join(progress.CurrentWork, "；"))
 	}
@@ -12091,6 +12271,9 @@ func renderSummary(summary ObserveSummary) string {
 	fmt.Fprintf(&b, "- defaultBranch: `%s`\n", summary.DefaultBranch)
 	fmt.Fprintf(&b, "- dispatchMode: `%s`\n", summary.DispatchMode)
 	fmt.Fprintf(&b, "- dispatchModeLabel: `%s`\n", humanDispatchModeLabel(summary.DispatchMode))
+	if summary.DispatchNote != "" {
+		fmt.Fprintf(&b, "- latestUserOverride: %s\n", summary.DispatchNote)
+	}
 	fmt.Fprintf(&b, "- dispatchRecommended: `%t`\n", summary.DispatchRecommendation.Recommended)
 	fmt.Fprintf(&b, "- dispatchCapacityOnly: `%t`\n", summary.DispatchRecommendation.CapacityOnly)
 	if summary.DispatchRecommendation.CapacityWarning != "" {
@@ -12098,6 +12281,12 @@ func renderSummary(summary ObserveSummary) string {
 	}
 	if summary.DispatchRecommendation.Reason != "" {
 		fmt.Fprintf(&b, "- dispatchReason: %s\n", summary.DispatchRecommendation.Reason)
+	}
+	if summary.Reconciliation != nil {
+		fmt.Fprintf(&b, "- observeReconciliation: `%s` updated=`%d`\n", summary.Reconciliation.Status, summary.Reconciliation.Updated)
+		for _, action := range summary.Reconciliation.Actions {
+			fmt.Fprintf(&b, "  - %s\n", action)
+		}
 	}
 	if summary.DispatchRecommendation.NextAction != "" {
 		fmt.Fprintf(&b, "- dispatchNextAction: %s\n", summary.DispatchRecommendation.NextAction)
@@ -14511,6 +14700,9 @@ func violatesMainFallbackGuard(text string) bool {
 }
 
 func violatesContinuationGuard(text string) bool {
+	if violatesActiveRunModeHeartbeatDelete(text) {
+		return true
+	}
 	if violatesPushConfirmationStop(text) {
 		return true
 	}
@@ -14521,6 +14713,19 @@ func violatesContinuationGuard(text string) bool {
 		return false
 	}
 	return !containsAnyFold(text, []string{"ledger", "roadmap", "repo truth", "queue", "next task", "continue", "replace heartbeat", "队列", "路线图", "继续", "下一个", "检查"})
+}
+
+func violatesActiveRunModeHeartbeatDelete(text string) bool {
+	if containsAnyFold(text, []string{"do not", "must not", "never", "should not", "不得", "不要", "不能", "不应"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"delete heartbeat", "deleted heartbeat", "stop heartbeat", "removed heartbeat", "删除 heartbeat", "已删除这个 heartbeat", "已删除 heartbeat"}) {
+		return false
+	}
+	if !containsAnyFold(text, []string{"dispatchmode=active", "dispatchMode=active", "run-mode=active", "run mode active", "ledger active", "dispatch mode active", "派发模式 active", "ledger 还是 active"}) {
+		return false
+	}
+	return !containsAnyFold(text, []string{"run-mode=drain", "run-mode=paused", "dispatchMode=drain", "dispatchMode=paused", "queue drained", "队列已空", "切成 drain", "切成 paused", "暂停派发", "排空"})
 }
 
 func violatesPushConfirmationStop(text string) bool {

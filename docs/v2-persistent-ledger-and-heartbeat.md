@@ -164,6 +164,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator dispatch reconcile --task-id TASK
 ./codex-orchestrator record-task --id TASK --worktree /path/to/wt --branch codex/task
 ./codex-orchestrator observe --ledger examples/ledger.example.json
+./codex-orchestrator observe --reconcile --write --json
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator heartbeat --check-only --count 1 --write-report .codex-orchestrator/watchdog-heartbeat-report.json
 ./codex-orchestrator append-event --type review --task-id TASK --status completed-unreviewed
@@ -176,6 +177,11 @@ and prints the next suggested orchestrator action.
 `heartbeat --check-only` is for external watchdogs and diagnostics. It writes
 reports but does not append a heartbeat event, so it cannot accidentally hide a
 missed Codex App wakeup by refreshing the same event stream it is inspecting.
+
+`observe --reconcile --write` is for deterministic ledger catch-up. It can
+record a real worktree/branch or move a clean task commit to
+`completed-unreviewed`, but it is not a merge decision or proof of task
+correctness.
 
 The Go helper supports:
 

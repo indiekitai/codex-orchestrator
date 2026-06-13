@@ -614,6 +614,17 @@ During monitoring, use `codex-orchestrator heartbeat --count 1` or
 before merge. After review/merge/reject/cleanup, append an event with
 `codex-orchestrator append-event`.
 
+When local git truth is more current than the ledger, run:
+
+```bash
+codex-orchestrator observe --reconcile --write --json
+```
+
+This writes only deterministic local/static reconciliation back to the ledger:
+resolved worktree/branch for pending setup and `completed-unreviewed` for a
+clean task commit after `baseCommit`. It does not accept, merge, push, cleanup,
+release, deploy, or prove runtime behavior.
+
 For external watchdogs, use `codex-orchestrator heartbeat --check-only --count 1`
 so the watchdog can write reports without appending a heartbeat event.
 

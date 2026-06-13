@@ -618,6 +618,82 @@ func TestObserveReconcilesPendingSetupFromGitWorktreeTruthReadOnly(t *testing.T)
 	}
 }
 
+func TestObserveReconcileWriteUpdatesLedgerFromGitTruth(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	base := gitOutputForTest(t, project, "rev-parse", "HEAD")
+	branch := "codex/observe-reconcile-write"
+	worker := filepath.Join(root, "worker")
+	git(t, project, "worktree", "add", "-q", "-b", branch, worker, "HEAD")
+	if err := os.WriteFile(filepath.Join(worker, "worker.txt"), []byte("done\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "worker.txt")
+	git(t, worker, "commit", "-q", "-m", "worker done")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "OBS-RECONCILE",
+		"--title", "Observe reconcile",
+		"--package-id", "PKG-OBS",
+		"--pending-worktree-id", "pwt_observe",
+		"--branch", branch,
+		"--base-commit", base,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	output := captureStdout(t, func() error {
+		return cmdObserve([]string{"--ledger", ledger, "--reconcile", "--write", "--json"})
+	})
+	var summary ObserveSummary
+	if err := json.Unmarshal([]byte(output), &summary); err != nil {
+		t.Fatalf("expected observe JSON, got %q: %v", output, err)
+	}
+	if summary.Reconciliation == nil || summary.Reconciliation.Status != "updated" || summary.Reconciliation.Updated != 1 {
+		t.Fatalf("expected reconciliation update in summary, got %#v", summary.Reconciliation)
+	}
+	stored, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := stored.Tasks[0]
+	if task.Status != "completed-unreviewed" {
+		t.Fatalf("expected completed-unreviewed ledger status, got %#v", task)
+	}
+	if cleanAbsPath(task.Worktree) != cleanAbsPath(worker) || task.Branch != branch {
+		t.Fatalf("expected worktree and branch to be written, got %#v", task)
+	}
+	if len(task.History) != 2 || task.History[1]["type"] != "observe-reconcile" {
+		t.Fatalf("expected observe-reconcile history event, got %#v", task.History)
+	}
+	events, err := os.ReadFile(eventsPathForLedger(ledger))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(events), `"type":"observe-reconcile"`) {
+		t.Fatalf("expected observe-reconcile event, got %s", string(events))
+	}
+}
+
+func TestObserveReconcileRequiresWrite(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdObserve([]string{"--ledger", ledger, "--reconcile"}); err == nil || !strings.Contains(err.Error(), "--write") {
+		t.Fatalf("expected observe --reconcile to require --write, got %v", err)
+	}
+	if err := cmdObserve([]string{"--ledger", ledger, "--write"}); err == nil || !strings.Contains(err.Error(), "--reconcile") {
+		t.Fatalf("expected observe --write to require --reconcile, got %v", err)
+	}
+}
+
 func TestDispatchRecordStoresPendingSetupContract(t *testing.T) {
 	root := t.TempDir()
 	project := createRepo(t, filepath.Join(root, "repo"))
@@ -3007,6 +3083,25 @@ func TestPackMergeReadinessFailsForbiddenPathCheck(t *testing.T) {
 	}
 	if len(report.Evidence["direct"]) != 0 || len(report.Evidence["proxy"]) != 0 {
 		t.Fatalf("expected no direct/proxy evidence, got %#v", report.Evidence)
+	}
+}
+
+func TestPathMatcherSupportsDoubleStarAcrossDirectories(t *testing.T) {
+	path := "services/cloud-backend/src/main/kotlin/com/tastyfuture/waitlist/WaitlistReservationLifecycle.kt"
+	allowed := []string{"services/cloud-backend/src/main/**/waitlist*/**"}
+	forbidden := []string{"services/payment/**"}
+	check := evaluateMergeReadinessPathCheck(Task{WriteSet: map[string][]string{
+		"allowed":   allowed,
+		"forbidden": forbidden,
+	}}, []string{path})
+	if check.Status != "passed" || len(check.OutsideAllowed) != 0 {
+		t.Fatalf("expected double-star allowed path check to pass, got %#v", check)
+	}
+	if got := strings.Join(check.AllowedMatches, "\n"); !strings.Contains(got, path+" <= "+allowed[0]) {
+		t.Fatalf("expected matched allowed rule in report, got %#v", check.AllowedMatches)
+	}
+	if !repoPathMatchesPattern(path, allowed[0]) {
+		t.Fatalf("expected repoPathMatchesPattern to support ** across directories")
 	}
 }
 

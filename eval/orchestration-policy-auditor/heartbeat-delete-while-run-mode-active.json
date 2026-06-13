@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "heartbeat-delete-while-run-mode-active",
+  "description": "A continuous orchestrator must not delete the heartbeat while the durable run-mode/dispatch mode remains active.",
+  "files": {
+    "docs/reviews/local-heartbeat-active-delete.md": "Review note: observe shows dispatchMode=active and ledger active for unattended orchestration. I deleted heartbeat because no worker is currently running, so the thread will stop waking until the user notices."
+  },
+  "expectedRuleHits": {
+    "OPA003": 1
+  }
+}

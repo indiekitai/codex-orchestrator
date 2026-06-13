@@ -135,6 +135,12 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
      delete the heartbeat,
    - if the next task choice is blocked by missing context, notify with the
      blocker instead of silently stopping.
+If durable ledger truth still says `dispatchMode=active` or the latest user
+instruction says to continue unattended, do not delete the heartbeat merely
+because the current worker batch is empty. First either switch run-mode to
+`drain`/`paused` with the user's instruction recorded, or record a concrete
+queue-drained/blocker state that explains why continued wakeups are no longer
+needed.
 11. If rejected, report blocking findings and leave the branch/worktree for targeted fix or cleanup.
 
 Task-specific heartbeats are watchdogs for the current child task, not the
@@ -222,6 +228,7 @@ ledger over chat-only state:
 codex-orchestrator init --write-templates
 codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch codex/task --max-runtime-minutes 90 --review-budget-minutes 25 --constraint "do not touch payment" --authority "worker may commit only"
 codex-orchestrator observe --json
+codex-orchestrator observe --reconcile --write --json
 codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md --write-report .codex-orchestrator/status.json
 codex-orchestrator preflight --repo . --write-report .codex-orchestrator/preflight.json --write-summary .codex-orchestrator/preflight.md
 codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch; do not dispatch new workers"
@@ -251,6 +258,14 @@ current helper exposes `packageSummary`, `packageLaneGuard`, `preflight`, and
 `timeline` in `observe`/`status`. Use those fields to keep work grouped by one
 feature package, to explain recent progress in human language, and to avoid
 filling spare concurrency slots with unrelated safe tasks.
+
+When `observe` reports a deterministic gap between ledger state and git truth,
+such as a recorded branch whose real worktree now exists or an active worker
+with a clean task commit after `baseCommit`, run
+`codex-orchestrator observe --reconcile --write --json` before reviewing or
+dispatching more work. This only records local/static truth such as worktree,
+branch, and `completed-unreviewed`; it does not accept the work, merge, push,
+cleanup, or prove runtime behavior.
 
 When `create_thread` returns a `pendingWorktreeId`, record that pending setup in
 durable ledger truth immediately, even before the final worktree path is known.
@@ -712,6 +727,7 @@ Do not start subagents, do not use another orchestrator, and do not create secon
 You are not alone in the codebase. Do not revert unrelated work; adapt to current changes.
 If the run needs a human physical/device/payment/deploy action, proactively notify the user in their preferred language using the project's available notification mechanism; do not require the user to remember any skill name or command. Pause at the checkpoint, say the exact action, device/resource, what not to do, and what the user should reply; continue only after confirmation and record it in artifacts.
 Before handoff, review your own diff as a reviewer: check boundaries, forbidden paths, shared contracts, docs drift, evidence strength, gates, anti-shallow-slice classification, and residual risks. Fix scoped issues you find before committing.
+If the task changes cleanup, retry, event/outbox writes, lifecycle APIs, migrations, aggregate/versioning, or unique constraints, explicitly self-review repeated execution and idempotency: running the action twice must either be safe or produce a documented blocked/product decision.
 Commit to the task branch, but do not merge, push the integration branch, delete the worktree, or delete the branch unless the orchestrator explicitly asks you to.
 ```
 
@@ -1001,8 +1017,17 @@ Also check:
 - `git diff --name-status <default-branch>..HEAD` does not include another
   task's files,
 - the final message or review doc includes a real self-review,
+- for cleanup/retry/event/outbox/lifecycle/migration/API tasks, the self-review
+  discusses repeated execution, idempotency, aggregate/version uniqueness, and
+  duplicate side effects,
 - progress/roadmap updates are factual and do not mark partial work as done,
 - direct/proxy/local/blocked labels match the artifacts.
+
+When scanning evidence wording, prefer the changed diff and added lines first
+instead of broad whole-repo `rg` output. Broad scans may include historical
+PROGRESS entries, negated warnings, and old blocked notes. Separate positive
+proof claims from negative boundary statements such as "not direct proof" or
+"blocked".
 
 If clean:
 
