@@ -23,6 +23,12 @@ This is not a benchmark claim. It is an operating observation:
 The conclusion is not "models are all the same." The conclusion is that
 model choice is becoming one variable inside a larger harness.
 
+Complementary note: `docs/research/developer-agent-misalignment.md` covers the
+other side of the same product judgment. If models are broadly competent on
+bounded chunks, the bigger daily risk shifts toward developer-agent
+misalignment: missed constraints, overreach, stale state, and unsupported
+completion claims.
+
 ## Core Product Judgment
 
 If many models are competent enough to implement or review bounded chunks, the
@@ -263,4 +269,3 @@ The next product work should prioritize portable review artifacts before adding
 more routines. A good review pack makes the current Codex App workflow better,
 helps external reviewers like DeepSeek or Claude Code, and creates a future
 interface for local models or UI layers without changing the core workflow.
-
