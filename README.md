@@ -33,7 +33,7 @@ One Codex chat is enough for small edits. Larger work gets messy:
 - **Optional Go helper CLI**: `codex-orchestrator`, used for ledger, status,
   heartbeat reports, review packs, policy checks, and local update support.
 - **Docs and templates**: project maps, package plans, orchestration policy,
-  case studies, and routine specs.
+  thread maps, pulse/inbox/router prompts, case studies, and routine specs.
 
 The helper now also tracks trust boundaries: it can record developer-agent
 misalignment events, snapshot each worker's constraint stack, verify completion
@@ -121,6 +121,26 @@ The loop is intentionally conservative:
 - spare concurrency is not a reason to start unrelated work;
 - workers commit to their own branches, while the orchestrator reviews and
   merges.
+
+## Thread Layout
+
+For long-running Codex App work, one thread is rarely enough. A practical setup
+is:
+
+- **Project Orchestrator**: owns repo truth, ledger, worker dispatch, review,
+  merge, push, cleanup, and package closeout.
+- **Pulse**: wakes on a schedule and reports material changes, missed
+  heartbeat gaps, blocked workers, or review-ready commits.
+- **Inbox**: collects GitHub issues, user feedback, external reviews, and real
+  project-run observations before they become tasks.
+- **Router**: reads the thread map and decides which thread should own new
+  input. It routes context; it does not implement code or merge branches.
+- **Log**: keeps a human-readable journal of decisions and package progress.
+
+`codex-orchestrator init --write-templates` now creates
+`.codex-orchestrator/thread-map.md` and
+`.codex-orchestrator/pulse-threads.md` so a project can record this topology
+instead of relying on chat memory.
 
 ## Documentation
 

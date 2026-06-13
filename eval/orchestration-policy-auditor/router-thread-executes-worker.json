@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "router-thread-executes-worker",
+  "description": "Router, Inbox, Pulse, and Log threads should route or summarize context rather than execute worker lifecycle actions.",
+  "files": {
+    "docs/reviews/local-router-executes-worker.md": "Thread plan: the Router thread knows every project thread, so the router should dispatch worker sessions, implement code, merge the branch, push main, and cleanup the worktree when a request arrives."
+  },
+  "expectedRuleHits": {
+    "OPA011": 1
+  }
+}

@@ -1,9 +1,9 @@
-# TastyFuture Status / Acceptance Feedback
+# Restaurant POS Status / Acceptance Feedback
 
 ## Scope
 
-This is a local/static codex-orchestrator follow-up from a real TastyFuture
-orchestrator run. It does not include TastyFuture business code, private
+This is a local/static codex-orchestrator follow-up from a real restaurant POS
+orchestrator run. It does not include private business code, private
 artifacts, live device proof, provider proof, or production proof.
 
 ## Findings Addressed

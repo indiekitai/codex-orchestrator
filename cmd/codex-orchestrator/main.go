@@ -344,6 +344,14 @@ type ProjectMapStatus struct {
 	RecommendedAction string   `json:"recommendedAction,omitempty"`
 }
 
+type ThreadMapStatus struct {
+	EvidenceLabel     string   `json:"evidenceLabel"`
+	Status            string   `json:"status"`
+	Path              string   `json:"path,omitempty"`
+	CheckedPaths      []string `json:"checkedPaths"`
+	RecommendedAction string   `json:"recommendedAction,omitempty"`
+}
+
 type PreflightReport struct {
 	SchemaVersion       int                 `json:"schemaVersion"`
 	Command             string              `json:"command"`
@@ -434,6 +442,7 @@ type ObserveSummary struct {
 	PackageLaneGuard       PackageLaneGuard             `json:"packageLaneGuard"`
 	DispatchRecommendation DispatchRecommendation       `json:"dispatchRecommendation"`
 	ProjectMap             ProjectMapStatus             `json:"projectMap"`
+	ThreadMap              ThreadMapStatus              `json:"threadMap"`
 	Preflight              *PreflightReport             `json:"preflight,omitempty"`
 	Timeline               []TimelineItem               `json:"timeline,omitempty"`
 	Observations           []Observation                `json:"observations"`
@@ -3060,6 +3069,7 @@ func cmdStatus(args []string) error {
 		"packageLaneGuard":       summary.PackageLaneGuard,
 		"dispatchRecommendation": summary.DispatchRecommendation,
 		"projectMap":             summary.ProjectMap,
+		"threadMap":              summary.ThreadMap,
 		"preflight":              summary.Preflight,
 		"timeline":               summary.Timeline,
 		"tasks":                  ledger.Tasks,
@@ -3122,6 +3132,11 @@ func cmdStatus(args []string) error {
 	fmt.Printf("Project map (%s): %s", summary.ProjectMap.EvidenceLabel, summary.ProjectMap.Status)
 	if summary.ProjectMap.Path != "" {
 		fmt.Printf(" path=%s", summary.ProjectMap.Path)
+	}
+	fmt.Println()
+	fmt.Printf("Thread map (%s): %s", summary.ThreadMap.EvidenceLabel, summary.ThreadMap.Status)
+	if summary.ThreadMap.Path != "" {
+		fmt.Printf(" path=%s", summary.ThreadMap.Path)
 	}
 	fmt.Println()
 	fmt.Printf("Dispatch slots: used=%d/%d available=%d\n",
@@ -3894,6 +3909,7 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 		{"preflight", preflightEvidenceLabel(summary.Preflight)},
 		{"budget", summary.BudgetPressure.EvidenceLabel},
 		{"projectMap", summary.ProjectMap.EvidenceLabel},
+		{"threadMap", summary.ThreadMap.EvidenceLabel},
 	} {
 		if item.value != "" {
 			fmt.Fprintf(&b, "<span>%s: <strong>%s</strong></span>", escapeHTML(item.label), escapeHTML(item.value))
@@ -4677,6 +4693,8 @@ func proposalForPolicyRule(ruleID string) (string, string) {
 		return "Prevent local or proxy evidence from becoming direct proof", "Proposed rule: local, static, fixture, or proxy checks must stay labeled as local or proxy evidence. Only the routine that directly observes the target runtime, device, deployment, or external surface may record direct evidence."
 	case policyRulePackageContinuity:
 		return "Keep unattended work on one feature package", "Proposed rule: unattended continuous orchestration must choose a primary feature package or product module before dispatching new workers. Fill capacity with workers that advance that package; use unrelated safe tasks only for explicitly named blocker-removal or maintenance work, and record the package switch."
+	case policyRuleRouterBoundary:
+		return "Keep router/inbox/pulse threads out of execution", "Proposed rule: Router, Inbox, Pulse, and Log threads may classify, summarize, and route context, but they must not implement code, dispatch workers, merge, push, cleanup, deploy, or mutate external systems unless the user explicitly promotes that thread to the project orchestrator role."
 	default:
 		return "Review local orchestration rule update", "Proposed rule: convert the confirmed repeated failure into a narrow, reviewable rule with an explicit trigger, forbidden action, verification surface, and blocked-stop condition."
 	}
@@ -8792,7 +8810,7 @@ func runOrchestrationPolicyAuditorRoutine(repo string) RoutineRunReport {
 		}
 		findings = append(findings, auditOrchestrationPolicyText(path, string(data))...)
 	}
-	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static orchestration policy rules OPA001-OPA010")
+	report.ActionsTaken = append(report.ActionsTaken, "Applied deterministic local/static orchestration policy rules OPA001-OPA011")
 	report.Evidence["local"] = append(report.Evidence["local"], fmt.Sprintf("Scanned %d repo-local orchestration policy input file(s).", len(paths)))
 	report.Evidence["local"] = append(report.Evidence["local"], summarizePolicyAuditFindings(findings))
 
@@ -9826,6 +9844,7 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 	timeline := buildTimeline(ledger.Tasks, observations, ledger.RoutineRuns, 12)
 	heartbeatStatus := loadRepoHeartbeatStatus(ledger.ProjectRoot)
 	trustRisk := buildTrustRiskReport(ledger, observations, heartbeatStatus)
+	threadMap := inspectThreadMap(ledger.ProjectRoot)
 	overall, actions := summarizeObservations(ledger, integration, counts, pressure)
 	summary := ObserveSummary{
 		Ledger:                 ledgerPath,
@@ -9849,6 +9868,7 @@ func observeWithOptions(ledgerPath string, staleAfter time.Duration) (ObserveSum
 		PackageLaneGuard:       laneGuard,
 		DispatchRecommendation: dispatchRecommendation,
 		ProjectMap:             projectMap,
+		ThreadMap:              threadMap,
 		Timeline:               timeline,
 		Observations:           observations,
 		RecentRoutineRuns:      recentRoutineRuns(ledger.RoutineRuns, 5),
@@ -9883,6 +9903,7 @@ func buildPreflightReportFromSummary(ledgerPath string, eventsPath string, ledge
 	addPreflightCheck(report, preflightHeartbeatCheck(eventsPath, interval, missedAfter, summary.ObservedAt))
 	addPreflightCheck(report, preflightWatchdogCheck(ledger.ProjectRoot))
 	addPreflightCheck(report, preflightProjectMapCheck(summary.ProjectMap))
+	addPreflightCheck(report, preflightThreadMapCheck(summary.ThreadMap))
 	addPreflightCheck(report, preflightPackageLaneCheck(summary.PackageLaneGuard))
 	addPreflightCheck(report, preflightReviewPolicyCheck(summary.PackageSummary))
 	report.Summary = preflightSummary(report)
@@ -10020,6 +10041,18 @@ func preflightProjectMapCheck(status ProjectMapStatus) PreflightCheck {
 		check.Action = "Create or point to a project map before a long first orchestration run."
 	} else if status.Path != "" {
 		check.Detail = "project map path=" + status.Path + "."
+	}
+	return check
+}
+
+func preflightThreadMapCheck(status ThreadMapStatus) PreflightCheck {
+	check := PreflightCheck{Name: "thread-map", Status: "passed", EvidenceLabel: "local/static", Detail: "thread map is present."}
+	if status.Status == "missing" {
+		check.Status = "warning"
+		check.Detail = "thread map is missing."
+		check.Action = "Create .codex-orchestrator/thread-map.md before relying on multiple long-lived Codex threads, routers, inboxes, or pulse monitors."
+	} else if status.Path != "" {
+		check.Detail = "thread map path=" + status.Path + "."
 	}
 	return check
 }
@@ -11688,6 +11721,8 @@ func writeStarterTemplates(projectRoot string, force bool) ([]string, []string, 
 		filepath.Join(stateDir, "orchestration-policy.md"): starterOrchestrationPolicyTemplate(),
 		filepath.Join(stateDir, "package-plan.md"):         starterPackagePlanTemplate(),
 		filepath.Join(stateDir, "project-map.md"):          starterProjectMapTemplate(),
+		filepath.Join(stateDir, "thread-map.md"):           starterThreadMapTemplate(),
+		filepath.Join(stateDir, "pulse-threads.md"):        starterPulseThreadsTemplate(),
 	}
 	paths := make([]string, 0, len(templates))
 	for path := range templates {
@@ -11809,6 +11844,109 @@ This is a local/static orientation map for Codex App-first orchestration.
 - Workers submit commits only on their branch.
 - Workers do not merge, push, cleanup, or launch subagents.
 - Workers record evidence labels honestly.
+`
+}
+
+func starterThreadMapTemplate() string {
+	return `# Thread Map
+
+This is a local/static map of long-lived Codex App threads for an orchestration
+workspace. It is not a task ledger and it is not proof that a heartbeat or
+thread-to-thread handoff ran.
+
+## Roles
+
+| Role | Thread name | Thread id | Purpose | Can dispatch? | Can merge/push? | Notes |
+|---|---|---|---|---|---|---|
+| Router |  |  | Decides which thread owns new input and routes summaries. | no | no | Should not implement worker tasks. |
+| Inbox |  |  | Collects user feedback, issues, external reviews, and pulse outputs. | no | no | Keeps raw input separate from task execution. |
+| Project Orchestrator |  |  | Owns repo truth, ledger, worker dispatch, review, merge, push, cleanup. | yes | yes | One project/package lane at a time. |
+| Pulse |  |  | Recurring read-only status checks. | no | no | Use generic heartbeat prompts. |
+| Log |  |  | Long-running journal or decision log. | no | no | Append summaries, not raw dumps. |
+
+## Routing Rules
+
+- Router threads classify and forward context; they do not edit code, merge,
+  push, deploy, or clean worktrees.
+- Inbox threads collect untriaged material; they do not dispatch workers.
+- Pulse threads read status and report gaps; they do not replace project
+  orchestrators.
+- Project orchestrators remain responsible for ledger truth, worker lifecycle,
+  gates, evidence labels, merge/push/cleanup, and package closeout.
+
+## Current Topology
+
+- active project orchestrator:
+- active pulse / monitor:
+- inbox / feedback thread:
+- router:
+- retired / archived threads:
+
+## Evidence Boundary
+
+Thread-map entries are local/static coordination notes. Confirm live thread ids,
+automations, and recent messages before acting on them.
+`
+}
+
+func starterPulseThreadsTemplate() string {
+	return `# Pulse / Inbox / Router Thread Templates
+
+These are reusable Codex App-first prompt shapes inspired by durable
+Pulse/Log/Inbox/Router thread workflows. Keep prompts generic and put changing
+task state in the ledger/status files, not in the automation prompt.
+
+## Project Pulse
+
+Purpose: recurring read-only status check for one repository.
+
+~~~text
+Read repo truth, .codex-orchestrator/ledger.json, status artifacts, worktrees,
+and current automations. Report only material changes: completed-unreviewed
+work, blockers, missed heartbeat gaps, stale setup, cleanup residuals, or
+evidence-label risks. Do not dispatch, merge, push, delete worktrees, or edit
+code unless explicitly acting as the project orchestrator.
+~~~
+
+## Inbox Thread
+
+Purpose: collect incoming user feedback, GitHub issues, external reviews, and
+project-run observations.
+
+~~~text
+Collect and classify new input. For each item, record source, affected project,
+suggested owner thread, evidence label, and whether it is actionable now,
+blocked, duplicate, or needs routing. Do not implement or dispatch directly.
+~~~
+
+## Router Thread
+
+Purpose: choose the right owner thread and create compact handoff prompts.
+
+~~~text
+Read the thread map and classify this input. Decide whether it belongs to the
+project orchestrator, inbox, pulse, release, docs, or research thread. Produce a
+short handoff prompt with boundaries and evidence labels. Do not edit code,
+merge, push, deploy, or clean worktrees.
+~~~
+
+## Log Thread
+
+Purpose: maintain a human-readable operating journal.
+
+~~~text
+Append a short dated summary of decisions, package progress, release events,
+open questions, and blocked proof. Link to ledger/status/review artifacts
+instead of copying raw logs.
+~~~
+
+## Boundaries
+
+- Pulse, Inbox, Router, and Log threads are coordination roles.
+- Only the Project Orchestrator owns worker dispatch and closeout unless the
+  user explicitly authorizes a different thread.
+- A thread map is local/static evidence. Verify live thread state before taking
+  irreversible action.
 `
 }
 
@@ -12165,6 +12303,9 @@ func humanRiskLines(summary ObserveSummary) []string {
 	if summary.ProjectMap.Status == "missing" {
 		lines = append(lines, "缺少 project map；首次编排前最好补一份项目地图。")
 	}
+	if summary.ThreadMap.Status == "missing" {
+		lines = append(lines, "缺少 thread map；多线程长期编排前最好补一份 Router/Inbox/Pulse/Project Orchestrator 线程地图。")
+	}
 	if summary.PackageLaneGuard.Status == "warning" || summary.PackageLaneGuard.Status == "blocked" {
 		lines = append(lines, "主线保护提示："+summary.PackageLaneGuard.RecommendedAction)
 		lines = append(lines, summary.PackageLaneGuard.Warnings...)
@@ -12334,6 +12475,11 @@ func renderSummary(summary ObserveSummary) string {
 		fmt.Fprintf(&b, " path=`%s`", summary.ProjectMap.Path)
 	}
 	fmt.Fprintf(&b, "\n")
+	fmt.Fprintf(&b, "- threadMap: `%s`", summary.ThreadMap.Status)
+	if summary.ThreadMap.Path != "" {
+		fmt.Fprintf(&b, " path=`%s`", summary.ThreadMap.Path)
+	}
+	fmt.Fprintf(&b, "\n")
 	fmt.Fprintf(&b, "- tasksWithBudget: `%d`\n", summary.BudgetSummary.TasksWithBudget)
 	if summary.BudgetSummary.TotalMaxRuntimeMinutes > 0 {
 		fmt.Fprintf(&b, "- totalMaxRuntimeMinutes: `%d`\n", summary.BudgetSummary.TotalMaxRuntimeMinutes)
@@ -12372,6 +12518,7 @@ func renderSummary(summary ObserveSummary) string {
 	renderPackageSummaryMarkdown(&b, summary.PackageSummary)
 	renderJobSummaryMarkdown(&b, summary.JobSummary)
 	renderProjectMapMarkdown(&b, summary.ProjectMap)
+	renderThreadMapMarkdown(&b, summary.ThreadMap)
 	fmt.Fprintf(&b, "\n## Tasks\n\n")
 	if len(summary.Observations) == 0 {
 		fmt.Fprintf(&b, "- No tasks recorded.\n")
@@ -12724,6 +12871,18 @@ func renderProjectMapMarkdown(b *strings.Builder, status ProjectMapStatus) {
 	}
 }
 
+func renderThreadMapMarkdown(b *strings.Builder, status ThreadMapStatus) {
+	fmt.Fprintf(b, "\n## Thread Map\n\n")
+	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", status.EvidenceLabel)
+	fmt.Fprintf(b, "- status: `%s`\n", status.Status)
+	if status.Path != "" {
+		fmt.Fprintf(b, "- path: `%s`\n", status.Path)
+	}
+	if status.RecommendedAction != "" {
+		fmt.Fprintf(b, "- recommendedAction: %s\n", status.RecommendedAction)
+	}
+}
+
 func escapeMarkdownTable(value string) string {
 	value = strings.ReplaceAll(value, "|", "\\|")
 	value = strings.ReplaceAll(value, "\n", " ")
@@ -12821,6 +12980,38 @@ func inspectProjectMap(projectRoot string) ProjectMapStatus {
 		status.Status = "present"
 		status.Path = candidate
 		status.RecommendedAction = "Use the project map as orientation context before creating worker task contracts."
+		return status
+	}
+	return status
+}
+
+func inspectThreadMap(projectRoot string) ThreadMapStatus {
+	root := expandPath(projectRoot)
+	if root == "" {
+		root = "."
+	}
+	candidates := []string{
+		filepath.Join(defaultStateDir, "thread-map.md"),
+		filepath.Join("docs", "THREAD_MAP.md"),
+		filepath.Join("docs", "thread-map.md"),
+		"THREAD_MAP.md",
+	}
+	status := ThreadMapStatus{
+		EvidenceLabel: "local/static",
+		Status:        "missing",
+		CheckedPaths:  append([]string(nil), candidates...),
+		RecommendedAction: "Create a thread map before relying on multiple long-lived Codex threads. " +
+			"A useful map names Router, Inbox, Pulse, Log, and Project Orchestrator roles, thread ids, authority boundaries, and handoff rules.",
+	}
+	for _, candidate := range candidates {
+		fullPath := filepath.Join(root, candidate)
+		info, err := os.Stat(fullPath)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		status.Status = "present"
+		status.Path = candidate
+		status.RecommendedAction = "Use the thread map to route input across Router, Inbox, Pulse, Log, and Project Orchestrator threads without relying on chat memory."
 		return status
 	}
 	return status
@@ -13005,6 +13196,14 @@ func printObservations(summary ObserveSummary) {
 	}
 	if summary.ProjectMap.Status == "missing" && summary.ProjectMap.RecommendedAction != "" {
 		fmt.Printf(" - %s", summary.ProjectMap.RecommendedAction)
+	}
+	fmt.Println()
+	fmt.Printf("Thread map (%s): %s", summary.ThreadMap.EvidenceLabel, summary.ThreadMap.Status)
+	if summary.ThreadMap.Path != "" {
+		fmt.Printf(" path=%s", summary.ThreadMap.Path)
+	}
+	if summary.ThreadMap.Status == "missing" && summary.ThreadMap.RecommendedAction != "" {
+		fmt.Printf(" - %s", summary.ThreadMap.RecommendedAction)
 	}
 	fmt.Println()
 	fmt.Printf("Dispatch slots: used=%d/%d available=%d\n",
@@ -13850,6 +14049,7 @@ const (
 	policyRuleBudgetBoundary    = "OPA008"
 	policyRulePackageContinuity = "OPA009"
 	policyRuleClaimVerification = "OPA010"
+	policyRuleRouterBoundary    = "OPA011"
 )
 
 func newEvidenceAuditFinding(ruleID string, format string, args ...any) evidenceAuditFinding {
@@ -14203,7 +14403,8 @@ func isKnownPolicyRule(ruleID string) bool {
 		policyRulePendingLedger,
 		policyRuleBudgetBoundary,
 		policyRulePackageContinuity,
-		policyRuleClaimVerification:
+		policyRuleClaimVerification,
+		policyRuleRouterBoundary:
 		return true
 	default:
 		return false
@@ -14591,6 +14792,14 @@ func auditOrchestrationPolicyText(path string, text string) []policyAuditFinding
 			findings = append(findings, newPolicyAuditFinding(
 				policyRuleClaimVerification,
 				"%s:%d: completion/self-report wording appears to trust worker claims without git, gate, diff, or evidence-bound verification: %s",
+				path,
+				line,
+				compactForFinding(body),
+			))
+		case violatesRouterBoundary(body):
+			findings = append(findings, newPolicyAuditFinding(
+				policyRuleRouterBoundary,
+				"%s:%d: router/inbox/pulse wording appears to grant execution authority instead of routing/status authority: %s",
 				path,
 				line,
 				compactForFinding(body),
@@ -15193,6 +15402,71 @@ func violatesClaimVerificationGuard(text string) bool {
 		"没贴日志",
 	})
 	return (trustsCompletion && skipsEvidence) || claimsTestsPassed || (strings.Contains(lower, "self-report") && strings.Contains(lower, "enough"))
+}
+
+func violatesRouterBoundary(text string) bool {
+	if containsAnyFold(text, []string{"OPA011"}) {
+		return false
+	}
+	roleTerms := []string{"router", "inbox", "pulse", "log thread", "路由线程", "收件箱", "脉冲", "日志线程"}
+	negationTerms := []string{"do not", "must not", "never", "read-only", "cannot", "does not", "no ", "不得", "不要", "不能", "只读", "不应该", "不负责"}
+	forbiddenTerms := []string{
+		"implement code",
+		"write code",
+		"edit code",
+		"dispatch worker",
+		"create worker",
+		"start worker",
+		"merge",
+		"push",
+		"cleanup",
+		"clean worktree",
+		"delete worktree",
+		"deploy",
+		"mutate external",
+		"实现代码",
+		"写代码",
+		"修改代码",
+		"派发 worker",
+		"创建 worker",
+		"合并",
+		"推送",
+		"清理 worktree",
+		"删除 worktree",
+		"部署",
+	}
+	for _, segment := range policySegments(text) {
+		if !containsAnyFold(segment, roleTerms) {
+			continue
+		}
+		if containsAnyFold(segment, negationTerms) {
+			continue
+		}
+		if containsAnyFold(segment, forbiddenTerms) {
+			return true
+		}
+	}
+	return false
+}
+
+func policySegments(text string) []string {
+	split := func(r rune) bool {
+		switch r {
+		case '\n', '.', ';', '。', '；':
+			return true
+		default:
+			return false
+		}
+	}
+	parts := strings.FieldsFunc(text, split)
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func compactForFinding(text string) string {

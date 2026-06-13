@@ -114,12 +114,20 @@ This adds non-overwriting templates under `.codex-orchestrator/`:
 .codex-orchestrator/orchestration-policy.md
 .codex-orchestrator/package-plan.md
 .codex-orchestrator/project-map.md
+.codex-orchestrator/thread-map.md
+.codex-orchestrator/pulse-threads.md
 ```
 
 Use them to record the current product lane, feature package outcome, safe
-worker queue, blocked external proof, and project map before the first
-hands-off run. Existing files are preserved unless `--force` is explicitly
-used.
+worker queue, blocked external proof, project map, and long-lived Codex thread
+topology before the first hands-off run. Existing files are preserved unless
+`--force` is explicitly used.
+
+`thread-map.md` is for durable Codex App thread roles such as Router, Inbox,
+Pulse, Log, and Project Orchestrator. `pulse-threads.md` contains reusable
+prompt shapes for recurring read-only pulse checks, input triage, routing, and
+decision logs. These files are local/static coordination state: verify live
+thread ids and automations before taking irreversible action.
 
 ## Record Dispatch Setup
 
@@ -256,6 +264,13 @@ helper checks common files such as `docs/CODEBASE_MAP.md`,
 recommended action is to ask Codex App to generate or read a concise project map
 before first orchestration: module boundaries, owner docs, test commands,
 shared contracts, and high-risk paths.
+
+Reports also include a `threadMap` block. The helper checks
+`.codex-orchestrator/thread-map.md`, `docs/thread-map.md`, and
+`THREAD_MAP.md`. If none exists, preflight warns before relying on multiple
+long-lived Codex App threads, routers, inboxes, or pulse monitors. A thread map
+does not prove that a thread or automation is alive; it only keeps the intended
+topology out of chat memory.
 
 Older ledgers may contain completed tasks that were recorded before
 `packageId` existed. Those terminal ungrouped tasks remain available in JSON

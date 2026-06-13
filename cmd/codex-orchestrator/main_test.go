@@ -1695,7 +1695,8 @@ func TestInitCanWriteStarterTemplates(t *testing.T) {
 	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project, "--write-templates"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"orchestration-policy.md", "package-plan.md", "project-map.md"} {
+	templateNames := []string{"orchestration-policy.md", "package-plan.md", "project-map.md", "thread-map.md", "pulse-threads.md"}
+	for _, name := range templateNames {
 		path := filepath.Join(project, ".codex-orchestrator", name)
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -1703,6 +1704,12 @@ func TestInitCanWriteStarterTemplates(t *testing.T) {
 		}
 		if !strings.Contains(string(data), "codex-orchestrator") && name == "orchestration-policy.md" {
 			t.Fatalf("expected policy template to name codex-orchestrator, got:\n%s", string(data))
+		}
+		if name == "thread-map.md" && !strings.Contains(string(data), "Router") {
+			t.Fatalf("expected thread map template to include Router role, got:\n%s", string(data))
+		}
+		if name == "pulse-threads.md" && !strings.Contains(string(data), "Project Pulse") {
+			t.Fatalf("expected pulse template to include Project Pulse, got:\n%s", string(data))
 		}
 	}
 	policy := filepath.Join(project, ".codex-orchestrator", "orchestration-policy.md")
@@ -1713,7 +1720,7 @@ func TestInitCanWriteStarterTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(created) != 0 || len(skipped) != 3 {
+	if len(created) != 0 || len(skipped) != len(templateNames) {
 		t.Fatalf("expected all templates skipped, got created=%#v skipped=%#v", created, skipped)
 	}
 	data, err := os.ReadFile(policy)
@@ -2276,6 +2283,12 @@ func TestObserveJobSummaryAndProjectMap(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(project, "docs", "CODEBASE_MAP.md"), []byte("# Codebase map\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(project, ".codex-orchestrator"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".codex-orchestrator", "thread-map.md"), []byte("# Thread Map\n\nRouter\nInbox\nPulse\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
 		t.Fatal(err)
 	}
@@ -2307,8 +2320,11 @@ func TestObserveJobSummaryAndProjectMap(t *testing.T) {
 	if summary.ProjectMap.Status != "present" || summary.ProjectMap.Path != filepath.Join("docs", "CODEBASE_MAP.md") {
 		t.Fatalf("expected detected project map, got %#v", summary.ProjectMap)
 	}
+	if summary.ThreadMap.Status != "present" || summary.ThreadMap.Path != filepath.Join(".codex-orchestrator", "thread-map.md") {
+		t.Fatalf("expected detected thread map, got %#v", summary.ThreadMap)
+	}
 	rendered := renderSummary(summary)
-	for _, want := range []string{"## Job Summary", "| `STATUS-ROW` | `` | `active`", "## Project Map", "docs/CODEBASE_MAP.md"} {
+	for _, want := range []string{"## Job Summary", "| `STATUS-ROW` | `` | `active`", "## Project Map", "docs/CODEBASE_MAP.md", "## Thread Map", ".codex-orchestrator/thread-map.md"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected rendered summary to include %q:\n%s", want, rendered)
 		}
@@ -2320,12 +2336,13 @@ func TestObserveJobSummaryAndProjectMap(t *testing.T) {
 	var statusPayload struct {
 		JobSummary JobSummary       `json:"jobSummary"`
 		ProjectMap ProjectMapStatus `json:"projectMap"`
+		ThreadMap  ThreadMapStatus  `json:"threadMap"`
 	}
 	if err := json.Unmarshal([]byte(statusJSON), &statusPayload); err != nil {
 		t.Fatalf("expected status JSON, got %q: %v", statusJSON, err)
 	}
-	if statusPayload.JobSummary.Total != 1 || statusPayload.ProjectMap.Status != "present" {
-		t.Fatalf("expected status JSON jobSummary/projectMap, got %#v", statusPayload)
+	if statusPayload.JobSummary.Total != 1 || statusPayload.ProjectMap.Status != "present" || statusPayload.ThreadMap.Status != "present" {
+		t.Fatalf("expected status JSON jobSummary/projectMap/threadMap, got %#v", statusPayload)
 	}
 }
 
@@ -3087,7 +3104,7 @@ func TestPackMergeReadinessFailsForbiddenPathCheck(t *testing.T) {
 }
 
 func TestPathMatcherSupportsDoubleStarAcrossDirectories(t *testing.T) {
-	path := "services/cloud-backend/src/main/kotlin/com/tastyfuture/waitlist/WaitlistReservationLifecycle.kt"
+	path := "services/cloud-backend/src/main/kotlin/com/examplepos/waitlist/WaitlistReservationLifecycle.kt"
 	allowed := []string{"services/cloud-backend/src/main/**/waitlist*/**"}
 	forbidden := []string{"services/payment/**"}
 	check := evaluateMergeReadinessPathCheck(Task{WriteSet: map[string][]string{

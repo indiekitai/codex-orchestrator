@@ -313,6 +313,26 @@ orchestration, ask Codex App to generate or read a concise project map covering
 module boundaries, owner docs, test commands, shared contracts, and high-risk
 paths before dispatching broad work.
 
+For multi-thread Codex App setups, use `threadMap` when available.
+`codex-orchestrator init --write-templates` writes
+`.codex-orchestrator/thread-map.md` and
+`.codex-orchestrator/pulse-threads.md`. Use them to record long-lived thread
+roles:
+
+- Project Orchestrator: owns repo truth, ledger, worker dispatch, review,
+  merge, push, cleanup, and feature-package closeout.
+- Pulse: recurring read-only status checks and missed heartbeat reporting.
+- Inbox: collection point for issues, user feedback, external reviews, and
+  real-run observations before they become tasks.
+- Router: classifies new input and creates handoff prompts for the right
+  thread; it does not implement code, dispatch workers, merge, push, deploy, or
+  clean worktrees unless the user explicitly promotes it to the project
+  orchestrator role.
+- Log: human-readable operating journal and decision record.
+
+Treat the thread map as local/static coordination state. Verify live thread ids,
+automation bindings, and recent messages before taking irreversible action.
+
 For long-running Codex App orchestrator sessions, refresh fixed status artifacts
 on every visible monitor, review, merge, cleanup, or dispatch turn:
 
@@ -441,13 +461,14 @@ runtime proof.
 The orchestration policy auditor runner is the first V4 policy/eval checker.
 It is read-only and does not load or update the ledger. It scans repo-local
 orchestration docs, prompts, routine specs, routine reports, and ledger/event
-files for deterministic policy rules (`OPA001`-`OPA010`): dry-run dispatch
+files for deterministic policy rules (`OPA001`-`OPA011`): dry-run dispatch
 barrier, no-main-checkout fallback guard, heartbeat continuation guard,
 delegated worker boundary, evidence promotion boundary, heartbeat target binding
 guard, pending worktree ledger guard, budget-policy evidence/control boundary
 drift, unrelated safe-backlog dispatch that breaks feature-package continuity,
-and completion/self-report claims that are not bound to command, diff, gate, or
-artifact evidence. Findings are
+completion/self-report claims that are not bound to command, diff, gate, or
+artifact evidence, and Router/Inbox/Pulse/Log role overreach that grants
+execution authority to coordination threads. Findings are
 local/static suspicions until a reviewer confirms them. Its MVP report uses
 only `local` and `blocked` evidence; it does not stage, commit, merge, push,
 tag, release, clean worktrees, dispatch sessions, mutate the ledger, or claim

@@ -115,7 +115,8 @@ If you are evaluating the workflow for the first time, use this order:
    [docs/case-studies/restaurant-pos-orchestration.md](case-studies/restaurant-pos-orchestration.md).
 7. When the project is ready for durable state, Codex can run
    `codex-orchestrator init --write-templates` to create starter local files
-   for the project map, package plan, and orchestration policy.
+   for the project map, package plan, orchestration policy, thread map, and
+   pulse/inbox/router prompts.
 
 Naming note: **codex-orchestrator** is the product name, repository name,
 Codex App skill name, and helper CLI name.
@@ -267,6 +268,17 @@ cp -r codex-orchestrator ~/.codex/skills/codex-orchestrator
 scripts/install.sh
 codex-orchestrator init --write-templates
 ```
+
+The generated `.codex-orchestrator/thread-map.md` and
+`.codex-orchestrator/pulse-threads.md` are for multi-thread Codex App setups:
+
+- Project Orchestrator owns worker dispatch, review, merge, push, cleanup, and
+  package closeout.
+- Pulse threads report recurring status and missed heartbeat gaps.
+- Inbox threads collect issues, feedback, external reviews, and observations.
+- Router threads classify new input and create handoff prompts; they do not
+  implement code, dispatch workers, merge, push, deploy, or clean worktrees.
+- Log threads keep a human-readable operating journal.
 
 You can also download a prebuilt `codex-orchestrator_<os>_<arch>` binary from
 the Releases page and put it on your `PATH`, but that is an advanced/helper
@@ -815,12 +827,13 @@ evidence is `local` or `blocked`.
 MVP. It is read-only and does not load or update the ledger. It scans
 repo-local orchestration docs, prompts, routine specs, routine reports, and
 ledger/event files for deterministic orchestration policy rules (`OPA001`-
-`OPA010`): dry-run dispatch barrier, no-main-checkout fallback guard, heartbeat
+`OPA011`): dry-run dispatch barrier, no-main-checkout fallback guard, heartbeat
 continuation guard, delegated worker boundaries, evidence promotion boundaries,
 heartbeat target binding guard, pending worktree ledger guard, budget-policy
 evidence/control boundary drift, unrelated safe-backlog dispatch that breaks
-feature-package continuity, and completion/self-report claims that are not
-bound to command, diff, gate, or artifact evidence. The heartbeat lifecycle
+feature-package continuity, completion/self-report claims that are not
+bound to command, diff, gate, or artifact evidence, and Router/Inbox/Pulse/Log
+role overreach that grants execution authority to coordination threads. The heartbeat lifecycle
 checks also flag repeated generic heartbeat prompt updates that should have
 been ledger/status changes.
 Findings are

@@ -30,7 +30,8 @@ worktree，并继续推进路线图。
   编排手册。
 - **可选 Go 辅助命令**：`codex-orchestrator`，用于维护账本、生成状态页和心跳报告、
   准备审查包、运行策略检查，以及更新本地安装。
-- **文档和模板**：项目地图、功能包计划、编排策略、案例和 routine 规范。
+- **文档和模板**：项目地图、功能包计划、编排策略、线程地图、Pulse/Inbox/Router
+  提示词、案例和 routine 规范。
 
 辅助命令现在也会显式跟踪信任边界：它可以记录 developer-agent misalignment 事件，
 保存 worker 的约束栈快照，把完成声明和本地证据绑定起来，并在状态页里显示
@@ -109,6 +110,24 @@ flowchart LR
 - `direct`、`proxy`、`local`、`blocked` 证据不混写；
 - 有空闲并发槽，不代表要派无关任务；
 - worker 只提交自己的分支，统领负责审查和合并。
+
+## 线程布局
+
+长期使用 Codex App 时，一个线程通常不够。推荐把职责分开：
+
+- **Project Orchestrator**：负责 repo truth、ledger、worker 派发、验收、合并、
+  推送、清理和功能包收口。
+- **Pulse**：按计划醒来，只报告有意义的变化，比如 heartbeat 漏跑、worker 阻塞、
+  等待验收的 commit。
+- **Inbox**：收集 GitHub issue、用户反馈、外部 review、真实项目使用体验，先归类，
+  不直接派任务。
+- **Router**：读取线程地图，判断新输入应该交给哪个线程。它负责路由，不负责写代码、
+  派 worker、merge 或 push。
+- **Log**：记录人能看懂的决策和功能包进展。
+
+`codex-orchestrator init --write-templates` 现在会生成
+`.codex-orchestrator/thread-map.md` 和
+`.codex-orchestrator/pulse-threads.md`，把这些长期线程关系落到文件里，而不是靠聊天记忆。
 
 ## 文档
 
