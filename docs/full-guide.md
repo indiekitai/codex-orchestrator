@@ -503,6 +503,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine budget-policy-report --write-report /tmp/budget-policy-report.json
 ./codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 ./codex-orchestrator eval run --write-report /tmp/eval-run-report.json
+./codex-orchestrator eval draft-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1 --write-report /tmp/eval-draft.json
 ./codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
 ./codex-orchestrator rules propose --from-review docs/reviews/example.md --write-report /tmp/rules-proposal-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
@@ -876,11 +877,20 @@ the current repository text. The first suite is
 `eval/orchestration-policy-auditor/` and compares actual `OPAxxx` hit counts
 against each fixture's `expectedRuleHits`.
 
+`eval draft-failure` is the safer first step for turning a real failure into a
+regression fixture. Give it inline text, a text file, or a review file with
+`--from-review`; it applies the current policy rules read-only, reports actual
+versus expected `OPAxxx` counts, and prints a suggested `eval add-failure`
+command only when the counts match. It does not write fixture files. Use this
+when a worker, Pulse, Inbox, or external reviewer reports a repeated
+orchestration failure and the orchestrator wants a Checker pass before locking
+the failure into the suite.
+
 `eval add-failure` adds a manually supplied failure case to the fixture suite.
-For the MVP, pass the text and expected rule hits explicitly. The command
-verifies the text against the current policy rules before writing JSON, refuses
-to overwrite an existing fixture unless `--force` is supplied, and does not
-parse review documents automatically yet.
+Prefer running `eval draft-failure` first, then use `add-failure` only after
+the failure class and expected rule counts are accepted. The command verifies
+the text against the current policy rules before writing JSON and refuses to
+overwrite an existing fixture unless `--force` is supplied.
 
 `rules propose` turns local evidence text or a review file into a review-only
 rule proposal report. It can read `--from-review`, `--text`, or `--text-file`,

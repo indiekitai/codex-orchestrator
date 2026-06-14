@@ -38,7 +38,8 @@ One Codex chat is enough for small edits. Larger work gets messy:
 
 The helper now also tracks trust boundaries: it can record developer-agent
 misalignment events, snapshot each worker's constraint stack, verify completion
-claims against local evidence, and surface a `trustRisk` block in status pages.
+claims against local evidence, draft failure-to-regression fixtures for review,
+and surface a `trustRisk` block in status pages.
 
 It is not a daemon, a package-manager-first product, a full agent operating
 system, or an unreviewed autonomous coding bot. Codex App still creates and
@@ -116,6 +117,7 @@ flowchart LR
 The loop is intentionally conservative:
 
 - repo/worktree truth beats chat status;
+- workers are makers; the orchestrator and routine reports are checkers;
 - shared contracts, migrations, APIs, devices, payments, and deploys are
   serialized;
 - `direct`, `proxy`, `local`, and `blocked` evidence stay separate;

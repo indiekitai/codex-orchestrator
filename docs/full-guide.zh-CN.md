@@ -439,6 +439,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator run-routine budget-policy-report --write-report /tmp/budget-policy-report.json
 ./codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 ./codex-orchestrator eval run --write-report /tmp/eval-run-report.json
+./codex-orchestrator eval draft-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1 --write-report /tmp/eval-draft.json
 ./codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
 ./codex-orchestrator rules propose --from-review docs/reviews/example.md --write-report /tmp/rules-proposal-report.json
 ./codex-orchestrator record-routine-run --routine pr-reviewer --status passed --evidence-local "go test ./..." --action "reviewed diff" --next "merge branch"
@@ -713,9 +714,16 @@ transcript；transcript-shaped fixtures 是脱敏的本地静态重建。
 `orchestration-policy-auditor`，读取 `eval/orchestration-policy-auditor/` 下的
 fixture，并把实际 `OPAxxx` 命中次数和每个 fixture 的 `expectedRuleHits` 对齐。
 
-`eval add-failure` 用来把手动提供的失败案例加入 fixture suite。MVP 版本需要显式
-传入文本和期望命中的规则；命令会先用当前 policy 规则验证文本，匹配后才写 JSON。
-已有 fixture 默认不会覆盖，除非传 `--force`。它还不会自动解析 review 文档。
+`eval draft-failure` 是把真实失败沉淀成回归 fixture 前更安全的第一步。它可以读取
+内联文本、文本文件，或通过 `--from-review` 读取 review 文件；然后只读运行当前
+policy 规则，报告实际命中的 `OPAxxx` 次数是否符合预期。只有计数匹配时，它才给出
+建议的 `eval add-failure` 命令。它不会写 fixture 文件。适合 worker、Pulse、Inbox
+或外部 reviewer 报告了重复编排失败，而统领想先做一次 Checker 复核的场景。
+
+`eval add-failure` 用来把手动提供的失败案例加入 fixture suite。优先先跑
+`eval draft-failure`，确认失败类别和期望命中次数后，再用 `add-failure` 锁进回归
+suite。命令会先用当前 policy 规则验证文本，匹配后才写 JSON。已有 fixture 默认
+不会覆盖，除非传 `--force`。
 
 `rules propose` 会把本地证据文本或 review 文件转换成只供 review 的规则建议报告。
 它可以读取 `--from-review`、`--text` 或 `--text-file`，只有传入 `--write-report`

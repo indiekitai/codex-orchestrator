@@ -5251,6 +5251,95 @@ func TestCmdEvalAddFailureWritesJSONResult(t *testing.T) {
 	}
 }
 
+func TestEvalDraftFailureDoesNotWriteFixture(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	reviewPath := filepath.Join(project, "review.md")
+	if err := os.WriteFile(reviewPath, []byte("The orchestrator rewrote the heartbeat prompt on every wakeup with current task details."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report, err := draftFailureEvalFixture(
+		project,
+		"orchestration-policy-auditor",
+		"",
+		"heartbeat-prompt-churn-draft",
+		"heartbeat prompt churn draft",
+		"docs/reviews/heartbeat.md",
+		reviewPath,
+		"",
+		"",
+		[]string{"OPA006=1"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "ready-for-approval" || !report.MatchesExpected {
+		t.Fatalf("unexpected draft report: %#v", report)
+	}
+	if report.ActualRuleHits["OPA006"] != 1 || !strings.Contains(report.AddFailureCommand, "eval") || !strings.Contains(report.AddFailureCommand, "add-failure") {
+		t.Fatalf("unexpected draft command/report: %#v", report)
+	}
+	if _, err := os.Stat(filepath.Join(project, "eval", "orchestration-policy-auditor", "heartbeat-prompt-churn-draft.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("draft-failure must not write fixture, stat=%v", err)
+	}
+}
+
+func TestEvalDraftFailureReportsExpectationMismatch(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	report, err := draftFailureEvalFixture(
+		project,
+		"orchestration-policy-auditor",
+		"",
+		"mismatch-draft",
+		"",
+		"README.md",
+		"",
+		"Local proxy smoke counts as direct proof.",
+		"",
+		[]string{"OPA001=1"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "needs-expectation-review" || report.MatchesExpected {
+		t.Fatalf("expected mismatch draft report, got %#v", report)
+	}
+	if report.ActualRuleHits["OPA005"] != 1 || report.AddFailureCommand != "" {
+		t.Fatalf("unexpected mismatch details: %#v", report)
+	}
+}
+
+func TestCmdEvalDraftFailureWritesJSONReport(t *testing.T) {
+	root := t.TempDir()
+	project := createOrchestrationPolicyFixture(t, root)
+	reportPath := filepath.Join(root, "draft.json")
+	if err := cmdEval([]string{
+		"draft-failure",
+		"--repo", project,
+		"--id", "worker-boundary-draft",
+		"--text", "Worker prompt: use a worktree branch for this task.",
+		"--expect", "OPA004=1",
+		"--write-report", reportPath,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report EvalFailureDraftReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Command != "eval draft-failure" || report.Status != "ready-for-approval" || !report.MatchesExpected {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+	if _, err := os.Stat(filepath.Join(project, "eval", "orchestration-policy-auditor", "worker-boundary-draft.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("draft-failure command must not write fixture, stat=%v", err)
+	}
+}
+
 func TestEvalAddFailureRejectsExpectationMismatch(t *testing.T) {
 	root := t.TempDir()
 	project := createOrchestrationPolicyFixture(t, root)

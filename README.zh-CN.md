@@ -34,8 +34,8 @@ worktree，并继续推进路线图。
   Pulse/Inbox/Router 提示词、案例和 routine 规范。
 
 辅助命令现在也会显式跟踪信任边界：它可以记录 developer-agent misalignment 事件，
-保存 worker 的约束栈快照，把完成声明和本地证据绑定起来，并在状态页里显示
-`trustRisk` 风险块。
+保存 worker 的约束栈快照，把完成声明和本地证据绑定起来，先生成“失败案例 -> 回归
+fixture”的草案供审查，并在状态页里显示 `trustRisk` 风险块。
 
 它不是后台守护进程，不是以包管理器为中心的产品，也不是完整的 Agent 操作系统；更不是
 不经审查就自动写代码的机器人。Codex App 仍然负责创建和运行 worker 会话。
@@ -106,6 +106,7 @@ flowchart LR
 这套循环刻意保守：
 
 - repo/worktree 的真实状态优先于聊天里的说法；
+- worker 是 Maker；统领和 routine 报告是 Checker；
 - 共享契约、迁移、API、设备、支付和部署串行处理；
 - `direct`、`proxy`、`local`、`blocked` 证据不混写；
 - 有空闲并发槽，不代表要派无关任务；

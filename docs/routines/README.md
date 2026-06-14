@@ -24,6 +24,7 @@ codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/r
 codex-orchestrator run-routine budget-policy-report --write-report /tmp/budget-policy-report.json
 codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 codex-orchestrator eval run --write-report /tmp/eval-run-report.json
+codex-orchestrator eval draft-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1 --write-report /tmp/eval-draft.json
 codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
 codex-orchestrator record-routine-run --report-json /tmp/pr-reviewer-report.json
 ```
@@ -149,11 +150,17 @@ Use it while changing policy rules to catch regressions in known good and bad
 cases. The default suite is `orchestration-policy-auditor`, backed by
 `eval/orchestration-policy-auditor/`.
 
+`eval draft-failure` is the Maker/Checker handoff for failures that should
+become regression fixtures. It reads `--text`, `--text-file`, or
+`--from-review`, applies the current policy rules read-only, reports actual
+versus expected `OPAxxx` hit counts, and prints a suggested `eval add-failure`
+command when the counts match. It does not write fixtures or mutate policy.
+
 `eval add-failure` writes a new fixture into the suite after validating that
 the provided text actually produces the declared `--expect RULE=N` hit counts.
-It is intentionally manual in this MVP: it accepts `--text` or `--text-file`,
-does not parse review documents automatically, and refuses to overwrite
-existing fixtures unless `--force` is supplied.
+It is intentionally manual: use it only after a human or orchestrator checker
+accepts the `draft-failure` report. It accepts `--text` or `--text-file` and
+refuses to overwrite existing fixtures unless `--force` is supplied.
 
 `run-routine roadmap-next-task-suggester` is a read-only local planning
 assistant. It reads `docs/roadmap.md`, compares the remaining v3 and explicit

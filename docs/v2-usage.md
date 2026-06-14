@@ -121,8 +121,9 @@ This adds non-overwriting templates under `.codex-orchestrator/`:
 ```
 
 Use them to record the current product lane, feature package outcome, safe
-worker queue, blocked external proof, project map, long-lived Codex thread
-topology, stable concepts, and intake items before the first hands-off run. Existing files are preserved unless
+worker queue, stop conditions, blocked external proof, project map, long-lived
+Codex thread topology, stable concepts, and intake items before the first
+hands-off run. Existing files are preserved unless
 `--force` is explicitly used.
 
 `thread-map.md` is for durable Codex App thread roles such as Router, Inbox,
@@ -598,6 +599,46 @@ pressure warnings, unknown timing states, and human-review recommendations
 separate without introducing budget enforcement. It does not dispatch,
 schedule, prioritize, pause, kill, merge, push, delete, clean worktrees, mutate
 the ledger, or make budget eligibility decisions.
+
+## Turn Failures Into Eval Fixtures
+
+When a real run exposes a repeatable orchestration failure, treat the worker or
+review note as Maker output and produce a Checker draft first:
+
+```bash
+codex-orchestrator eval draft-failure \
+  --id heartbeat-prompt-churn \
+  --from-review docs/reviews/heartbeat-review.md \
+  --file docs/reviews/heartbeat-review.md \
+  --expect OPA006=1 \
+  --write-report /tmp/heartbeat-eval-draft.json
+```
+
+The draft report is local/static evidence. It shows the actual rule hits,
+whether they match the expected `OPAxxx` counts, the fixture JSON that would be
+written, and the suggested `eval add-failure` command. It does not write the
+fixture.
+
+After a human or orchestrator checker accepts the draft, lock it into the suite:
+
+```bash
+codex-orchestrator eval add-failure \
+  --id heartbeat-prompt-churn \
+  --text-file docs/reviews/heartbeat-review.md \
+  --file docs/reviews/heartbeat-review.md \
+  --expect OPA006=1
+```
+
+Then run:
+
+```bash
+codex-orchestrator eval run --repo .
+codex-orchestrator policy check --repo .
+```
+
+This is the conservative self-improvement loop: observe a failure, draft a
+regression, review it, then lock it. The helper does not automatically change
+policy rules, merge code, dispatch workers, or claim runtime proof.
 
 ## Record Review/Merge/Cleanup Outcomes
 

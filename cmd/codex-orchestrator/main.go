@@ -1164,6 +1164,7 @@ func usage() {
   codex-orchestrator roadmap score [--repo PATH] [--config PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator policy check [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
   codex-orchestrator eval run [--suite orchestration-policy-auditor] [--repo PATH] [--eval-dir PATH] [--write-report PATH] [--json]
+  codex-orchestrator eval draft-failure --id ID (--text TEXT | --text-file PATH | --from-review PATH) --expect OPA001=1 [--file README.md] [--suite orchestration-policy-auditor] [--repo PATH] [--write-report PATH] [--json]
   codex-orchestrator eval add-failure --id ID --text TEXT --expect OPA001=1 [--file README.md] [--suite orchestration-policy-auditor] [--repo PATH]
   codex-orchestrator rules propose (--from-review PATH | --text TEXT | --text-file PATH) [--write-report PATH] [--json]
   codex-orchestrator misalignment record --category CAT [--task-id TASK] [--package-id PKG] [--source TEXT] [--severity low|medium|high] [--status open|resolved|blocked] [--note TEXT] [--resolution TEXT] [--json]
@@ -1553,10 +1554,12 @@ _codex_orchestrator()
     eval)
       if [[ ${COMP_WORDS[2]} == "run" ]]; then
         COMPREPLY=( $(compgen -W "--suite --repo --eval-dir --write-report --json --help" -- "$cur") )
+      elif [[ ${COMP_WORDS[2]} == "draft-failure" ]]; then
+        COMPREPLY=( $(compgen -W "--suite --repo --eval-dir --id --description --file --from-review --text --text-file --expect --write-report --json --help" -- "$cur") )
       elif [[ ${COMP_WORDS[2]} == "add-failure" ]]; then
         COMPREPLY=( $(compgen -W "--suite --repo --eval-dir --id --description --file --text --text-file --expect --force --json --help" -- "$cur") )
       else
-        COMPREPLY=( $(compgen -W "run add-failure" -- "$cur") )
+        COMPREPLY=( $(compgen -W "run draft-failure add-failure" -- "$cur") )
       fi
       ;;
     rules)
@@ -1662,7 +1665,9 @@ case $state in
         ;;
       eval)
         if (( CURRENT == 3 )); then
-          _values 'subcommand' run add-failure
+          _values 'subcommand' run draft-failure add-failure
+        elif [[ $words[3] == "draft-failure" ]]; then
+          _values 'options' --suite --repo --eval-dir --id --description --file --from-review --text --text-file --expect --write-report --json --help
         elif [[ $words[3] == "add-failure" ]]; then
           _values 'options' --suite --repo --eval-dir --id --description --file --text --text-file --expect --force --json --help
         else
@@ -1801,7 +1806,7 @@ complete -c codex-orchestrator -n '__fish_seen_subcommand_from watchdog' -a 'sta
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from pack' -a 'merge-readiness consultation review acceptance status'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from review' -a 'run import policy'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from policy' -a 'check'
-complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run add-failure'
+complete -c codex-orchestrator -n '__fish_seen_subcommand_from eval' -a 'run draft-failure add-failure'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from rules' -a 'propose'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from misalignment' -a 'record report'
 complete -c codex-orchestrator -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'
@@ -1842,6 +1847,7 @@ complete -c codex-orchestrator -l output -d 'Output directory'
 complete -c codex-orchestrator -l dry-run -d 'Print runner command without invoking reviewer'
 complete -c codex-orchestrator -l dispatch-mode -d 'Run-level dispatch mode: active, drain, or paused'
 complete -c codex-orchestrator -l write-templates -d 'Write starter project orchestration templates'
+complete -c codex-orchestrator -l from-review -d 'Read local review text from a Markdown/text file'
 complete -c codex-orchestrator -l constraint -d 'Task constraint or boundary'
 complete -c codex-orchestrator -l authority -d 'Task source-of-truth authority'
 complete -c codex-orchestrator -l user-instruction -d 'Latest user instruction snapshot'
@@ -4506,11 +4512,13 @@ func cmdPolicy(args []string) error {
 
 func cmdEval(args []string) error {
 	if len(args) == 0 {
-		return errors.New("eval requires a subcommand: run or add-failure")
+		return errors.New("eval requires a subcommand: run, draft-failure, or add-failure")
 	}
 	switch args[0] {
 	case "run":
 		return cmdEvalRun(args[1:])
+	case "draft-failure":
+		return cmdEvalDraftFailure(args[1:])
 	case "add-failure":
 		return cmdEvalAddFailure(args[1:])
 	default:
@@ -4795,6 +4803,40 @@ func cmdEvalAddFailure(args []string) error {
 	}
 	fmt.Printf("Wrote eval fixture: %s\n", result.Path)
 	fmt.Printf("Expected rule hits: %s\n", formatRuleCounts(result.ExpectedRuleHits))
+	return nil
+}
+
+func cmdEvalDraftFailure(args []string) error {
+	fs := flag.NewFlagSet("eval draft-failure", flag.ExitOnError)
+	suite := fs.String("suite", "orchestration-policy-auditor", "eval suite id")
+	repo := fs.String("repo", ".", "repository path used to resolve relative eval dirs")
+	evalDir := fs.String("eval-dir", "", "eval fixture directory; defaults to eval/SUITE")
+	id := fs.String("id", "", "fixture id; used as the JSON filename if later approved")
+	description := fs.String("description", "", "fixture description")
+	fileName := fs.String("file", "README.md", "synthetic file path stored inside the fixture")
+	fromReview := fs.String("from-review", "", "read failure text from a local review Markdown/text file")
+	text := fs.String("text", "", "failure text to draft into a fixture")
+	textFile := fs.String("text-file", "", "read failure text from a file instead of --text")
+	writeReport := fs.String("write-report", "", "write draft report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON result")
+	var expects stringList
+	fs.Var(&expects, "expect", "expected rule hit in RULE=N form; may be repeated")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	report, err := draftFailureEvalFixture(*repo, *suite, *evalDir, *id, *description, *fileName, *fromReview, *text, *textFile, []string(expects))
+	if err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote eval failure draft: %s\n", *writeReport)
 	return nil
 }
 
@@ -11821,6 +11863,12 @@ Evidence label: local/static until direct runtime evidence is explicitly collect
 - continuous monitor: use one generic Codex App heartbeat; do not rewrite it for every worker
 - no foreground sleep/long polling in the orchestrator turn
 
+## Maker / Checker
+
+- Workers are makers: they may edit, test, self-review, and commit only inside their task branch.
+- The project orchestrator and helper routine reports are checkers: they review diff, gates, evidence, boundaries, and stop conditions before merge.
+- A worker self-report is never acceptance by itself.
+
 ## Product Lane
 
 Current package lane:
@@ -11858,12 +11906,15 @@ Use this file to keep orchestration readable as a product/module lane instead of
 - unattended-safe work:
 - human-required work:
 - shared contract / DB / proto / API risk:
+- stop condition:
+- max iterations / review budget:
+- checker:
 
 ## Worker Queue
 
-| Order | Worker | Purpose | Allowed paths | Forbidden paths | Gates | Evidence label |
-|---|---|---|---|---|---|---|
-| 1 |  |  |  |  |  | local/static |
+| Order | Worker | Purpose | Allowed paths | Forbidden paths | Gates | Evidence label | Stop condition |
+|---|---|---|---|---|---|---|---|
+| 1 |  |  |  |  |  | local/static |  |
 
 ## Closeout Criteria
 
@@ -14260,6 +14311,28 @@ type evalAddFailureResult struct {
 	Overwritten      bool           `json:"overwritten"`
 }
 
+type EvalFailureDraftReport struct {
+	SchemaVersion       int               `json:"schemaVersion"`
+	Command             string            `json:"command"`
+	GeneratedAt         string            `json:"generatedAt"`
+	Status              string            `json:"status"`
+	EvidenceLabel       string            `json:"evidenceLabel"`
+	Boundary            string            `json:"boundary"`
+	Suite               string            `json:"suite"`
+	ID                  string            `json:"id"`
+	File                string            `json:"file"`
+	Source              RuleSource        `json:"source"`
+	Description         string            `json:"description,omitempty"`
+	ExpectedRuleHits    map[string]int    `json:"expectedRuleHits"`
+	ActualRuleHits      map[string]int    `json:"actualRuleHits"`
+	MatchesExpected     bool              `json:"matchesExpected"`
+	ProposedFixturePath string            `json:"proposedFixturePath"`
+	Fixture             policyEvalFixture `json:"fixture"`
+	AddFailureCommand   string            `json:"addFailureCommand,omitempty"`
+	Evidence            []string          `json:"evidence"`
+	NextAction          string            `json:"nextAction"`
+}
+
 type RuleProposalReport struct {
 	SchemaVersion    int            `json:"schemaVersion"`
 	Command          string         `json:"command"`
@@ -14552,6 +14625,91 @@ func addFailureEvalFixture(repo string, suite string, evalDir string, id string,
 	}, nil
 }
 
+func draftFailureEvalFixture(repo string, suite string, evalDir string, id string, description string, fileName string, fromReview string, text string, textFile string, expects []string) (EvalFailureDraftReport, error) {
+	report := EvalFailureDraftReport{
+		SchemaVersion: 1,
+		Command:       "eval draft-failure",
+		GeneratedAt:   nowISO(),
+		Status:        "blocked",
+		EvidenceLabel: "local/static",
+		Boundary:      "Drafting an eval fixture is local/static planning evidence only. It does not write fixtures, mutate policy, edit docs, dispatch workers, merge, push, cleanup, or prove runtime behavior.",
+		Evidence:      []string{},
+		NextAction:    "Fix the blocked draft input, then rerun eval draft-failure.",
+	}
+	repo = expandPath(repo)
+	if repo == "" {
+		repo = "."
+	}
+	suite = strings.TrimSpace(suite)
+	if suite == "" {
+		suite = "orchestration-policy-auditor"
+	}
+	report.Suite = suite
+	if suite != "orchestration-policy-auditor" {
+		return report, fmt.Errorf("unsupported eval suite %q", suite)
+	}
+	if evalDir == "" {
+		evalDir = filepath.Join("eval", suite)
+	}
+	id = strings.TrimSpace(id)
+	if err := validateFixtureID(id); err != nil {
+		return report, err
+	}
+	report.ID = id
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" {
+		return report, errors.New("eval draft-failure requires --file")
+	}
+	if filepath.IsAbs(fileName) || strings.Contains(fileName, "..") {
+		return report, errors.New("eval draft-failure --file must be a relative fixture file path without '..'")
+	}
+	report.File = fileName
+	body, source, err := failureDraftText(fromReview, text, textFile)
+	report.Source = source
+	if err != nil {
+		return report, err
+	}
+	expected, err := parseRuleExpectations(expects)
+	if err != nil {
+		return report, err
+	}
+	if len(expected) == 0 {
+		return report, errors.New("eval draft-failure requires at least one --expect RULE=N")
+	}
+	fixture := policyEvalFixture{
+		SchemaVersion:    1,
+		ID:               id,
+		Description:      strings.TrimSpace(description),
+		Files:            map[string]string{fileName: body},
+		ExpectedRuleHits: expected,
+	}
+	actual := countPolicyAuditFindings(auditOrchestrationPolicyText(fileName, body))
+	fixtureDir := resolveRepoRelativePath(repo, evalDir)
+	path := filepath.Join(fixtureDir, id+".json")
+	report.Description = fixture.Description
+	report.ExpectedRuleHits = expected
+	report.ActualRuleHits = actual
+	report.MatchesExpected = sameRuleCounts(actual, expected)
+	report.ProposedFixturePath = path
+	report.Fixture = fixture
+	sourceName := source.Path
+	if sourceName == "" {
+		sourceName = "inline text"
+	}
+	report.Evidence = append(report.Evidence, "Read local fixture draft input from "+sourceName+".")
+	report.Evidence = append(report.Evidence, "Applied current orchestration policy rules read-only; actual hits: "+formatRuleCounts(actual)+".")
+	report.Evidence = append(report.Evidence, "No eval fixture was written. Use eval add-failure only after orchestrator/human approval.")
+	if report.MatchesExpected {
+		report.Status = "ready-for-approval"
+		report.AddFailureCommand = buildEvalAddFailureCommand(repo, suite, evalDir, id, fixture.Description, fileName, source, body, expected)
+		report.NextAction = "Review the draft fixture and, if the failure class is confirmed, run the add-failure command to lock it into the regression suite."
+	} else {
+		report.Status = "needs-expectation-review"
+		report.NextAction = "Expected rule hits do not match current policy output. Adjust --expect, tighten the rule, or reject this as the wrong fixture."
+	}
+	return report, nil
+}
+
 func loadPolicyEvalFixture(path string) (policyEvalFixture, error) {
 	var fixture policyEvalFixture
 	data, err := os.ReadFile(path)
@@ -14578,7 +14736,7 @@ func loadPolicyEvalFixture(path string) (policyEvalFixture, error) {
 
 func validateFixtureID(id string) error {
 	if id == "" {
-		return errors.New("eval add-failure requires --id")
+		return errors.New("eval fixture requires --id")
 	}
 	for _, r := range id {
 		switch {
@@ -14612,6 +14770,93 @@ func failureText(text string, textFile string) (string, error) {
 		return "", errors.New("eval add-failure requires --text or --text-file")
 	}
 	return text, nil
+}
+
+func failureDraftText(fromReview string, text string, textFile string) (string, RuleSource, error) {
+	fromReview = strings.TrimSpace(fromReview)
+	text = strings.TrimSpace(text)
+	textFile = strings.TrimSpace(textFile)
+	count := 0
+	for _, value := range []string{fromReview, text, textFile} {
+		if value != "" {
+			count++
+		}
+	}
+	if count == 0 {
+		return "", RuleSource{}, errors.New("eval draft-failure requires one of --from-review, --text, or --text-file")
+	}
+	if count > 1 {
+		return "", RuleSource{}, errors.New("use only one of --from-review, --text, or --text-file")
+	}
+	if fromReview != "" {
+		data, err := os.ReadFile(expandPath(fromReview))
+		if err != nil {
+			return "", RuleSource{Kind: "review", Path: fromReview}, err
+		}
+		body := strings.TrimSpace(string(data))
+		if body == "" {
+			return "", RuleSource{Kind: "review", Path: fromReview}, errors.New("eval draft-failure input is empty")
+		}
+		return body, RuleSource{Kind: "review", Path: fromReview}, nil
+	}
+	if textFile != "" {
+		data, err := os.ReadFile(expandPath(textFile))
+		if err != nil {
+			return "", RuleSource{Kind: "text-file", Path: textFile}, err
+		}
+		body := strings.TrimSpace(string(data))
+		if body == "" {
+			return "", RuleSource{Kind: "text-file", Path: textFile}, errors.New("eval draft-failure input is empty")
+		}
+		return body, RuleSource{Kind: "text-file", Path: textFile}, nil
+	}
+	return text, RuleSource{Kind: "text"}, nil
+}
+
+func buildEvalAddFailureCommand(repo string, suite string, evalDir string, id string, description string, fileName string, source RuleSource, body string, expected map[string]int) string {
+	parts := []string{
+		"codex-orchestrator",
+		"eval",
+		"add-failure",
+		"--repo", repo,
+		"--suite", suite,
+		"--id", id,
+		"--file", fileName,
+	}
+	if strings.TrimSpace(evalDir) != "" {
+		parts = append(parts, "--eval-dir", evalDir)
+	}
+	if strings.TrimSpace(description) != "" {
+		parts = append(parts, "--description", description)
+	}
+	if source.Path != "" {
+		parts = append(parts, "--text-file", source.Path)
+	} else {
+		parts = append(parts, "--text", body)
+	}
+	for _, item := range ruleExpectationsArgs(expected) {
+		parts = append(parts, "--expect", item)
+	}
+	quoted := make([]string, 0, len(parts))
+	for _, part := range parts {
+		quoted = append(quoted, shellQuote(part))
+	}
+	return strings.Join(quoted, " ")
+}
+
+func ruleExpectationsArgs(expected map[string]int) []string {
+	keys := make([]string, 0, len(expected))
+	for key, value := range expected {
+		if value > 0 {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	args := make([]string, 0, len(keys))
+	for _, key := range keys {
+		args = append(args, fmt.Sprintf("%s=%d", key, expected[key]))
+	}
+	return args
 }
 
 func parseRuleExpectations(values []string) (map[string]int, error) {

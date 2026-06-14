@@ -386,6 +386,7 @@ codex-orchestrator run-routine roadmap-next-task-suggester --write-report /tmp/r
 codex-orchestrator run-routine budget-policy-report --write-report /tmp/budget-policy-report.json
 codex-orchestrator policy check --write-report /tmp/policy-check-report.json
 codex-orchestrator eval run --write-report /tmp/eval-run-report.json
+codex-orchestrator eval draft-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1 --write-report /tmp/eval-draft.json
 codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
 codex-orchestrator rules propose --from-review docs/reviews/example.md --write-report /tmp/rules-proposal-report.json
 codex-orchestrator pack review --package-id PKG --task-id TASK --output /tmp/review-pack/PKG
@@ -497,11 +498,20 @@ without scanning the current repository text. The default suite is
 `orchestration-policy-auditor`; it compares actual `OPAxxx` rule-hit counts
 against each fixture's `expectedRuleHits`.
 
+Use `codex-orchestrator eval draft-failure` when a real review, transcript, or
+misalignment note looks like it should become a regression fixture. It is the
+Maker/Checker step before `eval add-failure`: it reads `--text`,
+`--text-file`, or `--from-review`, applies the current policy rules read-only,
+reports actual versus expected `OPAxxx` hits, and emits a suggested
+`add-failure` command only when counts match. It does not write fixtures or
+mutate rules. A human or orchestrator checker should accept the draft before
+locking it into the suite.
+
 Use `codex-orchestrator eval add-failure` to add a manually supplied failure
-case to the fixture suite. The MVP requires explicit `--text` or `--text-file`
-and at least one `--expect RULE=N`. It validates the text against the current
-rules before writing JSON and refuses to overwrite existing fixtures unless
-`--force` is supplied.
+case to the fixture suite. Prefer running `eval draft-failure` first, then use
+`add-failure` only after the failure class and expected rule counts are
+accepted. It validates the text against the current rules before writing JSON
+and refuses to overwrite existing fixtures unless `--force` is supplied.
 
 Use `codex-orchestrator rules propose` to turn local evidence text or a review
 file into a review-only rule proposal report. It accepts `--from-review`,

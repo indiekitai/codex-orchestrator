@@ -367,6 +367,7 @@ cmd/codex-orchestrator run-routine roadmap-next-task-suggester
 cmd/codex-orchestrator run-routine budget-policy-report
 cmd/codex-orchestrator policy check
 cmd/codex-orchestrator eval run
+cmd/codex-orchestrator eval draft-failure
 cmd/codex-orchestrator eval add-failure
 cmd/codex-orchestrator rules propose
 cmd/codex-orchestrator record-routine-run --routine ... --status ...
@@ -409,9 +410,13 @@ merge、push 或 cleanup 的执行线程。
 `eval run` 单独运行 fixture suite，不扫描当前仓库文本。它适合在修改
 `OPA001`-`OPA011` 规则时做确定性回归检查。
 
-`eval add-failure` 已有手动 MVP：通过 `--text`/`--text-file` 和 `--expect RULE=N`
-写入新的 fixture。写入前会先用当前规则验证实际命中是否匹配期望；还没有从 review
-文档自动解析失败案例。
+`eval draft-failure` 已补 Maker/Checker 草案层：通过 `--text`、`--text-file` 或
+`--from-review` 读取失败证据，只读运行当前 policy 规则，输出 actual/expected
+`OPAxxx` 命中和建议的 `eval add-failure` 命令，但不写 fixture。
+
+`eval add-failure` 已有手动写入层：通过 `--text`/`--text-file` 和 `--expect RULE=N`
+写入新的 fixture。写入前会先用当前规则验证实际命中是否匹配期望；推荐先由
+`draft-failure` 生成草案并经 Checker 接受后再锁进 regression suite。
 
 `rules propose` 已有保守的 review-only MVP：通过 `--from-review`、`--text` 或
 `--text-file` 读取本地证据文本，输出建议规则 title/body/source/evidence label/
@@ -518,7 +523,7 @@ routines/
 
 ```bash
 codex-orchestrator policy check --task TASK_ID
-codex-orchestrator eval add-failure --from-review docs/reviews/...
+codex-orchestrator eval draft-failure --from-review docs/reviews/... --id reviewed-failure --expect OPA001=1
 codex-orchestrator eval run
 codex-orchestrator rules propose --from-review docs/reviews/...
 ```
@@ -528,13 +533,14 @@ codex-orchestrator rules propose --from-review docs/reviews/...
 ```bash
 codex-orchestrator policy check --repo .
 codex-orchestrator eval run --repo .
+codex-orchestrator eval draft-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1 --write-report /tmp/eval-draft.json
 codex-orchestrator eval add-failure --id dry-run-example --text "Dry run mode can dispatch workers immediately." --expect OPA001=1
 codex-orchestrator rules propose --from-review docs/reviews/example.md --write-report /tmp/rules-proposal-report.json
 ```
 
 `policy check` 会先运行本地 orchestration policy auditor，再运行仓库内置 fixture
-eval；`eval run` 只运行 fixture eval；当前 orchestration-policy-auditor suite 有
-22 个 local/static fixture；`eval add-failure` 能手动沉淀失败案例。
+eval；`eval run` 只运行 fixture eval；`eval draft-failure` 能把 review/text 失败
+证据变成待批准草案；`eval add-failure` 能把已批准失败案例手动锁进回归 suite。
 `rules propose` 能从本地 review/text 输入生成只供人工 review 的规则建议报告；还没有
 自动修改 live 规则，也不应自动修改。
 
