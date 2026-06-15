@@ -288,12 +288,13 @@ Future daemon/UI
 
 下一步建议：
 
-1. 发布可用的 beta tag，验证 GitHub release artifacts。已完成到 `v0.3.7`。
+1. 发布可用的 beta tag，验证 GitHub release artifacts。已完成到 `v0.3.10`。
    当前 release 线已包含 missed heartbeat 检测、macOS watchdog fallback、
    reusable status snapshot、package/external review workflow、package closeout
    status、starter templates、更清晰的 current-action rows，以及
-   misalignment/claim-verification/trust-risk 本地静态闭环。后续 release 文档只应声明
-   已经发布并验证过的资产。
+   misalignment/claim-verification/trust-risk 本地静态闭环；最新 release 还把
+   reviewer timeout 和 package `candidate-closed` closeout hint 做成显式状态。
+   后续 release 文档只应声明已经发布并验证过的资产。
 
 2. 继续打磨 Codex App-first install UX。Homebrew、npm wrapper、tap 或其他
    package-manager 分发路线不在当前产品范围内；helper binary 只能作为 Codex App

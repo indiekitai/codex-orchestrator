@@ -1,79 +1,47 @@
-# v0.3.9 Release Notes
+# v0.3.10 Release Notes
 
-`v0.3.9` adds a small feature-package desired-state layer to the Codex
-App-first orchestration workflow. The goal is to keep long runs focused on one
-coherent product/module outcome instead of treating several clean worker slices
-as a finished feature package by accident.
+`v0.3.10` is a small reliability and operator-clarity release for real Codex
+App orchestration loops. It focuses on two things that showed up in live use:
+reviewers timing out, and package lanes looking "done" without a clear closeout
+signal.
 
 ## Highlights
 
-- Added `pack spec`:
-  - generates a package spec template;
-  - checks required sections such as outcome, scope, gates, evidence
-    boundaries, evaluation matrix, exit condition, blocked condition, and
-    waivers.
-- Added `pack eval`:
-  - builds a local/static evaluation matrix from ledger tasks;
-  - checks task commit state, recorded gates, evidence boundaries, and
-    package-level integration proof;
-  - treats an `active` ledger task with a clean commit after `baseCommit` as
-    reviewable by reading git/worktree truth.
-- Added `pack reconcile`:
-  - compares desired package spec, evaluation matrix, and `pack status`
-    closeout;
-  - reports drift before the orchestrator claims a feature package is done or
-    dispatches the next same-package worker.
-- Added starter templates:
-  - `.codex-orchestrator/packages/example-package/spec.md`;
-  - `.codex-orchestrator/packages/example-package/evaluation.md`.
-- Updated the Codex skill and docs to make package specs/evaluation matrices
-  part of feature-package planning and closeout.
+- `review run` now supports `--timeout-seconds` in addition to
+  `--timeout-minutes`.
+- External reviewer timeouts are recorded as `blocked` reviewer-timeout reports
+  and ledger routine runs instead of being hidden as generic command failures.
+- Package status rows now expose:
+  - `closeoutStatus`;
+  - `closeoutReason`;
+  - `closeoutNextAction`.
+- Status HTML and Markdown surface package closeout hints. A package can now
+  show `candidate-closed` when all recorded workers are terminal and there is
+  no visible local review, cleanup, or blocker pressure.
+- Skill and guide docs now explain how to treat reviewer timeouts and package
+  closeout hints without promoting local/static evidence into direct proof.
 
 ## Why This Release
 
-Real Codex App orchestration does not fail only because a worker branch is
-dirty. It also fails when a run slowly turns into many individually mergeable
-slices without a clear package outcome, proof matrix, or exit condition.
+Long-running orchestration often stalls for practical reasons: an external
+review command hangs, a package has no active workers but no explicit "done"
+decision, or the orchestrator is unsure whether to rerun, waive, or switch
+lanes.
 
-`v0.3.9` makes that package-level desired state explicit. It gives the
-orchestrator a lightweight way to ask:
-
-- What is this package supposed to accomplish?
-- Which proof layers exist?
-- Which proof layers are still missing?
-- Is package closeout aligned with the original goal?
-
-## New Commands
-
-Generate a package spec:
-
-```bash
-codex-orchestrator pack spec \
-  --package-id CHECKOUT-PACKAGE \
-  --write-template .codex-orchestrator/packages/checkout/spec.md
-```
-
-Build an evaluation matrix:
-
-```bash
-codex-orchestrator pack eval --package-id CHECKOUT-PACKAGE --json
-```
-
-Reconcile desired state and observed closeout:
-
-```bash
-codex-orchestrator pack reconcile \
-  --package-id CHECKOUT-PACKAGE \
-  --spec .codex-orchestrator/packages/checkout/spec.md \
-  --json
-```
+`v0.3.10` makes those states visible. A reviewer timeout becomes a ledgered
+review setup issue. A cleaned package row now tells the operator whether it is
+only locally quiet or ready for an explicit package closeout decision.
 
 ## Evidence Boundary
 
-All new helper outputs are `local/static` planning and review aids. They do not
-dispatch workers, merge, push, cleanup, release, deploy, call external
-services, or prove direct runtime/device/provider behavior. The Codex App
-orchestrator still makes the final accept/reject/block/next-dispatch decision.
+All new helper outputs are `local/static` or `proxy/advisory` evidence:
+
+- timeout classification and package closeout hints are local/static helper
+  evidence;
+- external reviewer output remains proxy/advisory;
+- a reviewer timeout is blocked review evidence for that reviewer run;
+- none of this authorizes implementation, merge, push, cleanup, release,
+  deploy, or direct runtime/device/provider proof.
 
 ## Verification Before Publishing
 
@@ -84,12 +52,11 @@ Checks used for this release:
 - `go run ./cmd/codex-orchestrator policy check --repo . --json`
 - `go run ./cmd/codex-orchestrator run-routine docs-drift-checker --repo . --json`
 - `go run ./cmd/codex-orchestrator run-routine evidence-label-auditor --repo . --json`
-- package spec/eval smoke with a temporary git repository
-- `/Users/tf/.local/bin/codex-orchestrator --help`
+- Pi review attempted; it produced no output within 90 seconds and was treated
+  as unavailable reviewer evidence, not as a passing review.
 
 ## Suggested Announcement
 
-`codex-orchestrator v0.3.9` adds feature-package desired state: package specs,
-evaluation matrices, and reconcile reports so Codex App orchestration can keep
-one product/module lane honest instead of mistaking clean slices for a closed
-feature package.
+`codex-orchestrator v0.3.10` improves real Codex App loops by making reviewer
+timeouts and package closeout state explicit: no silent waiting, no guessing
+whether a cleaned package is actually ready to close.
