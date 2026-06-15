@@ -305,6 +305,9 @@ type PackageSummary struct {
 type PackageStatusItem struct {
 	ID                  string         `json:"id"`
 	Status              string         `json:"status"`
+	CloseoutStatus      string         `json:"closeoutStatus,omitempty"`
+	CloseoutReason      string         `json:"closeoutReason,omitempty"`
+	CloseoutNextAction  string         `json:"closeoutNextAction,omitempty"`
 	ProgressLabel       string         `json:"progressLabel,omitempty"`
 	ReviewStatus        string         `json:"reviewStatus,omitempty"`
 	ReviewRequired      bool           `json:"reviewRequired,omitempty"`
@@ -1039,6 +1042,7 @@ type ExternalReviewReport struct {
 	RunnerCommand       []string             `json:"runnerCommand,omitempty"`
 	RunnerOutput        string               `json:"runnerOutput,omitempty"`
 	TimeoutMinutes      int                  `json:"timeoutMinutes,omitempty"`
+	TimeoutSeconds      int                  `json:"timeoutSeconds,omitempty"`
 	FindingCounts       ReviewFindingCounts  `json:"findingCounts,omitempty"`
 	NeedsHuman          bool                 `json:"needsHuman"`
 	ResidualRisks       []string             `json:"residualRisks,omitempty"`
@@ -1275,7 +1279,7 @@ func usage() {
   codex-orchestrator pack spec --package-id PKG [--repo PATH] [--ledger PATH] [--spec PATH] [--write-template PATH] [--write-report PATH] [--json]
   codex-orchestrator pack eval --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack reconcile --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--spec PATH] [--write-report PATH] [--json]
-  codex-orchestrator review run --package-id PKG --reviewer pi|claude --pack DIR [--repo PATH] [--ledger PATH] [--write-report PATH] [--json] [--dry-run]
+  codex-orchestrator review run --package-id PKG --reviewer pi|claude --pack DIR [--repo PATH] [--ledger PATH] [--write-report PATH] [--json] [--dry-run] [--timeout-minutes N | --timeout-seconds N]
   codex-orchestrator review import --package-id PKG --reviewer NAME --file PATH [--ledger PATH] [--task-id TASK] [--status passed|failed|blocked] [--p1 N] [--p2 N] [--json]
   codex-orchestrator review policy show|check [--repo PATH] [--config PATH] [--risk low|medium|high] [--task-count N] [--package-id PKG] [--json]
   codex-orchestrator validate-routines [--dir routines] [--json]
@@ -1646,7 +1650,7 @@ _codex_orchestrator()
       ;;
     review)
       if [[ ${COMP_WORDS[2]} == "run" ]]; then
-        COMPREPLY=( $(compgen -W "--repo --ledger --package-id --reviewer --pack --write-report --json --dry-run --timeout-minutes --help" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--repo --ledger --package-id --reviewer --pack --write-report --json --dry-run --timeout-minutes --timeout-seconds --help" -- "$cur") )
       elif [[ ${COMP_WORDS[2]} == "import" ]]; then
         COMPREPLY=( $(compgen -W "--ledger --package-id --reviewer --file --task-id --status --p0 --p1 --p2 --p3 --other-findings --json --help" -- "$cur") )
       elif [[ ${COMP_WORDS[2]} == "policy" ]]; then
@@ -1855,7 +1859,7 @@ case $state in
         if (( CURRENT == 3 )); then
           _values 'subcommand' run import policy
         elif [[ $words[3] == "run" ]]; then
-          _values 'options' --repo --ledger --package-id --reviewer --pack --write-report --json --dry-run --timeout-minutes --help
+          _values 'options' --repo --ledger --package-id --reviewer --pack --write-report --json --dry-run --timeout-minutes --timeout-seconds --help
         elif [[ $words[3] == "policy" ]]; then
           _values 'subcommand' show check
         else
@@ -4304,6 +4308,7 @@ func cmdReviewRun(args []string) error {
 	jsonOut := fs.Bool("json", false, "print JSON report")
 	dryRun := fs.Bool("dry-run", false, "print planned runner command without invoking reviewer")
 	timeoutMinutes := fs.Int("timeout-minutes", 20, "reviewer runner timeout in minutes")
+	timeoutSeconds := fs.Int("timeout-seconds", 0, "reviewer runner timeout in seconds; overrides --timeout-minutes when set")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -4321,7 +4326,7 @@ func cmdReviewRun(args []string) error {
 		resolvedRepo = "."
 	}
 	resolvedLedger := resolveDefaultLedgerPath(resolvedRepo, *ledgerPath, flagProvided(fs, "ledger"))
-	report, err := runExternalReview(resolvedRepo, resolvedLedger, *packageID, *reviewer, *packDir, *timeoutMinutes, *dryRun)
+	report, err := runExternalReview(resolvedRepo, resolvedLedger, *packageID, *reviewer, *packDir, *timeoutMinutes, *timeoutSeconds, *dryRun)
 	if err != nil {
 		return err
 	}
@@ -4336,7 +4341,7 @@ func cmdReviewRun(args []string) error {
 			return err
 		}
 	}
-	if !*dryRun && report.Status != "blocked" {
+	if !*dryRun && (report.Status != "blocked" || externalReviewTimeoutBlocked(report)) {
 		if err := recordExternalReviewRun(resolvedLedger, report); err != nil {
 			return err
 		}
@@ -5006,6 +5011,16 @@ func renderPackageCardHTML(b *strings.Builder, row PackageStatusItem) {
 	}
 	if row.ReviewNextAction != "" {
 		fmt.Fprintf(b, "<div class=\"action warn\">%s</div>", escapeHTML(row.ReviewNextAction))
+	}
+	if row.CloseoutStatus != "" {
+		fmt.Fprintf(b, "<div class=\"meta\">closeout: %s", escapeHTML(row.CloseoutStatus))
+		if row.CloseoutReason != "" {
+			fmt.Fprintf(b, " · %s", escapeHTML(row.CloseoutReason))
+		}
+		fmt.Fprintf(b, "</div>")
+	}
+	if row.CloseoutNextAction != "" && row.CloseoutNextAction != row.NextSuggestedAction && row.CloseoutNextAction != row.ReviewNextAction {
+		fmt.Fprintf(b, "<div class=\"action\">%s</div>", escapeHTML(row.CloseoutNextAction))
 	}
 	if row.NextSuggestedAction != "" {
 		fmt.Fprintf(b, "<div class=\"action\">%s</div>", escapeHTML(row.NextSuggestedAction))
@@ -7563,7 +7578,7 @@ func reviewPackLiveProofGate(report ReviewPack) LiveProofGate {
 	return gate
 }
 
-func runExternalReview(repoPath, ledgerPath, packageID, reviewer, packDir string, timeoutMinutes int, dryRun bool) (ExternalReviewReport, error) {
+func runExternalReview(repoPath, ledgerPath, packageID, reviewer, packDir string, timeoutMinutes int, timeoutSeconds int, dryRun bool) (ExternalReviewReport, error) {
 	report := newExternalReviewReport(packageID, reviewer, packDir)
 	resolvedPack := expandPath(packDir)
 	if !filepath.IsAbs(resolvedPack) {
@@ -7583,12 +7598,13 @@ func runExternalReview(repoPath, ledgerPath, packageID, reviewer, packDir string
 	report.TaskIDs = taskIDs
 	outputPath := filepath.Join(resolvedPack, safeFileName(reviewer)+"-review.md")
 	report.OutputPath = outputPath
-	timeout := time.Duration(timeoutMinutes) * time.Minute
-	if timeout <= 0 {
-		timeout = 20 * time.Minute
-		report.TimeoutMinutes = 20
-	} else {
+	timeout := externalReviewTimeout(timeoutMinutes, timeoutSeconds)
+	if timeoutSeconds > 0 {
+		report.TimeoutSeconds = timeoutSeconds
+	} else if timeoutMinutes > 0 {
 		report.TimeoutMinutes = timeoutMinutes
+	} else {
+		report.TimeoutMinutes = 20
 	}
 	name, args, display, err := externalReviewerCommand(reviewer, promptPath)
 	if err != nil {
@@ -7610,11 +7626,18 @@ func runExternalReview(repoPath, ledgerPath, packageID, reviewer, packDir string
 	output, err := commandOutputWithTimeout(resolvedPack, timeout, name, args...)
 	report.RunnerOutput = output
 	if err != nil {
-		report.Status = "failed"
 		report.NeedsHuman = true
+		report.Status = "failed"
 		report.BlockedReason = "external reviewer command failed"
+		report.NextSuggestedAction = "Inspect reviewer output, rerun the review if useful, or import a manual reviewer result."
+		if isCommandTimeoutError(err) {
+			report.Status = "blocked"
+			report.BlockedReason = "external reviewer timed out"
+			report.NextSuggestedAction = "Treat this reviewer as timed out; rerun with a larger timeout, import another reviewer, or explicitly record an optional-skipped review decision when project policy allows it."
+			report.ActionsTaken = append(report.ActionsTaken, "Recorded reviewer timeout as blocked/timeout; no merge, push, cleanup, or direct proof is authorized.")
+		}
 		report.Evidence["blocked"] = append(report.Evidence["blocked"], err.Error())
-		report.ResidualRisks = append(report.ResidualRisks, "External reviewer did not complete successfully; orchestrator must inspect the command output.")
+		report.ResidualRisks = append(report.ResidualRisks, "External reviewer did not complete successfully; orchestrator must inspect the command output or record an explicit waiver.")
 		return finalizeExternalReviewReport(report), nil
 	}
 	report.Status = "passed"
@@ -7623,6 +7646,27 @@ func runExternalReview(repoPath, ledgerPath, packageID, reviewer, packDir string
 	report.ActionsTaken = append(report.ActionsTaken, "Invoked external reviewer in read-only package review mode")
 	report.NextSuggestedAction = "Import/inspect reviewer findings and compare them with package acceptance criteria before merge."
 	return finalizeExternalReviewReport(report), nil
+}
+
+func externalReviewTimeout(timeoutMinutes int, timeoutSeconds int) time.Duration {
+	if timeoutSeconds > 0 {
+		return time.Duration(timeoutSeconds) * time.Second
+	}
+	if timeoutMinutes > 0 {
+		return time.Duration(timeoutMinutes) * time.Minute
+	}
+	return 20 * time.Minute
+}
+
+func isCommandTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "timed out after")
+}
+
+func externalReviewTimeoutBlocked(report ExternalReviewReport) bool {
+	return report.Status == "blocked" && strings.Contains(strings.ToLower(report.BlockedReason), "timed out")
 }
 
 func newExternalReviewReport(packageID, reviewer, packDir string) ExternalReviewReport {
@@ -12009,6 +12053,8 @@ func buildPackageSummary(tasks []Task, observations []Observation, routineRuns [
 			row.ReviewStatus = "external-review-not-recorded"
 		}
 		applyPackageReviewPolicy(row)
+		applyPackageCloseoutHint(row)
+		row.HumanSummary = packageHumanSummary(*row)
 		rows = append(rows, *row)
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -12091,6 +12137,60 @@ func applyPackageReviewPolicy(row *PackageStatusItem) {
 		row.Status = "review-needed"
 		row.NextSuggestedAction = row.ReviewNextAction
 	}
+}
+
+func applyPackageCloseoutHint(row *PackageStatusItem) {
+	row.CloseoutStatus = "open"
+	row.CloseoutReason = "package still has local orchestration pressure."
+	row.CloseoutNextAction = firstNonEmpty(row.NextSuggestedAction, "Continue the current package lane.")
+	switch row.Status {
+	case "blocked":
+		row.CloseoutStatus = "blocked"
+		row.CloseoutReason = "one or more package workers are blocked."
+		row.CloseoutNextAction = "Resolve, defer, or explicitly record the blocker before switching packages."
+	case "review-needed":
+		row.CloseoutStatus = "review-needed"
+		row.CloseoutReason = "package has completed worker(s) or review debt that still need orchestrator acceptance."
+		row.CloseoutNextAction = firstNonEmpty(row.ReviewNextAction, "Review completed worker(s), run gates, then merge or reject.")
+	case "cleanup-needed":
+		row.CloseoutStatus = "cleanup-needed"
+		row.CloseoutReason = "accepted package work still has worktree/branch cleanup pressure."
+		row.CloseoutNextAction = "Clean accepted package worktree/branch, then refresh status."
+	case "attention-needed":
+		row.CloseoutStatus = "attention-needed"
+		row.CloseoutReason = "package contains task states that are not cleanly terminal."
+		row.CloseoutNextAction = "Inspect package task status before treating this lane as closed."
+	case "active":
+		row.CloseoutStatus = "active"
+		row.CloseoutReason = "package has active or pending worker progress."
+		row.CloseoutNextAction = "Wait for same-package worker progress; do not fill capacity with unrelated work."
+	case "review-only":
+		row.CloseoutStatus = "review-only"
+		row.CloseoutReason = "package has no worker tasks and only package-level routine output."
+		row.CloseoutNextAction = "Review package routine output before closing or dispatching package work."
+	case "cleaned":
+		if row.TaskCount > 0 && packageTerminalCount(*row) >= row.TaskCount {
+			row.CloseoutStatus = "candidate-closed"
+			row.CloseoutReason = "all recorded package workers are terminal and no local review/cleanup/blocked pressure remains."
+			row.CloseoutNextAction = "If the roadmap has no same-package next worker, record package closed/no-next before switching product lanes."
+		} else {
+			row.CloseoutStatus = "idle"
+			row.CloseoutReason = "package has no current local pressure, but task progress is not fully terminal."
+			row.CloseoutNextAction = "Choose the next coherent worker in this package or explicitly close/defer it."
+		}
+	default:
+		row.CloseoutStatus = "unknown"
+		row.CloseoutReason = "package status is not recognized by the closeout helper."
+		row.CloseoutNextAction = "Inspect package row before dispatching or switching lanes."
+	}
+}
+
+func packageTerminalCount(row PackageStatusItem) int {
+	total := 0
+	for _, status := range []string{"merged", "released", "cleaned", "rejected", "abandoned"} {
+		total += row.Counts[status]
+	}
+	return total
 }
 
 func packageExternalReviewMissing(reviewStatus string) bool {
@@ -12209,6 +12309,18 @@ func packageHumanSummary(row PackageStatusItem) string {
 	}
 	if len(row.CleanupTaskIDs) > 0 {
 		pieces = append(pieces, fmt.Sprintf("%d 个待清理", len(row.CleanupTaskIDs)))
+	}
+	switch row.CloseoutStatus {
+	case "candidate-closed":
+		pieces = append(pieces, "候选收口：无本地待审/待清理压力")
+	case "blocked":
+		pieces = append(pieces, "未收口：有阻塞")
+	case "review-needed":
+		pieces = append(pieces, "未收口：待验收或 review")
+	case "active":
+		pieces = append(pieces, "未收口：有 worker 进行中")
+	case "cleanup-needed":
+		pieces = append(pieces, "未收口：待清理")
 	}
 	return strings.Join(pieces, "，")
 }
@@ -13826,6 +13938,12 @@ func humanRiskLines(summary ObserveSummary) []string {
 
 func humanNextAction(summary ObserveSummary) string {
 	if row, ok := currentPackageLane(summary.PackageSummary); ok {
+		if row.CloseoutStatus == "candidate-closed" && row.CloseoutNextAction != "" {
+			return row.CloseoutNextAction
+		}
+		if row.CloseoutStatus == "review-needed" && row.CloseoutNextAction != "" {
+			return row.CloseoutNextAction
+		}
 		if row.NextSuggestedAction != "" {
 			return row.NextSuggestedAction
 		}
@@ -14261,13 +14379,18 @@ func renderPackageSummaryMarkdown(b *strings.Builder, summary PackageSummary) {
 		}
 		fmt.Fprintf(b, "- historicalReviewDebt: `%s` (not the active lane unless explicitly selected)\n", strings.Join(ids, ", "))
 	}
-	fmt.Fprintf(b, "\n| Package | Status | Progress | External Review | Review Decision | Counts | Updated | Next |\n")
-	fmt.Fprintf(b, "|---|---|---|---|---|---|---|---|\n")
+	fmt.Fprintf(b, "\n| Package | Status | Closeout | Progress | External Review | Review Decision | Counts | Updated | Next |\n")
+	fmt.Fprintf(b, "|---|---|---|---|---|---|---|---|---|\n")
 	for _, row := range summary.Rows {
-		next := firstNonEmpty(row.ReviewNextAction, row.NextSuggestedAction)
-		fmt.Fprintf(b, "| `%s` | `%s` | %s | `%s` | `%s` | `%s` | `%s` | %s |\n",
+		next := firstNonEmpty(row.ReviewNextAction, row.CloseoutNextAction, row.NextSuggestedAction)
+		closeout := row.CloseoutStatus
+		if row.CloseoutReason != "" {
+			closeout += ": " + row.CloseoutReason
+		}
+		fmt.Fprintf(b, "| `%s` | `%s` | %s | %s | `%s` | `%s` | `%s` | `%s` | %s |\n",
 			row.ID,
 			row.Status,
+			escapeMarkdownTable(closeout),
 			escapeMarkdownTable(firstNonEmpty(row.HumanSummary, row.ProgressLabel)),
 			escapeMarkdownTable(row.ReviewStatus),
 			escapeMarkdownTable(row.ReviewDecision),

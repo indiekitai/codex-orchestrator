@@ -476,6 +476,12 @@ codex-orchestrator pack acceptance \
   --write-report .codex-orchestrator/review-pack/PKG/package-acceptance.json
 ```
 
+Use `--timeout-minutes` for normal reviewer runs. For short local smoke tests or
+CI fixtures, `--timeout-seconds` overrides the minute value. A timeout is
+recorded as a blocked reviewer timeout so the orchestrator can rerun, import a
+different reviewer result, or explicitly record an optional-skipped review
+instead of silently waiting.
+
 If `--task-id` is omitted, `pack review` and `pack acceptance` select tasks
 recorded with the given `packageId`. This keeps the orchestrator from manually
 copying a long list of task ids out of chat. External reviewer output is

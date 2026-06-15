@@ -2288,6 +2288,24 @@ func TestIntegrationStateDirOnlyAndDrainSlotDisplay(t *testing.T) {
 	if progress.Headline != "队列已停，不再派发" || !strings.Contains(progress.NextStep, "run-mode=drain") {
 		t.Fatalf("expected terminal drain human summary, got %#v", progress)
 	}
+	closedRow := PackageStatusItem{
+		ID:        "customer-ordering-coupon-checkout",
+		Status:    "cleaned",
+		TaskCount: 2,
+		Counts:    map[string]int{"cleaned": 2},
+	}
+	applyPackageCloseoutHint(&closedRow)
+	closedRow.HumanSummary = packageHumanSummary(closedRow)
+	if closedRow.CloseoutStatus != "candidate-closed" || !strings.Contains(closedRow.HumanSummary, "候选收口") {
+		t.Fatalf("expected candidate package closeout, got %#v", closedRow)
+	}
+	closedProgress := buildHumanProgressSummary(ObserveSummary{
+		JobSummary:     JobSummary{Total: 2},
+		PackageSummary: PackageSummary{CurrentLane: &closedRow, Rows: []PackageStatusItem{closedRow}},
+	})
+	if !strings.Contains(closedProgress.NextStep, "record package closed/no-next") {
+		t.Fatalf("expected closeout next step, got %#v", closedProgress)
+	}
 	if got := humanDispatchModeExplanation("paused"); !strings.Contains(got, "暂停编排") || !strings.Contains(got, "不派发") {
 		t.Fatalf("expected human paused explanation, got %q", got)
 	}
@@ -3519,6 +3537,66 @@ func TestReviewRunDryRunAndImportRecordExternalReviewer(t *testing.T) {
 	}
 	if got := strings.Join(run.Evidence["proxy"], "\n"); !strings.Contains(got, "Imported external reviewer output") {
 		t.Fatalf("expected proxy advisory evidence, got %#v", run.Evidence)
+	}
+}
+
+func TestReviewRunTimeoutRecordsBlockedReviewer(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	packDir := filepath.Join(root, "review-pack")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(packDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pack := ReviewPack{
+		SchemaVersion: 1,
+		PackageID:     "PKG-TIMEOUT",
+		Tasks:         []MergeReadinessTaskSummary{{ID: "TASK-TIMEOUT"}},
+		Evidence:      normalizedEvidence(nil),
+	}
+	if err := writeJSON(filepath.Join(packDir, "review-pack.json"), pack); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeText(filepath.Join(packDir, "reviewer-prompt.md"), "Review this package.\n"); err != nil {
+		t.Fatal(err)
+	}
+	binDir := filepath.Join(root, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fakePi := filepath.Join(binDir, "pi")
+	if err := os.WriteFile(fakePi, []byte("#!/bin/sh\nsleep 2\necho late\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	reportPath := filepath.Join(root, "external-review-timeout.json")
+	if err := cmdReviewRun([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-TIMEOUT", "--reviewer", "pi", "--pack", packDir, "--timeout-seconds", "1", "--write-report", reportPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report ExternalReviewReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != "blocked" || report.BlockedReason != "external reviewer timed out" || report.TimeoutSeconds != 1 {
+		t.Fatalf("expected blocked timeout report, got %#v", report)
+	}
+	if !strings.Contains(report.NextSuggestedAction, "optional-skipped") {
+		t.Fatalf("expected optional-skipped guidance, got %q", report.NextSuggestedAction)
+	}
+	updated, err := loadLedger(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.RoutineRuns) != 1 || updated.RoutineRuns[0].Status != "blocked" || updated.RoutineRuns[0].BlockedReason != "external reviewer timed out" {
+		t.Fatalf("expected blocked timeout routine run, got %#v", updated.RoutineRuns)
 	}
 }
 

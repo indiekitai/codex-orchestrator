@@ -902,6 +902,20 @@ all external review output as `proxy/advisory`: it can block acceptance or infor
 the orchestrator, but it cannot authorize implementation, merge, push, cleanup,
 release, deploy, or direct runtime/device/provider proof.
 
+If `review run` times out, treat it as a recorded reviewer timeout, not as a
+reason to wait forever. The helper marks the run `blocked` with timeout evidence
+and can record it in the ledger. The orchestrator may rerun with a larger
+`--timeout-minutes`, use `--timeout-seconds` for short/local tests, import
+another reviewer result, or explicitly record an optional-skipped/waived review
+when project policy allows it. Do not let one unavailable reviewer stop a
+continuous package closeout unless the package policy requires that reviewer.
+
+When status shows a package as `candidate-closed`, it means all recorded workers
+for that package are terminal and no local review/cleanup/blocker pressure is
+visible. That is not an automatic product claim. Before switching product lanes,
+record or state whether the package has no same-lane next worker, is blocked on
+owner/live proof, or needs a fresh package spec.
+
 When importing a reviewer result, record finding counts when known:
 
 ```bash

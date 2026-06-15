@@ -770,6 +770,13 @@ authorizes implementation, merge, push, cleanup, release, deploy, or direct
 runtime/device/provider proof by itself. For the design rationale, see
 [docs/research/package-review-policy.md](research/package-review-policy.md).
 
+Reviewer timeouts are explicit state, not hidden waiting. `review run` supports
+`--timeout-minutes` for normal reviewer runs and `--timeout-seconds` for short
+local smoke tests. A timeout is recorded as a `blocked` reviewer timeout with
+proxy/advisory evidence. The orchestrator should then rerun with a larger
+timeout, import another reviewer result, or record an explicit
+optional-skipped/waived review when project policy allows it.
+
 If one configured reviewer is unavailable because of quota, auth, or local
 installation state, do not stop a continuous package closeout solely to wait for
 that reviewer unless the project policy explicitly requires it. Use the
