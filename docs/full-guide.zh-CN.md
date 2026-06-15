@@ -7,12 +7,13 @@
 
 # codex-orchestrator
 
-**面向真实代码仓库的 Codex App 优先工程编排流程。**
+**面向真实代码仓库的 Codex App 优先 Loop Engineering 工程控制层。**
 
-`codex-orchestrator` 把 Codex App 从“一次开一个聊天写代码”，推进到一个可重复的
-工程循环：先规划边界清楚的任务，再放到隔离的 Codex worktree 会话里执行；用心跳
-（heartbeat）唤醒检查，用 git 里的真实状态对账；完成的工作先审查再合并，确认可接受后
-推送，清理分支，然后继续推进路线图。
+Loop Engineering 是一套工程方法：把目标、状态、反馈、审查和退出条件放进 Agent
+工作流里。`codex-orchestrator` 是 Codex App 里的实践控制层，也就是 harness：先规划
+边界清楚的任务，再放到隔离的 Codex worktree 会话里执行；用心跳（heartbeat）唤醒检查，
+用 git 里的真实状态对账；完成的工作先审查再合并，确认可接受后推送，清理分支，然后
+继续推进路线图。
 
 核心想法很简单：有用的 Agent 循环不是“让 Agent 一直自动写下去”，而是让每一个
 worker 分支都能被审查、拒绝、合并和清理。

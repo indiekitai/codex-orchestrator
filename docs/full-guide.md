@@ -9,11 +9,12 @@ advanced users.
 
 # codex-orchestrator
 
-**A Codex App-first orchestration workflow for supervised engineering loops in
-real repositories.**
+**A Codex App-first engineering harness for Loop Engineering in real
+repositories.**
 
-`codex-orchestrator` turns Codex App from one-chat-at-a-time coding help into a
-repeatable engineering loop: plan a bounded task, run it in an isolated Codex
+Loop Engineering is the discipline: design goals, state, feedback, review, and
+exit conditions around agent work. `codex-orchestrator` is a practical Codex
+App harness for that loop: plan a bounded task, run it in an isolated Codex
 worktree session, wake up on a heartbeat, reconcile with git truth, review
 before merge, push accepted work, clean the branch, and continue through the
 roadmap.
@@ -74,7 +75,7 @@ Open Codex App in the repository you want to orchestrate and paste:
 I want to try codex-orchestrator in this repository.
 
 Read https://github.com/indiekitai/codex-orchestrator and use it as a
-Codex App-first orchestration workflow.
+Codex App-first engineering harness for Loop Engineering.
 
 If the Codex App skill from that repository is not installed, install it into
 ~/.codex/skills/codex-orchestrator.

@@ -2,10 +2,11 @@
 
 # codex-orchestrator
 
-**面向真实代码仓库的 Codex App 优先工程编排流程。**
+**面向真实代码仓库的 Codex App 优先 Loop Engineering 工程控制层。**
 
-`codex-orchestrator` 帮一个主 Codex App 会话跑更安全的外层循环：先把工作拆成边界清楚
-的任务，再启动隔离的 worktree 会话；用本地账本（ledger）记录状态，用心跳
+Loop Engineering 是一套工程方法：把目标、状态、反馈、审查和退出条件放进 Agent
+工作流里。`codex-orchestrator` 是 Codex App 里的那层工程控制层，也就是 harness：
+先把工作拆成边界清楚的任务，再启动隔离的 worktree 会话；用本地账本（ledger）记录状态，用心跳
 （heartbeat）定时唤醒检查；完成的分支先审查，确认可接受后再 merge/push，最后清理
 worktree，并继续推进路线图。
 
@@ -22,7 +23,8 @@ worktree，并继续推进路线图。
 - 完成分支需要审查、合并、推送和清理；
 - 长时间循环容易变成随机扫小任务，而不是持续推进一个功能包。
 
-`codex-orchestrator` 解决的就是这套工程纪律。
+`codex-orchestrator` 解决的是这层控制系统：它不是 Loop Engineering 这个概念本身，
+而是让循环变得可观察、可验收、可恢复的一套实践工具。
 
 ## 它包含什么
 
@@ -48,7 +50,7 @@ fixture”的草案供审查，并在状态页里显示 `trustRisk` 风险块。
 我想在这个仓库里试用 codex-orchestrator。
 
 请阅读 https://github.com/indiekitai/codex-orchestrator，并把它作为
-以 Codex App 为主入口的工程编排工作流来使用。
+以 Codex App 为主入口的 Loop Engineering 工程控制层来使用。
 
 如果这个仓库提供的 Codex App skill 还没安装，请安装到
 ~/.codex/skills/codex-orchestrator。

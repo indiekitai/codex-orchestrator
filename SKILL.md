@@ -1,10 +1,10 @@
 ---
 name: codex-orchestrator
 description: |
-  Use when the user wants Codex App to run a supervised outer loop for
-  multi-session development: plan bounded work, dispatch isolated worktree
-  sessions, monitor with heartbeat and ledger truth, review/merge/push/cleanup,
-  rescue stale tasks, and keep direct/proxy/local/blocked evidence honest.
+  Use when the user wants Codex App to run a supervised engineering harness for
+  Loop Engineering: plan bounded work, dispatch isolated worktree sessions,
+  monitor with heartbeat and ledger truth, review/merge/push/cleanup, rescue
+  stale tasks, and keep direct/proxy/local/blocked evidence honest.
 ---
 
 # codex-orchestrator
@@ -32,10 +32,12 @@ surface for that environment, or report the tooling blocker before dispatching.
 
 Use this skill when the best move is not one big implementation in the current thread, but a controlled pipeline of small independent sessions. The orchestrator owns decomposition, dispatch, monitoring, review, merge, push, and cleanup.
 
-This is a Codex App-first supervised outer loop. It is not a standalone daemon,
-a fully autonomous agent operating system, or a replacement for engineering
-judgment. Worker sessions still run their own edit/test/fix inner loops; this
-skill manages the project-level outer loop around those workers.
+Loop Engineering is the discipline: design goals, state, feedback, review, and
+exit conditions around agent work. This skill is the Codex App-first harness for
+that discipline. It is not a standalone daemon, a fully autonomous agent
+operating system, or a replacement for engineering judgment. Worker sessions
+still run their own edit/test/fix inner loops; this skill manages the
+project-level control layer around those workers.
 
 This works best in early development or large-module buildout where many slices can move in parallel. It works poorly for hardware-heavy acceptance, production deploys, payment tests, or steps requiring frequent human observation; keep those serialized and explicit.
 

@@ -2,13 +2,15 @@
 
 # codex-orchestrator
 
-**A Codex App-first orchestration workflow for supervised engineering loops in
-real repositories.**
+**A Codex App-first engineering harness for Loop Engineering in real
+repositories.**
 
-`codex-orchestrator` helps a main Codex App session run a safer outer loop:
-split work into bounded tasks, start isolated worktree sessions, track state in
-a local ledger, wake up on a heartbeat, review completed branches, merge/push
-accepted work, clean up, and continue through a roadmap.
+Loop Engineering is the discipline: design the goal, state, feedback, review,
+and exit conditions around an agent loop. `codex-orchestrator` is the harness
+for that discipline in Codex App: split work into bounded tasks, start isolated
+worktree sessions, track state in a local ledger, wake up on a heartbeat,
+review completed branches, merge/push accepted work, clean up, and continue
+through a roadmap.
 
 The point is not to let agents write forever. The point is to make every worker
 branch reviewable, rejectable, mergeable, and cleanable.
@@ -24,7 +26,9 @@ One Codex chat is enough for small edits. Larger work gets messy:
 - a long-running loop can drift into random small tasks instead of one feature
   package.
 
-`codex-orchestrator` is the operating discipline around that workflow.
+`codex-orchestrator` is the control layer around that workflow: not the loop
+idea itself, but the practical harness that keeps the loop observable,
+reviewable, and recoverable.
 
 ## What It Includes
 
@@ -54,7 +58,7 @@ your first message:
 I want to try codex-orchestrator in this repository.
 
 Read https://github.com/indiekitai/codex-orchestrator and use it as a
-Codex App-first orchestration workflow.
+Codex App-first engineering harness for Loop Engineering.
 
 If the Codex App skill from that repository is not installed, install it into
 ~/.codex/skills/codex-orchestrator.
