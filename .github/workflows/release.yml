@@ -43,8 +43,9 @@ jobs:
           EXT=""
           if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
           OUT="codex-orchestrator_${{ matrix.goos }}_${{ matrix.goarch }}${EXT}"
+          VERSION="${GITHUB_REF_NAME:-dev}"
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 \
-            go build -trimpath -ldflags="-s -w" -o "dist/$OUT" ./cmd/codex-orchestrator
+            go build -trimpath -ldflags="-s -w -X main.helperVersion=$VERSION" -o "dist/$OUT" ./cmd/codex-orchestrator
           cd dist
           if [ "${{ matrix.goos }}" = "windows" ]; then
             zip "$OUT.zip" "$OUT"
