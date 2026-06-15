@@ -594,6 +594,7 @@ type RoutineRun struct {
 	Reviewer            string              `json:"reviewer,omitempty"`
 	ReportPath          string              `json:"reportPath,omitempty"`
 	Status              string              `json:"status"`
+	FindingCounts       ReviewFindingCounts `json:"findingCounts,omitempty"`
 	Evidence            map[string][]string `json:"evidence"`
 	ActionsTaken        []string            `json:"actionsTaken"`
 	NeedsHuman          bool                `json:"needsHuman"`
@@ -654,6 +655,8 @@ type RoadmapScoreCandidate struct {
 	Score                   int      `json:"score"`
 	SuggestedAction         string   `json:"suggestedAction"`
 	WriteSetHints           []string `json:"writeSetHints,omitempty"`
+	SharedResourceHints     []string `json:"sharedResourceHints,omitempty"`
+	CommonRiskHints         []string `json:"commonRiskHints,omitempty"`
 	ExternalDependencyHints []string `json:"externalDependencyHints,omitempty"`
 	RiskHints               []string `json:"riskHints,omitempty"`
 	LedgerMatch             string   `json:"ledgerMatch,omitempty"`
@@ -845,12 +848,37 @@ type PackageAcceptanceReport struct {
 	AuthorizationMatrix []AuthorizationCheck        `json:"authorizationMatrix"`
 	LiveProofGate       LiveProofGate               `json:"liveProofGate"`
 	ClaimVerification   ClaimVerificationReport     `json:"claimVerification"`
+	FindingTracker      ReviewFindingTracker        `json:"findingTracker"`
+	IntegrationGate     IntegrationGateReport       `json:"integrationGate"`
 	ResidualRisks       []string                    `json:"residualRisks,omitempty"`
 	NeedsHuman          bool                        `json:"needsHuman"`
 	BlockedReason       string                      `json:"blockedReason,omitempty"`
 	NextAction          string                      `json:"nextAction"`
 	Evidence            map[string][]string         `json:"evidence"`
 	ActionsTaken        []string                    `json:"actionsTaken"`
+}
+
+type ReviewFindingCounts struct {
+	P0    int `json:"p0,omitempty"`
+	P1    int `json:"p1,omitempty"`
+	P2    int `json:"p2,omitempty"`
+	P3    int `json:"p3,omitempty"`
+	Other int `json:"other,omitempty"`
+}
+
+type ReviewFindingTracker struct {
+	Status      string              `json:"status"`
+	Summary     string              `json:"summary"`
+	Counts      ReviewFindingCounts `json:"counts"`
+	AgingPolicy string              `json:"agingPolicy"`
+	Actions     []string            `json:"actions,omitempty"`
+}
+
+type IntegrationGateReport struct {
+	Status          string   `json:"status"`
+	Summary         string   `json:"summary"`
+	DetectedGates   []string `json:"detectedGates,omitempty"`
+	MissingEvidence []string `json:"missingEvidence,omitempty"`
 }
 
 type PackageCloseoutReport struct {
@@ -919,6 +947,7 @@ type ExternalReviewReport struct {
 	RunnerCommand       []string             `json:"runnerCommand,omitempty"`
 	RunnerOutput        string               `json:"runnerOutput,omitempty"`
 	TimeoutMinutes      int                  `json:"timeoutMinutes,omitempty"`
+	FindingCounts       ReviewFindingCounts  `json:"findingCounts,omitempty"`
 	NeedsHuman          bool                 `json:"needsHuman"`
 	ResidualRisks       []string             `json:"residualRisks,omitempty"`
 	Evidence            map[string][]string  `json:"evidence"`
@@ -1149,7 +1178,7 @@ func usage() {
   codex-orchestrator pack acceptance --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack status --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator review run --package-id PKG --reviewer pi|claude --pack DIR [--repo PATH] [--ledger PATH] [--write-report PATH] [--json] [--dry-run]
-  codex-orchestrator review import --package-id PKG --reviewer NAME --file PATH [--ledger PATH] [--task-id TASK] [--status passed|failed|blocked] [--json]
+  codex-orchestrator review import --package-id PKG --reviewer NAME --file PATH [--ledger PATH] [--task-id TASK] [--status passed|failed|blocked] [--p1 N] [--p2 N] [--json]
   codex-orchestrator review policy show|check [--repo PATH] [--config PATH] [--risk low|medium|high] [--task-count N] [--package-id PKG] [--json]
   codex-orchestrator validate-routines [--dir routines] [--json]
   codex-orchestrator run-routine pr-reviewer --task-id TASK [--ledger PATH] [--write-report PATH] [--json]
@@ -1521,7 +1550,7 @@ _codex_orchestrator()
       if [[ ${COMP_WORDS[2]} == "run" ]]; then
         COMPREPLY=( $(compgen -W "--repo --ledger --package-id --reviewer --pack --write-report --json --dry-run --timeout-minutes --help" -- "$cur") )
       elif [[ ${COMP_WORDS[2]} == "import" ]]; then
-        COMPREPLY=( $(compgen -W "--ledger --package-id --reviewer --file --task-id --status --json --help" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--ledger --package-id --reviewer --file --task-id --status --p0 --p1 --p2 --p3 --other-findings --json --help" -- "$cur") )
       elif [[ ${COMP_WORDS[2]} == "policy" ]]; then
         COMPREPLY=( $(compgen -W "show check --repo --config --risk --task-count --package-id --write-report --json --help" -- "$cur") )
       else
@@ -1731,7 +1760,7 @@ case $state in
         elif [[ $words[3] == "policy" ]]; then
           _values 'subcommand' show check
         else
-          _values 'options' --ledger --package-id --reviewer --file --task-id --status --json --help
+          _values 'options' --ledger --package-id --reviewer --file --task-id --status --p0 --p1 --p2 --p3 --other-findings --json --help
         fi
         ;;
       record-task)
@@ -3726,6 +3755,11 @@ func cmdReviewImport(args []string) error {
 	reviewer := fs.String("reviewer", "", "reviewer name")
 	filePath := fs.String("file", "", "review markdown/text file")
 	status := fs.String("status", "passed", "review status: passed, failed, or blocked")
+	p0 := fs.Int("p0", 0, "number of open P0 findings reported by the reviewer")
+	p1 := fs.Int("p1", 0, "number of open P1 findings reported by the reviewer")
+	p2 := fs.Int("p2", 0, "number of open P2 findings reported by the reviewer")
+	p3 := fs.Int("p3", 0, "number of open P3 findings reported by the reviewer")
+	otherFindings := fs.Int("other-findings", 0, "number of other open findings reported by the reviewer")
 	jsonOut := fs.Bool("json", false, "print JSON report")
 	var taskIDs stringList
 	fs.Var(&taskIDs, "task-id", "task id covered by the review; repeatable")
@@ -3744,6 +3778,16 @@ func cmdReviewImport(args []string) error {
 	if !containsString([]string{"passed", "failed", "blocked"}, *status) {
 		return errors.New("review import --status must be passed, failed, or blocked")
 	}
+	findingCounts := ReviewFindingCounts{
+		P0:    *p0,
+		P1:    *p1,
+		P2:    *p2,
+		P3:    *p3,
+		Other: *otherFindings,
+	}
+	if err := validateReviewFindingCounts(findingCounts); err != nil {
+		return err
+	}
 	data, err := os.ReadFile(expandPath(*filePath))
 	if err != nil {
 		return err
@@ -3760,6 +3804,7 @@ func cmdReviewImport(args []string) error {
 		Reviewer:      *reviewer,
 		OutputPath:    expandPath(*filePath),
 		RunnerOutput:  strings.TrimSpace(string(data)),
+		FindingCounts: findingCounts,
 		Evidence: normalizedEvidence(map[string][]string{
 			"proxy": {"Imported external reviewer output from " + *filePath},
 			"local": {"Review import updated only the local ledger/routine-run record."},
@@ -3772,6 +3817,14 @@ func cmdReviewImport(args []string) error {
 		report.NeedsHuman = true
 		report.BlockedReason = "external reviewer reported blocked"
 		report.ResidualRisks = []string{"External reviewer did not produce a clean pass; orchestrator must inspect findings before merge."}
+	}
+	if reviewFindingsHasBlocking(findingCounts) {
+		report.NeedsHuman = true
+		report.ResidualRisks = append(report.ResidualRisks, "External reviewer reported open P0/P1 findings; package acceptance must not treat this as a clean pass until fixed or explicitly waived.")
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], reviewFindingSummary(findingCounts))
+	} else if reviewFindingTotal(findingCounts) > 0 {
+		report.ResidualRisks = append(report.ResidualRisks, "External reviewer reported non-blocking findings that need tracking through package closeout.")
+		report.Evidence["local"] = append(report.Evidence["local"], reviewFindingSummary(findingCounts))
 	}
 	if err := recordExternalReviewRun(*ledgerPath, report); err != nil {
 		return err
@@ -5859,12 +5912,32 @@ func buildPackageAcceptanceReport(repoPath string, ledgerPath string, packageID 
 		}
 		report.ExternalReviewRuns = append(report.ExternalReviewRuns, run)
 		report.EvidenceReviewed = append(report.EvidenceReviewed, "external reviewer "+firstNonEmpty(run.Reviewer, "unknown")+": "+run.Status)
+		if reviewFindingTotal(run.FindingCounts) > 0 {
+			report.EvidenceReviewed = append(report.EvidenceReviewed, "external reviewer "+firstNonEmpty(run.Reviewer, "unknown")+" findings: "+reviewFindingSummary(run.FindingCounts))
+		}
 		if run.Status == "blocked" || run.Status == "failed" {
 			report.NeedsHuman = true
 			report.ResidualRisks = append(report.ResidualRisks, "External reviewer "+firstNonEmpty(run.Reviewer, "unknown")+" reported "+run.Status+".")
 			if report.Status == "passed" {
 				report.Decision = "needs-review"
 			}
+		}
+	}
+	report.FindingTracker = buildReviewFindingTracker(report.ExternalReviewRuns)
+	if reviewFindingsHasBlocking(report.FindingTracker.Counts) {
+		report.NeedsHuman = true
+		report.ResidualRisks = append(report.ResidualRisks, "Package has open P0/P1 reviewer findings; fix or explicit waiver is required before acceptance.")
+		if report.Status == "passed" {
+			report.Decision = "needs-review"
+		}
+	} else if report.FindingTracker.Counts.P2 > 0 {
+		report.ResidualRisks = append(report.ResidualRisks, "Package has open P2 reviewer findings; track them and escalate if they survive three package batches.")
+	}
+	report.IntegrationGate = buildPackageIntegrationGate(report)
+	if report.IntegrationGate.Status == "missing" {
+		report.ResidualRisks = append(report.ResidualRisks, "Package-level integration/post-merge gate evidence is missing; do not treat task-level gates as full feature-package proof.")
+		if report.Status == "passed" {
+			report.Decision = "needs-review"
 		}
 	}
 	if len(report.Why) == 0 {
@@ -5900,6 +5973,63 @@ func packageAcceptanceShouldUsePostCleanupMode(task Task) bool {
 		return os.IsNotExist(err)
 	}
 	return false
+}
+
+func buildReviewFindingTracker(runs []RoutineRun) ReviewFindingTracker {
+	tracker := ReviewFindingTracker{
+		Status:      "not-recorded",
+		Summary:     "No imported external reviewer finding counts are recorded for this package.",
+		AgingPolicy: "P0/P1 findings block package acceptance until fixed or explicitly waived. P2 findings should not survive more than three subsequent package batches without escalation.",
+		Actions:     []string{},
+	}
+	for _, run := range runs {
+		tracker.Counts = addReviewFindingCounts(tracker.Counts, run.FindingCounts)
+	}
+	total := reviewFindingTotal(tracker.Counts)
+	switch {
+	case total == 0 && len(runs) > 0:
+		tracker.Status = "clear"
+		tracker.Summary = "External reviewer runs are imported and no open finding counts were recorded."
+	case reviewFindingsHasBlocking(tracker.Counts):
+		tracker.Status = "blocked"
+		tracker.Summary = "Open P0/P1 reviewer findings require fixup or explicit waiver before acceptance."
+		tracker.Actions = append(tracker.Actions, "Fix or waive P0/P1 findings before package closeout.")
+	case tracker.Counts.P2 > 0:
+		tracker.Status = "track-p2"
+		tracker.Summary = "Open P2 reviewer findings are present; track age and escalate if they survive three package batches."
+		tracker.Actions = append(tracker.Actions, "Record owner/orchestrator decision for every open P2 finding.")
+	case total > 0:
+		tracker.Status = "track-minor"
+		tracker.Summary = "Only P3/other reviewer findings are recorded; keep them visible but they do not block by default."
+	default:
+		tracker.Actions = append(tracker.Actions, "Import external reviewer findings with review import --p1/--p2/--p3 when package risk warrants it.")
+	}
+	return tracker
+}
+
+func buildPackageIntegrationGate(report PackageAcceptanceReport) IntegrationGateReport {
+	gate := IntegrationGateReport{
+		Status:  "not-required",
+		Summary: "Single-task package or no package-level integration gate requirement inferred from local/static inputs.",
+	}
+	allGates := uniqueSortedStrings(append([]string{}, report.GatesReviewed...))
+	for _, candidate := range allGates {
+		lower := strings.ToLower(candidate)
+		if containsAny(lower, []string{"integration", "e2e", "end-to-end", "post-merge", "package", "browser", "smoke", "build", "test"}) {
+			gate.DetectedGates = append(gate.DetectedGates, candidate)
+		}
+	}
+	if len(gate.DetectedGates) > 0 {
+		gate.Status = "passed"
+		gate.Summary = "Local/static acceptance found package-level or integration-like gate evidence; orchestrator must still verify command output before merge."
+		return gate
+	}
+	if len(report.Tasks) > 1 {
+		gate.Status = "missing"
+		gate.Summary = "Multi-task package has no recorded integration/post-merge gate evidence."
+		gate.MissingEvidence = []string{"Record or run a package-level integration, e2e, browser, smoke, build, or equivalent post-merge gate before claiming feature-package closeout."}
+	}
+	return gate
 }
 
 func packageAcceptanceTerminalCleanupStatus(status string) bool {
@@ -6857,6 +6987,7 @@ func recordExternalReviewRun(ledgerPath string, report ExternalReviewReport) err
 		Reviewer:            report.Reviewer,
 		ReportPath:          firstNonEmpty(report.ReportPath, report.OutputPath),
 		Status:              report.Status,
+		FindingCounts:       report.FindingCounts,
 		Evidence:            normalizedEvidence(report.Evidence),
 		ActionsTaken:        append([]string(nil), report.ActionsTaken...),
 		NeedsHuman:          report.NeedsHuman,
@@ -6877,8 +7008,38 @@ func recordExternalReviewRun(ledgerPath string, report ExternalReviewReport) err
 		"packageId":  run.PackageID,
 		"reviewer":   run.Reviewer,
 		"reportPath": run.ReportPath,
+		"findings":   reviewFindingSummary(run.FindingCounts),
 		"note":       run.NextSuggestedAction,
 	})
+}
+
+func validateReviewFindingCounts(counts ReviewFindingCounts) error {
+	if counts.P0 < 0 || counts.P1 < 0 || counts.P2 < 0 || counts.P3 < 0 || counts.Other < 0 {
+		return errors.New("review finding counts cannot be negative")
+	}
+	return nil
+}
+
+func reviewFindingTotal(counts ReviewFindingCounts) int {
+	return counts.P0 + counts.P1 + counts.P2 + counts.P3 + counts.Other
+}
+
+func reviewFindingsHasBlocking(counts ReviewFindingCounts) bool {
+	return counts.P0 > 0 || counts.P1 > 0
+}
+
+func reviewFindingSummary(counts ReviewFindingCounts) string {
+	return fmt.Sprintf("review findings p0=%d p1=%d p2=%d p3=%d other=%d", counts.P0, counts.P1, counts.P2, counts.P3, counts.Other)
+}
+
+func addReviewFindingCounts(left ReviewFindingCounts, right ReviewFindingCounts) ReviewFindingCounts {
+	return ReviewFindingCounts{
+		P0:    left.P0 + right.P0,
+		P1:    left.P1 + right.P1,
+		P2:    left.P2 + right.P2,
+		P3:    left.P3 + right.P3,
+		Other: left.Other + right.Other,
+	}
 }
 
 func reviewPackTaskIDs(path string) ([]string, error) {
@@ -9262,7 +9423,15 @@ func classifyRoadmapScoreCandidate(title string, source string, line int, snippe
 	}
 
 	writeHints := roadmapWriteSetHints(lower)
+	sharedResourceHints := roadmapSharedResourceHints(lower)
+	commonRiskHints := roadmapCommonRiskHints(lower)
 	externalHints := roadmapExternalDependencyHints(lower)
+	if len(sharedResourceHints) > 0 {
+		risks = append(risks, "shared resource writes require serialization or append-only discipline")
+	}
+	if len(commonRiskHints) > 0 {
+		risks = append(risks, "matches common P1 review pattern; require explicit self-check before handoff")
+	}
 	if len(externalHints) > 0 && classification != "shallow-risk" {
 		risks = append(risks, "external dependency requires separate proof or owner input")
 	}
@@ -9275,6 +9444,8 @@ func classifyRoadmapScoreCandidate(title string, source string, line int, snippe
 		Score:                   score,
 		SuggestedAction:         action,
 		WriteSetHints:           writeHints,
+		SharedResourceHints:     sharedResourceHints,
+		CommonRiskHints:         commonRiskHints,
 		ExternalDependencyHints: externalHints,
 		RiskHints:               risks,
 	}
@@ -9442,6 +9613,46 @@ func roadmapWriteSetHints(lower string) []string {
 		}
 	}
 	return hints
+}
+
+func roadmapSharedResourceHints(lower string) []string {
+	hints := []string{}
+	for _, entry := range []struct {
+		markers []string
+		hint    string
+	}{
+		{[]string{"strings.xml", "localization", "i18n", "translation", "copy deck"}, "localized strings / copy resources"},
+		{[]string{"route registry", "navigation", "nav graph", "router", "routes"}, "navigation/route registry"},
+		{[]string{"shared protocol", "proto", "api envelope", "contract"}, "shared protocol/API contract"},
+		{[]string{"migration", "schema", "database", "db"}, "database schema/migration"},
+		{[]string{"dependency injection", "di module", "service registry", "module registry"}, "dependency injection/service registry"},
+		{[]string{"config", "feature flag", "settings registry"}, "shared config/feature flags"},
+	} {
+		if containsAny(lower, entry.markers) {
+			hints = append(hints, entry.hint)
+		}
+	}
+	return uniqueSortedStrings(hints)
+}
+
+func roadmapCommonRiskHints(lower string) []string {
+	hints := []string{}
+	for _, entry := range []struct {
+		markers []string
+		hint    string
+	}{
+		{[]string{"dto", "field name", "json field", "serialization", "deserialize"}, "DTO/serialization field-name drift"},
+		{[]string{"state machine", "transition", "lifecycle", "status enum"}, "state-machine transition coverage"},
+		{[]string{"tenant", "store filter", "store id", "scope filter", "multi-tenant"}, "tenant/store scoping filter"},
+		{[]string{"cents", "money", "amount", "rounding", "currency"}, "integer cents and currency rounding"},
+		{[]string{"nullable", "null", "optional external", "provider field"}, "nullable external/provider field handling"},
+		{[]string{"cleanup", "retry", "outbox", "aggregate version", "unique constraint", "idempotent"}, "idempotency and unique-constraint handling"},
+	} {
+		if containsAny(lower, entry.markers) {
+			hints = append(hints, entry.hint)
+		}
+	}
+	return uniqueSortedStrings(hints)
 }
 
 func roadmapExternalDependencyHints(lower string) []string {

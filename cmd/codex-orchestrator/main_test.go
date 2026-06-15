@@ -3265,11 +3265,32 @@ func TestPackReviewWritesPortablePackageReviewPack(t *testing.T) {
 	if err := cmdPackReview([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-REVIEW", "--task-id", "OTHER-PACKAGE-TASK", "--write-report", filepath.Join(root, "bad-review-pack.json")}); err == nil {
 		t.Fatal("expected wrong-package explicit task to fail")
 	}
+	for _, taskID := range []string{"NOGATE-1", "NOGATE-2"} {
+		if err := cmdRecordTask([]string{
+			"--ledger", ledger,
+			"--id", taskID,
+			"--package-id", "PKG-NOGATE",
+			"--pending-worktree-id", "pwt-" + strings.ToLower(taskID),
+			"--base-commit", gitOutputForTest(t, project, "rev-parse", "HEAD"),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := cmdAppendEvent([]string{"--ledger", ledger, "--type", "cleanup", "--task-id", taskID, "--status", "cleaned", "--note", "task cleaned without package gate"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	multiTaskAcceptance, err := buildPackageAcceptanceReport(project, ledger, "PKG-NOGATE", []string{"NOGATE-1", "NOGATE-2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if multiTaskAcceptance.IntegrationGate.Status != "missing" || !strings.Contains(strings.Join(multiTaskAcceptance.ResidualRisks, "\n"), "Package-level integration") {
+		t.Fatalf("expected missing package integration gate warning, got gate=%#v risks=%#v", multiTaskAcceptance.IntegrationGate, multiTaskAcceptance.ResidualRisks)
+	}
 	failedReviewFile := filepath.Join(root, "pi-failed-review.md")
 	if err := os.WriteFile(failedReviewFile, []byte("Verdict: reject\nFinding: missing proof.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := cmdReviewImport([]string{"--ledger", ledger, "--package-id", "PKG-REVIEW", "--reviewer", "pi", "--file", failedReviewFile, "--task-id", "TASK-PACKAGE", "--status", "failed"}); err != nil {
+	if err := cmdReviewImport([]string{"--ledger", ledger, "--package-id", "PKG-REVIEW", "--reviewer", "pi", "--file", failedReviewFile, "--task-id", "TASK-PACKAGE", "--status", "failed", "--p1", "1"}); err != nil {
 		t.Fatal(err)
 	}
 	failedAcceptance, err := buildPackageAcceptanceReport(project, ledger, "PKG-REVIEW", []string{"TASK-PACKAGE"})
@@ -3278,6 +3299,9 @@ func TestPackReviewWritesPortablePackageReviewPack(t *testing.T) {
 	}
 	if !failedAcceptance.NeedsHuman || failedAcceptance.Decision != "needs-review" || !strings.Contains(strings.Join(failedAcceptance.ResidualRisks, "\n"), "pi reported failed") {
 		t.Fatalf("expected failed external review to force package review attention, got %#v", failedAcceptance)
+	}
+	if failedAcceptance.FindingTracker.Status != "blocked" || failedAcceptance.FindingTracker.Counts.P1 != 1 {
+		t.Fatalf("expected P1 finding tracker to block package acceptance, got %#v", failedAcceptance.FindingTracker)
 	}
 }
 
@@ -3323,7 +3347,7 @@ func TestReviewRunDryRunAndImportRecordExternalReviewer(t *testing.T) {
 	if err := os.WriteFile(reviewFile, []byte("Verdict: concerns\nFinding: check evidence labels.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := cmdReviewImport([]string{"--ledger", ledger, "--package-id", "PKG-EXT", "--reviewer", "pi", "--file", reviewFile, "--task-id", "TASK-EXT", "--status", "failed"}); err != nil {
+	if err := cmdReviewImport([]string{"--ledger", ledger, "--package-id", "PKG-EXT", "--reviewer", "pi", "--file", reviewFile, "--task-id", "TASK-EXT", "--status", "failed", "--p2", "2", "--p3", "1"}); err != nil {
 		t.Fatal(err)
 	}
 	updated, err := loadLedger(ledger)
@@ -3336,6 +3360,9 @@ func TestReviewRunDryRunAndImportRecordExternalReviewer(t *testing.T) {
 	run := updated.RoutineRuns[0]
 	if run.RoutineID != "external-reviewer" || run.PackageID != "PKG-EXT" || run.Reviewer != "pi" || run.Status != "failed" {
 		t.Fatalf("unexpected external review run: %#v", run)
+	}
+	if run.FindingCounts.P2 != 2 || run.FindingCounts.P3 != 1 {
+		t.Fatalf("expected imported reviewer finding counts, got %#v", run.FindingCounts)
 	}
 	if got := strings.Join(run.Evidence["proxy"], "\n"); !strings.Contains(got, "Imported external reviewer output") {
 		t.Fatalf("expected proxy advisory evidence, got %#v", run.Evidence)
@@ -4307,6 +4334,39 @@ func TestRoadmapScoreReadsConfigSources(t *testing.T) {
 	}
 	if !containsString(report.Candidates[0].WriteSetHints, "product app surfaces") {
 		t.Fatalf("expected product app write-set hint, got %#v", report.Candidates[0].WriteSetHints)
+	}
+}
+
+func TestRoadmapScoreAddsSharedResourceAndCommonRiskHints(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	if err := os.MkdirAll(project, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "PLAN.md"), []byte(`# Plan
+
+- Feature package next task: update route registry and state machine cleanup idempotency for retry/outbox flow.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	config := `{"sources":["PLAN.md"]}`
+	if err := os.WriteFile(filepath.Join(project, "roadmap-score.json"), []byte(config), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := runRoadmapScore(project, "roadmap-score.json", "")
+	if report.Status != "passed" || len(report.Candidates) != 1 {
+		t.Fatalf("expected one passed roadmap candidate, got %#v", report)
+	}
+	candidate := report.Candidates[0]
+	if !containsString(candidate.SharedResourceHints, "navigation/route registry") {
+		t.Fatalf("expected shared route registry hint, got %#v", candidate.SharedResourceHints)
+	}
+	if !containsString(candidate.CommonRiskHints, "state-machine transition coverage") || !containsString(candidate.CommonRiskHints, "idempotency and unique-constraint handling") {
+		t.Fatalf("expected common risk hints, got %#v", candidate.CommonRiskHints)
+	}
+	if !strings.Contains(strings.Join(candidate.RiskHints, "\n"), "shared resource writes") {
+		t.Fatalf("expected shared-resource risk hint, got %#v", candidate.RiskHints)
 	}
 }
 

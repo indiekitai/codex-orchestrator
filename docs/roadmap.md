@@ -170,6 +170,17 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
      `preflight` 暴露 `concepts` 与 `inbox`，让 Router/统领先读项目术语、稳定规则、
      历史决策、反馈和外部 review intake，再决定是否派发任务。
 
+9. Claude-orchestrator backport / review hardening package：已完成。
+   - 目标：吸收 Claude Code 任务编排版本里更硬的 review gate、P2 finding aging、
+     shared-resource discipline 和常见 P1 模式自检，但保持 Codex App-first 的 ledger /
+     heartbeat / worktree 编排边界。
+   - 当前落地：`review import` 支持记录 P0/P1/P2/P3 finding counts；`pack acceptance`
+     输出 `findingTracker` 和 package-level `integrationGate`；`roadmap score` 对共享
+     route/string/protocol/schema/config 资源和 DTO/state-machine/tenant/money/nullability/
+     idempotency 等常见风险加 hint；SKILL 要求 worker 在自审里显式覆盖这些高风险模式。
+   - 边界：这些都是 local/static review aids。它们不会自动授权 merge/push/cleanup，也不会
+     把外部 reviewer 输出升级成 direct proof。
+
 ## 分层架构
 
 推荐长期结构：

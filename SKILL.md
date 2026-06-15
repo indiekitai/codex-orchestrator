@@ -750,7 +750,7 @@ Each delegated session prompt should include:
 - Required source files/rules to read.
 - Acceptance commands.
 - Required docs/review/artifact updates.
-- Evidence labels: `direct`, `proxy`, `blocked`.
+- Evidence labels: `direct`, `proxy`, `local`, `blocked`.
 - Anti-shallow-slice classification: `vertical-completion`,
   `runtime-proof`, `blocked-removal`, or `owner-gated`.
 - Explanation of why this is not repeating an already-completed first slice.
@@ -767,6 +767,7 @@ You are not alone in the codebase. Do not revert unrelated work; adapt to curren
 If the run needs a human physical/device/payment/deploy action, proactively notify the user in their preferred language using the project's available notification mechanism; do not require the user to remember any skill name or command. Pause at the checkpoint, say the exact action, device/resource, what not to do, and what the user should reply; continue only after confirmation and record it in artifacts.
 Before handoff, review your own diff as a reviewer: check boundaries, forbidden paths, shared contracts, docs drift, evidence strength, gates, anti-shallow-slice classification, and residual risks. Fix scoped issues you find before committing.
 If the task changes cleanup, retry, event/outbox writes, lifecycle APIs, migrations, aggregate/versioning, or unique constraints, explicitly self-review repeated execution and idempotency: running the action twice must either be safe or produce a documented blocked/product decision.
+If the task touches DTO/serialization fields, state machines, tenant/store scoping, money/cents arithmetic, nullable external-provider fields, shared route/navigation registries, localization strings, shared config, protocol/API contracts, or migrations, call that out in self-review and explain how the diff avoids the common P1 failure mode.
 Commit to the task branch, but do not merge, push the integration branch, delete the worktree, or delete the branch unless the orchestrator explicitly asks you to.
 ```
 
@@ -888,6 +889,19 @@ all external review output as `proxy/advisory`: it can block acceptance or infor
 the orchestrator, but it cannot authorize implementation, merge, push, cleanup,
 release, deploy, or direct runtime/device/provider proof.
 
+When importing a reviewer result, record finding counts when known:
+
+```bash
+codex-orchestrator review import --package-id PKG --reviewer pi \
+  --file /tmp/pi-review.md --status passed --p1 0 --p2 2 --p3 1
+```
+
+Package acceptance aggregates those counts into a finding tracker. Open P0/P1
+findings block acceptance unless fixed or explicitly waived. P2 findings do not
+block by default, but they must stay visible; if the same P2 survives three
+subsequent package batches, escalate it instead of letting it become permanent
+review debt.
+
 Use `review policy check` before deciding which external reviewer(s) to run. It
 reads `.codex-orchestrator/review-policy.json` when present and otherwise uses
 built-in defaults. The command is local/static planning evidence only: it checks
@@ -920,6 +934,14 @@ worktree may be gone. Treat terminal `merged`, `released`, or `cleaned` tasks in
 `pack acceptance` post-cleanup mode as ledger closeout evidence, not as a fresh
 worktree diff check. A missing worker worktree after cleanup is not by itself a
 package acceptance failure; rerun integration gates when fresh proof is needed.
+
+At feature-package closeout, do not rely only on per-worker gates. `pack
+acceptance` includes an integration gate summary. For multi-task packages,
+record or run a package-level integration, e2e, browser, smoke, build, or
+equivalent post-merge gate before calling the package complete. If a shared
+resource such as route registry, localized strings, protocol/API envelope,
+database migration, DI registry, or shared config was touched, serialize that
+work or keep it append-only until a package-level gate has passed.
 
 ## Dynamic Heartbeat Prompt Pattern
 
