@@ -705,6 +705,19 @@ for the same package, then emits one decision such as `review-ready`,
 not a merge command: merge, push, cleanup, release, deploy, and direct proof
 still require a separate orchestrator closeout decision.
 
+`pack spec`, `pack eval`, and `pack reconcile` add a small desired-state layer
+above package acceptance. `pack spec --package-id PKG --write-template ...`
+creates a feature-package spec with outcome, scope, non-goals, gates, evidence
+boundaries, evaluation matrix, exit condition, blocked condition, and waivers.
+`pack eval --package-id PKG` reads the ledger and git/worktree truth to build a
+local/static matrix for task commit state, recorded gates, evidence boundaries,
+and package-level integration proof. `pack reconcile --package-id PKG --spec
+...` compares the desired spec, evaluation matrix, and `pack status` closeout
+signal, then reports drift and whether another same-package worker is locally
+reasonable. These commands do not dispatch, merge, push, cleanup, deploy, or
+claim direct proof; they help the orchestrator avoid mistaking several small
+slices for a finished feature package.
+
 After a task has already been accepted and cleaned, its worker worktree may no
 longer exist. Package acceptance handles terminal `merged`, `released`, and
 `cleaned` ledger tasks in post-cleanup mode: it uses terminal ledger state and

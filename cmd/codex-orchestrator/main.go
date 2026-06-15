@@ -922,6 +922,78 @@ type PackageCloseoutReport struct {
 	ActionsTaken        []string                `json:"actionsTaken"`
 }
 
+type PackageSpecReport struct {
+	SchemaVersion       int                 `json:"schemaVersion"`
+	Command             string              `json:"command"`
+	GeneratedAt         string              `json:"generatedAt"`
+	Status              string              `json:"status"`
+	EvidenceLabel       string              `json:"evidenceLabel"`
+	Boundary            string              `json:"boundary"`
+	PackageID           string              `json:"packageId"`
+	LedgerPath          string              `json:"ledgerPath"`
+	RepoPath            string              `json:"repoPath"`
+	SpecPath            string              `json:"specPath,omitempty"`
+	Template            string              `json:"template,omitempty"`
+	RequiredSections    []string            `json:"requiredSections"`
+	MissingSections     []string            `json:"missingSections,omitempty"`
+	NextSuggestedAction string              `json:"nextSuggestedAction"`
+	NeedsHuman          bool                `json:"needsHuman"`
+	Evidence            map[string][]string `json:"evidence"`
+	ActionsTaken        []string            `json:"actionsTaken"`
+}
+
+type PackageEvaluationReport struct {
+	SchemaVersion       int                    `json:"schemaVersion"`
+	Command             string                 `json:"command"`
+	GeneratedAt         string                 `json:"generatedAt"`
+	Status              string                 `json:"status"`
+	EvidenceLabel       string                 `json:"evidenceLabel"`
+	Boundary            string                 `json:"boundary"`
+	PackageID           string                 `json:"packageId"`
+	LedgerPath          string                 `json:"ledgerPath"`
+	RepoPath            string                 `json:"repoPath"`
+	Matrix              []EvaluationMatrixItem `json:"matrix"`
+	MissingRequired     []string               `json:"missingRequired,omitempty"`
+	NextSuggestedAction string                 `json:"nextSuggestedAction"`
+	NeedsHuman          bool                   `json:"needsHuman"`
+	Evidence            map[string][]string    `json:"evidence"`
+	ActionsTaken        []string               `json:"actionsTaken"`
+}
+
+type EvaluationMatrixItem struct {
+	Layer         string `json:"layer"`
+	Status        string `json:"status"`
+	EvidenceLabel string `json:"evidenceLabel"`
+	Required      bool   `json:"required"`
+	Source        string `json:"source,omitempty"`
+	Details       string `json:"details,omitempty"`
+	NextAction    string `json:"nextAction,omitempty"`
+}
+
+type PackageReconcileReport struct {
+	SchemaVersion       int                     `json:"schemaVersion"`
+	Command             string                  `json:"command"`
+	GeneratedAt         string                  `json:"generatedAt"`
+	Status              string                  `json:"status"`
+	EvidenceLabel       string                  `json:"evidenceLabel"`
+	Boundary            string                  `json:"boundary"`
+	PackageID           string                  `json:"packageId"`
+	LedgerPath          string                  `json:"ledgerPath"`
+	RepoPath            string                  `json:"repoPath"`
+	DesiredState        map[string]string       `json:"desiredState"`
+	ObservedState       map[string]string       `json:"observedState"`
+	Diff                []string                `json:"diff,omitempty"`
+	DispatchAllowed     bool                    `json:"dispatchAllowed"`
+	DispatchReason      string                  `json:"dispatchReason"`
+	Spec                PackageSpecReport       `json:"spec"`
+	Evaluation          PackageEvaluationReport `json:"evaluation"`
+	Closeout            PackageCloseoutReport   `json:"closeout"`
+	NextSuggestedAction string                  `json:"nextSuggestedAction"`
+	NeedsHuman          bool                    `json:"needsHuman"`
+	Evidence            map[string][]string     `json:"evidence"`
+	ActionsTaken        []string                `json:"actionsTaken"`
+}
+
 type ReviewPack struct {
 	SchemaVersion       int                         `json:"schemaVersion"`
 	Command             string                      `json:"command"`
@@ -1200,6 +1272,9 @@ func usage() {
   codex-orchestrator pack review --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--output DIR] [--write-report PATH] [--json]
   codex-orchestrator pack acceptance --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack status --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
+  codex-orchestrator pack spec --package-id PKG [--repo PATH] [--ledger PATH] [--spec PATH] [--write-template PATH] [--write-report PATH] [--json]
+  codex-orchestrator pack eval --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
+  codex-orchestrator pack reconcile --package-id PKG [--task-id TASK...] [--repo PATH] [--ledger PATH] [--spec PATH] [--write-report PATH] [--json]
   codex-orchestrator review run --package-id PKG --reviewer pi|claude --pack DIR [--repo PATH] [--ledger PATH] [--write-report PATH] [--json] [--dry-run]
   codex-orchestrator review import --package-id PKG --reviewer NAME --file PATH [--ledger PATH] [--task-id TASK] [--status passed|failed|blocked] [--p1 N] [--p2 N] [--json]
   codex-orchestrator review policy show|check [--repo PATH] [--config PATH] [--risk low|medium|high] [--task-count N] [--package-id PKG] [--json]
@@ -3842,7 +3917,7 @@ func printWatchdogStatus(report WatchdogStatusReport) {
 
 func cmdPack(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: codex-orchestrator pack merge-readiness|consultation|review|acceptance|status")
+		return errors.New("usage: codex-orchestrator pack merge-readiness|consultation|review|acceptance|status|spec|eval|reconcile")
 	}
 	switch args[0] {
 	case "merge-readiness":
@@ -3855,8 +3930,14 @@ func cmdPack(args []string) error {
 		return cmdPackAcceptance(args[1:])
 	case "status":
 		return cmdPackStatus(args[1:])
+	case "spec":
+		return cmdPackSpec(args[1:])
+	case "eval":
+		return cmdPackEval(args[1:])
+	case "reconcile":
+		return cmdPackReconcile(args[1:])
 	case "help", "-h", "--help":
-		fmt.Println("usage: codex-orchestrator pack merge-readiness|consultation|review|acceptance|status [--package-id PKG] [--task-id TASK] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]")
+		fmt.Println("usage: codex-orchestrator pack merge-readiness|consultation|review|acceptance|status|spec|eval|reconcile [--package-id PKG] [--task-id TASK] [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]")
 		return nil
 	default:
 		return fmt.Errorf("unknown pack subcommand: %s", args[0])
@@ -4054,6 +4135,142 @@ func cmdPackStatus(args []string) error {
 		return printJSON(report)
 	}
 	fmt.Printf("Wrote package closeout status: %s\n", *writeReport)
+	return nil
+}
+
+func cmdPackSpec(args []string) error {
+	fs := flag.NewFlagSet("pack spec", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	packageID := fs.String("package-id", "", "feature package id")
+	specPath := fs.String("spec", "", "existing package spec path to inspect")
+	writeTemplate := fs.String("write-template", "", "write a package spec Markdown template")
+	writeReport := fs.String("write-report", "", "write package spec report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *packageID == "" {
+		return errors.New("pack spec requires --package-id")
+	}
+	resolvedRepo := expandPath(*repo)
+	if resolvedRepo == "" {
+		resolvedRepo = "."
+	}
+	resolvedLedger := resolveDefaultLedgerPath(resolvedRepo, *ledgerPath, flagProvided(fs, "ledger"))
+	resolvedSpec := resolvePackageSpecPath(resolvedRepo, *packageID, *specPath)
+	report, err := buildPackageSpecReport(resolvedRepo, resolvedLedger, *packageID, resolvedSpec)
+	if err != nil {
+		return err
+	}
+	if *writeTemplate != "" {
+		if err := writeText(*writeTemplate, report.Template); err != nil {
+			return err
+		}
+		writeAction := "Wrote package spec template to " + *writeTemplate
+		if expandPath(*writeTemplate) == resolvedSpec {
+			report, err = buildPackageSpecReport(resolvedRepo, resolvedLedger, *packageID, resolvedSpec)
+			if err != nil {
+				return err
+			}
+		}
+		report.ActionsTaken = append(report.ActionsTaken, writeAction)
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || (*writeReport == "" && *writeTemplate == "") {
+		return printJSON(report)
+	}
+	if *writeTemplate != "" {
+		fmt.Printf("Wrote package spec template: %s\n", *writeTemplate)
+	}
+	if *writeReport != "" {
+		fmt.Printf("Wrote package spec report: %s\n", *writeReport)
+	}
+	return nil
+}
+
+func cmdPackEval(args []string) error {
+	fs := flag.NewFlagSet("pack eval", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	packageID := fs.String("package-id", "", "feature package id")
+	writeReport := fs.String("write-report", "", "write package evaluation matrix JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	var taskIDs stringList
+	fs.Var(&taskIDs, "task-id", "task id to include; repeatable. Defaults to all tasks in --package-id")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *packageID == "" {
+		return errors.New("pack eval requires --package-id")
+	}
+	resolvedRepo := expandPath(*repo)
+	if resolvedRepo == "" {
+		resolvedRepo = "."
+	}
+	resolvedLedger := resolveDefaultLedgerPath(resolvedRepo, *ledgerPath, flagProvided(fs, "ledger"))
+	selectedTaskIDs, err := selectPackageTaskIDs(resolvedLedger, *packageID, taskIDs)
+	if err != nil {
+		return err
+	}
+	report, err := buildPackageEvaluationReport(resolvedRepo, resolvedLedger, *packageID, selectedTaskIDs)
+	if err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote package evaluation matrix: %s\n", *writeReport)
+	return nil
+}
+
+func cmdPackReconcile(args []string) error {
+	fs := flag.NewFlagSet("pack reconcile", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	packageID := fs.String("package-id", "", "feature package id")
+	specPath := fs.String("spec", "", "existing package spec path to inspect")
+	writeReport := fs.String("write-report", "", "write package reconcile report JSON")
+	jsonOut := fs.Bool("json", false, "print JSON report")
+	var taskIDs stringList
+	fs.Var(&taskIDs, "task-id", "task id to include; repeatable. Defaults to all tasks in --package-id")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *packageID == "" {
+		return errors.New("pack reconcile requires --package-id")
+	}
+	resolvedRepo := expandPath(*repo)
+	if resolvedRepo == "" {
+		resolvedRepo = "."
+	}
+	resolvedLedger := resolveDefaultLedgerPath(resolvedRepo, *ledgerPath, flagProvided(fs, "ledger"))
+	selectedTaskIDs, err := selectPackageTaskIDs(resolvedLedger, *packageID, taskIDs)
+	if err != nil {
+		return err
+	}
+	report, err := buildPackageReconcileReport(resolvedRepo, resolvedLedger, *packageID, selectedTaskIDs, resolvePackageSpecPath(resolvedRepo, *packageID, *specPath))
+	if err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *jsonOut || *writeReport == "" {
+		return printJSON(report)
+	}
+	fmt.Printf("Wrote package reconcile report: %s\n", *writeReport)
 	return nil
 }
 
@@ -6625,6 +6842,501 @@ func buildPackageCloseoutReport(repoPath string, ledgerPath string, packageID st
 	}
 	report.NextSuggestedAction = "Package is locally/static review-ready; orchestrator should rerun gates and record its own acceptance decision before merge/push/cleanup."
 	return report, nil
+}
+
+func buildPackageSpecReport(repoPath string, ledgerPath string, packageID string, specPath string) (PackageSpecReport, error) {
+	required := packageSpecRequiredSections()
+	report := PackageSpecReport{
+		SchemaVersion:       1,
+		Command:             "pack spec",
+		GeneratedAt:         nowISO(),
+		Status:              "passed",
+		EvidenceLabel:       "local/static",
+		Boundary:            "Package spec reports are local/static planning evidence only. They do not dispatch, merge, push, cleanup, deploy, or prove direct runtime behavior.",
+		PackageID:           packageID,
+		LedgerPath:          ledgerPath,
+		RepoPath:            repoPath,
+		SpecPath:            specPath,
+		Template:            packageSpecTemplate(packageID),
+		RequiredSections:    required,
+		NextSuggestedAction: "Use this package spec as the desired state before dispatching bounded worker tasks.",
+		Evidence: normalizedEvidence(map[string][]string{
+			"local": {"Read local package spec path and required section list."},
+		}),
+		ActionsTaken: []string{"Started package spec report generation"},
+	}
+	data, err := os.ReadFile(expandPath(specPath))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			report.Status = "warning"
+			report.NeedsHuman = true
+			report.MissingSections = append([]string(nil), required...)
+			report.NextSuggestedAction = "Write a package spec template, fill the missing sections, then rerun pack spec."
+			report.Evidence["blocked"] = append(report.Evidence["blocked"], "Package spec file does not exist: "+specPath)
+			return report, nil
+		}
+		return report, err
+	}
+	report.ActionsTaken = append(report.ActionsTaken, "Read package spec file "+specPath)
+	report.MissingSections = missingPackageSpecSections(string(data), required)
+	if len(report.MissingSections) > 0 {
+		report.Status = "warning"
+		report.NeedsHuman = true
+		report.NextSuggestedAction = "Fill missing package spec sections: " + strings.Join(report.MissingSections, ", ")
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Package spec is missing %d required section(s).", len(report.MissingSections)))
+	}
+	report.Evidence = normalizedEvidence(report.Evidence)
+	return report, nil
+}
+
+func buildPackageEvaluationReport(repoPath string, ledgerPath string, packageID string, taskIDs []string) (PackageEvaluationReport, error) {
+	report := PackageEvaluationReport{
+		SchemaVersion:       1,
+		Command:             "pack eval",
+		GeneratedAt:         nowISO(),
+		Status:              "passed",
+		EvidenceLabel:       "local/static",
+		Boundary:            "Package evaluation matrices are local/static ledger summaries only. They do not replace fresh gates, external review, direct runtime proof, or orchestrator acceptance.",
+		PackageID:           packageID,
+		LedgerPath:          ledgerPath,
+		RepoPath:            repoPath,
+		NextSuggestedAction: "Use this matrix to decide which package layer still needs proof before package closeout.",
+		Evidence: normalizedEvidence(map[string][]string{
+			"local": {"Read local ledger task metadata, gates, statuses, and evidence boundaries."},
+		}),
+		ActionsTaken: []string{"Started package evaluation matrix generation"},
+	}
+	ledger, err := loadLedger(ledgerPath)
+	if err != nil {
+		return report, err
+	}
+	report.RepoPath = firstNonEmpty(ledger.ProjectRoot, repoPath)
+	tasks := []Task{}
+	for _, taskID := range uniqueSortedStrings(taskIDs) {
+		taskIndex := findTaskIndex(ledger.Tasks, taskID)
+		if taskIndex < 0 {
+			report.Matrix = append(report.Matrix, EvaluationMatrixItem{
+				Layer:         "ledger-task:" + taskID,
+				Status:        "blocked",
+				EvidenceLabel: "blocked",
+				Required:      true,
+				Source:        "ledger",
+				Details:       "Task id was selected but is missing from the ledger.",
+				NextAction:    "Record the task in the ledger or remove it from the package evaluation input.",
+			})
+			continue
+		}
+		tasks = append(tasks, ledger.Tasks[taskIndex])
+	}
+	report.Matrix = append(report.Matrix, buildEvaluationMatrixItems(tasks)...)
+	report.MissingRequired = missingRequiredEvaluationLayers(report.Matrix)
+	if len(tasks) == 0 {
+		report.Status = "blocked"
+		report.NeedsHuman = true
+		report.NextSuggestedAction = "Record at least one task for package " + packageID + " before evaluating package readiness."
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], "No package tasks were available for evaluation.")
+	} else if len(report.MissingRequired) > 0 {
+		report.Status = "warning"
+		report.NeedsHuman = true
+		report.NextSuggestedAction = "Close missing required evaluation layers before package closeout: " + strings.Join(report.MissingRequired, ", ")
+		report.Evidence["blocked"] = append(report.Evidence["blocked"], fmt.Sprintf("Package evaluation has %d missing required layer(s).", len(report.MissingRequired)))
+	}
+	report.Evidence = normalizedEvidence(report.Evidence)
+	return report, nil
+}
+
+func buildPackageReconcileReport(repoPath string, ledgerPath string, packageID string, taskIDs []string, specPath string) (PackageReconcileReport, error) {
+	spec, err := buildPackageSpecReport(repoPath, ledgerPath, packageID, specPath)
+	if err != nil {
+		return PackageReconcileReport{}, err
+	}
+	evaluation, err := buildPackageEvaluationReport(repoPath, ledgerPath, packageID, taskIDs)
+	if err != nil {
+		return PackageReconcileReport{}, err
+	}
+	closeout, err := buildPackageCloseoutReport(repoPath, ledgerPath, packageID, taskIDs)
+	if err != nil {
+		return PackageReconcileReport{}, err
+	}
+	report := PackageReconcileReport{
+		SchemaVersion: 1,
+		Command:       "pack reconcile",
+		GeneratedAt:   nowISO(),
+		Status:        "passed",
+		EvidenceLabel: "local/static",
+		Boundary:      "Package reconcile compares desired package spec, local/static evaluation matrix, and closeout status. It does not dispatch, merge, push, cleanup, deploy, or produce direct proof.",
+		PackageID:     packageID,
+		LedgerPath:    ledgerPath,
+		RepoPath:      repoPath,
+		DesiredState: map[string]string{
+			"spec":       spec.Status,
+			"evaluation": "all required layers passed",
+			"closeout":   "ready-for-orchestrator-acceptance",
+		},
+		ObservedState: map[string]string{
+			"spec":       spec.Status,
+			"evaluation": evaluation.Status,
+			"closeout":   closeout.CloseoutDecision,
+		},
+		Spec:       spec,
+		Evaluation: evaluation,
+		Closeout:   closeout,
+		NeedsHuman: false,
+		Evidence:   normalizedEvidence(map[string][]string{"local": {"Compared local package spec, evaluation matrix, and closeout report."}}),
+		ActionsTaken: []string{
+			"Generated package spec report",
+			"Generated package evaluation matrix",
+			"Generated package closeout status",
+		},
+	}
+	if spec.Status != "passed" {
+		report.Diff = append(report.Diff, "desired package spec is incomplete or missing")
+	}
+	if evaluation.Status != "passed" {
+		report.Diff = append(report.Diff, "package evaluation has missing required layers")
+	}
+	if closeout.CloseoutDecision != "ready-for-orchestrator-acceptance" {
+		report.Diff = append(report.Diff, "package closeout is not ready for orchestrator acceptance: "+closeout.CloseoutDecision)
+	}
+	mergeEvidence(report.Evidence, spec.Evidence)
+	mergeEvidence(report.Evidence, evaluation.Evidence)
+	mergeEvidence(report.Evidence, closeout.Evidence)
+	report.Evidence = normalizedEvidence(report.Evidence)
+	if len(report.Diff) > 0 {
+		report.Status = "warning"
+		report.NeedsHuman = true
+		report.DispatchAllowed = false
+		report.DispatchReason = "Do not dispatch more package work until desired-vs-observed drift is resolved."
+		report.NextSuggestedAction = "Fix package spec/evaluation/closeout drift, or record an explicit blocked/waiver decision."
+		return report, nil
+	}
+	report.DispatchAllowed = true
+	report.DispatchReason = "Spec, evaluation matrix, and closeout are locally aligned; orchestrator may choose the next bounded package task if roadmap policy allows it."
+	report.NextSuggestedAction = "Make a separate orchestrator decision: accept package closeout, request external review, or dispatch the next bounded same-package task."
+	return report, nil
+}
+
+func resolvePackageSpecPath(repoPath string, packageID string, specPath string) string {
+	if strings.TrimSpace(specPath) != "" {
+		return expandPath(specPath)
+	}
+	return filepath.Join(expandPath(repoPath), defaultStateDir, "packages", safePackageFileName(packageID), "spec.md")
+}
+
+func safePackageFileName(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var b strings.Builder
+	lastDash := false
+	for _, r := range value {
+		keep := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-'
+		if keep {
+			b.WriteRune(r)
+			lastDash = r == '-'
+			continue
+		}
+		if !lastDash {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	result := strings.Trim(b.String(), "-")
+	if result == "" {
+		return "package"
+	}
+	return result
+}
+
+func packageSpecRequiredSections() []string {
+	return []string{
+		"Outcome",
+		"Scope",
+		"Non-goals",
+		"Allowed paths",
+		"Forbidden paths",
+		"Gates",
+		"Evidence boundaries",
+		"Evaluation matrix",
+		"Exit condition",
+		"Blocked condition",
+		"Waivers",
+	}
+}
+
+func missingPackageSpecSections(text string, required []string) []string {
+	lower := strings.ToLower(text)
+	missing := []string{}
+	for _, section := range required {
+		needle := strings.ToLower(section)
+		if !strings.Contains(lower, "## "+needle) && !strings.Contains(lower, "### "+needle) {
+			missing = append(missing, section)
+		}
+	}
+	return missing
+}
+
+func packageSpecTemplate(packageID string) string {
+	return fmt.Sprintf(`# Package Spec: %s
+
+Evidence label: local/static until direct runtime proof is explicitly attached.
+
+## Outcome
+
+- User-visible or operator-visible capability:
+- Package success statement:
+
+## Scope
+
+- In scope:
+- Worker boundaries:
+
+## Non-goals
+
+- Out of scope:
+- Deferred direct/live proof:
+
+## Allowed paths
+
+- TBD
+
+## Forbidden paths
+
+- production secrets / credentials
+- direct device/provider/payment/pre/prod actions unless explicitly authorized
+
+## Gates
+
+| Gate | Required | Evidence label | Notes |
+|---|---|---|---|
+| TBD | yes | local/static | Fill before dispatch. |
+
+## Evidence boundaries
+
+- local/static:
+- proxy:
+- direct:
+- blocked:
+
+## Evaluation matrix
+
+| Layer | Required | Current status | Evidence | Next action |
+|---|---|---|---|---|
+| task-commit-state | yes | TBD | local/static | Ensure every worker has a reviewable terminal state. |
+| recorded-gates | yes | TBD | local/static | Record focused gates before closeout. |
+| package-integration | yes | TBD | local/static/proxy/direct | Prove the package as a coherent feature, not just isolated slices. |
+
+## Exit condition
+
+- Package is done when:
+
+## Blocked condition
+
+- Stop and record blocked when:
+
+## Waivers
+
+- Waiver owner:
+- Waiver reason:
+`, packageID)
+}
+
+func packageEvaluationMatrixTemplate(packageID string) string {
+	return fmt.Sprintf(`# Evaluation Matrix: %s
+
+Evidence label: local/static until direct proof is explicitly attached.
+
+| Layer | Required | Status | Evidence label | Source | Next action |
+|---|---|---|---|---|---|
+| task-commit-state | yes | TBD | local/static | ledger | Confirm all package workers reached a reviewable terminal state. |
+| recorded-gates | yes | TBD | local/static | ledger | Confirm focused gates were recorded and rerun by the orchestrator. |
+| package-integration | yes | TBD | local/static/proxy/direct | gates/reviews | Confirm the feature package works as a coherent product/module lane. |
+| external-review | optional | TBD | proxy | reviewer import | Import Pi/other review when package risk justifies it. |
+`, packageID)
+}
+
+func buildEvaluationMatrixItems(tasks []Task) []EvaluationMatrixItem {
+	items := []EvaluationMatrixItem{}
+	if len(tasks) == 0 {
+		return []EvaluationMatrixItem{{
+			Layer:         "package-task-set",
+			Status:        "blocked",
+			EvidenceLabel: "blocked",
+			Required:      true,
+			Source:        "ledger",
+			Details:       "No ledger tasks were selected for this package.",
+			NextAction:    "Record package tasks before evaluating package readiness.",
+		}}
+	}
+	if packageTasksTerminal(tasks) {
+		items = append(items, EvaluationMatrixItem{
+			Layer:         "task-commit-state",
+			Status:        "passed",
+			EvidenceLabel: "local/static",
+			Required:      true,
+			Source:        "ledger",
+			Details:       fmt.Sprintf("%d selected task(s) are in a reviewable or terminal ledger state.", len(tasks)),
+		})
+	} else {
+		items = append(items, EvaluationMatrixItem{
+			Layer:         "task-commit-state",
+			Status:        "warning",
+			EvidenceLabel: "local/static",
+			Required:      true,
+			Source:        "ledger",
+			Details:       "One or more selected tasks are still active, pending, blocked, or cleanup-needed.",
+			NextAction:    "Finish, block, or cleanup package workers before package closeout.",
+		})
+	}
+	gates := tasksRecordedGates(tasks)
+	if len(gates) > 0 {
+		items = append(items, EvaluationMatrixItem{
+			Layer:         "recorded-gates",
+			Status:        "passed",
+			EvidenceLabel: "local/static",
+			Required:      true,
+			Source:        "ledger",
+			Details:       strings.Join(gates, "; "),
+		})
+	} else {
+		items = append(items, EvaluationMatrixItem{
+			Layer:         "recorded-gates",
+			Status:        "warning",
+			EvidenceLabel: "local/static",
+			Required:      true,
+			Source:        "ledger",
+			Details:       "No focused gates are recorded on selected package tasks.",
+			NextAction:    "Record and rerun focused gates before package closeout.",
+		})
+	}
+	if tasksHaveEvidenceBoundary(tasks) {
+		items = append(items, EvaluationMatrixItem{
+			Layer:         "evidence-boundary",
+			Status:        "passed",
+			EvidenceLabel: "local/static",
+			Required:      true,
+			Source:        "ledger",
+			Details:       strings.Join(taskEvidenceBoundaries(tasks), "; "),
+		})
+	} else {
+		items = append(items, EvaluationMatrixItem{
+			Layer:         "evidence-boundary",
+			Status:        "warning",
+			EvidenceLabel: "local/static",
+			Required:      true,
+			Source:        "ledger",
+			Details:       "No explicit evidence boundary was recorded for selected package tasks.",
+			NextAction:    "Record local/proxy/direct/blocked boundaries before package closeout.",
+		})
+	}
+	integrationRequired := len(tasks) > 1
+	if tasksHaveIntegrationGate(tasks) {
+		items = append(items, EvaluationMatrixItem{
+			Layer:         "package-integration",
+			Status:        "passed",
+			EvidenceLabel: "local/static",
+			Required:      integrationRequired,
+			Source:        "ledger gates",
+			Details:       "At least one recorded gate looks package/integration oriented.",
+		})
+	} else {
+		status := "warning"
+		if !integrationRequired {
+			status = "not-recorded"
+		}
+		items = append(items, EvaluationMatrixItem{
+			Layer:         "package-integration",
+			Status:        status,
+			EvidenceLabel: "local/static",
+			Required:      integrationRequired,
+			Source:        "ledger gates",
+			Details:       "No package-level integration/browser/e2e/smoke/build gate was detected.",
+			NextAction:    "Add a package-level proof gate when this package spans multiple workers or modules.",
+		})
+	}
+	items = append(items, EvaluationMatrixItem{
+		Layer:         "external-review",
+		Status:        "not-recorded",
+		EvidenceLabel: "proxy",
+		Required:      false,
+		Source:        "review imports",
+		Details:       "External review is optional unless the package risk policy requires it.",
+		NextAction:    "Use pack review / review run / review import when the package deserves another model or human reviewer.",
+	})
+	return items
+}
+
+func missingRequiredEvaluationLayers(items []EvaluationMatrixItem) []string {
+	missing := []string{}
+	for _, item := range items {
+		if !item.Required {
+			continue
+		}
+		switch item.Status {
+		case "passed", "waived":
+			continue
+		default:
+			missing = append(missing, item.Layer)
+		}
+	}
+	return uniqueSortedStrings(missing)
+}
+
+func packageTasksTerminal(tasks []Task) bool {
+	for _, task := range tasks {
+		if !taskTerminalForEvaluation(task) {
+			return false
+		}
+	}
+	return true
+}
+
+func taskTerminalForEvaluation(task Task) bool {
+	switch strings.TrimSpace(task.Status) {
+	case "completed-unreviewed", "merged", "released", "cleaned":
+		return true
+	default:
+		observation := inspectTask(task, 0)
+		return observation.Status == "completed-unreviewed" || isTerminalStatus(observation.Status)
+	}
+}
+
+func tasksRecordedGates(tasks []Task) []string {
+	gates := []string{}
+	for _, task := range tasks {
+		gates = append(gates, task.Gates...)
+		if task.ConstraintStack != nil {
+			gates = append(gates, task.ConstraintStack.RequiredGates...)
+		}
+	}
+	return uniqueSortedStrings(gates)
+}
+
+func taskEvidenceBoundaries(tasks []Task) []string {
+	boundaries := []string{}
+	for _, task := range tasks {
+		if task.ConstraintStack != nil && strings.TrimSpace(task.ConstraintStack.EvidenceBoundary) != "" {
+			boundaries = append(boundaries, task.ID+": "+strings.TrimSpace(task.ConstraintStack.EvidenceBoundary))
+		}
+		if task.Evidence != nil {
+			if expected, ok := task.Evidence["expected"].(string); ok && strings.TrimSpace(expected) != "" {
+				boundaries = append(boundaries, task.ID+": expected="+strings.TrimSpace(expected))
+			}
+		}
+	}
+	return uniqueSortedStrings(boundaries)
+}
+
+func tasksHaveEvidenceBoundary(tasks []Task) bool {
+	return len(taskEvidenceBoundaries(tasks)) > 0
+}
+
+func tasksHaveIntegrationGate(tasks []Task) bool {
+	for _, gate := range tasksRecordedGates(tasks) {
+		normalized := strings.ToLower(gate)
+		if containsAny(normalized, []string{"integration", "browser", "e2e", "smoke", "build", "test", "soak", "proof"}) {
+			return true
+		}
+	}
+	return false
 }
 
 func mergeLiveProofGates(current LiveProofGate, next LiveProofGate) LiveProofGate {
@@ -12416,13 +13128,15 @@ func writeTextIfMissing(path string, value string, force bool) (bool, error) {
 func writeStarterTemplates(projectRoot string, force bool) ([]string, []string, error) {
 	stateDir := filepath.Join(projectRoot, defaultStateDir)
 	templates := map[string]string{
-		filepath.Join(stateDir, "orchestration-policy.md"): starterOrchestrationPolicyTemplate(),
-		filepath.Join(stateDir, "package-plan.md"):         starterPackagePlanTemplate(),
-		filepath.Join(stateDir, "project-map.md"):          starterProjectMapTemplate(),
-		filepath.Join(stateDir, "thread-map.md"):           starterThreadMapTemplate(),
-		filepath.Join(stateDir, "pulse-threads.md"):        starterPulseThreadsTemplate(),
-		filepath.Join(stateDir, "concepts.md"):             starterConceptsTemplate(),
-		filepath.Join(stateDir, "inbox.md"):                starterInboxTemplate(),
+		filepath.Join(stateDir, "orchestration-policy.md"):                      starterOrchestrationPolicyTemplate(),
+		filepath.Join(stateDir, "package-plan.md"):                              starterPackagePlanTemplate(),
+		filepath.Join(stateDir, "project-map.md"):                               starterProjectMapTemplate(),
+		filepath.Join(stateDir, "thread-map.md"):                                starterThreadMapTemplate(),
+		filepath.Join(stateDir, "pulse-threads.md"):                             starterPulseThreadsTemplate(),
+		filepath.Join(stateDir, "concepts.md"):                                  starterConceptsTemplate(),
+		filepath.Join(stateDir, "inbox.md"):                                     starterInboxTemplate(),
+		filepath.Join(stateDir, "packages", "example-package", "spec.md"):       packageSpecTemplate("example-package"),
+		filepath.Join(stateDir, "packages", "example-package", "evaluation.md"): packageEvaluationMatrixTemplate("example-package"),
 	}
 	paths := make([]string, 0, len(templates))
 	for path := range templates {

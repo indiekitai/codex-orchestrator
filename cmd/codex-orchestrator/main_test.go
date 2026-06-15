@@ -1696,7 +1696,17 @@ func TestInitCanWriteStarterTemplates(t *testing.T) {
 	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project, "--write-templates"}); err != nil {
 		t.Fatal(err)
 	}
-	templateNames := []string{"orchestration-policy.md", "package-plan.md", "project-map.md", "thread-map.md", "pulse-threads.md", "concepts.md", "inbox.md"}
+	templateNames := []string{
+		"orchestration-policy.md",
+		"package-plan.md",
+		"project-map.md",
+		"thread-map.md",
+		"pulse-threads.md",
+		"concepts.md",
+		"inbox.md",
+		filepath.Join("packages", "example-package", "spec.md"),
+		filepath.Join("packages", "example-package", "evaluation.md"),
+	}
 	for _, name := range templateNames {
 		path := filepath.Join(project, ".codex-orchestrator", name)
 		data, err := os.ReadFile(path)
@@ -1718,6 +1728,12 @@ func TestInitCanWriteStarterTemplates(t *testing.T) {
 		if name == "inbox.md" && !strings.Contains(string(data), "Intake") {
 			t.Fatalf("expected inbox template to include Intake, got:\n%s", string(data))
 		}
+		if name == filepath.Join("packages", "example-package", "spec.md") && !strings.Contains(string(data), "## Evaluation matrix") {
+			t.Fatalf("expected package spec template to include evaluation matrix, got:\n%s", string(data))
+		}
+		if name == filepath.Join("packages", "example-package", "evaluation.md") && !strings.Contains(string(data), "task-commit-state") {
+			t.Fatalf("expected package evaluation template to include task-commit-state, got:\n%s", string(data))
+		}
 	}
 	policy := filepath.Join(project, ".codex-orchestrator", "orchestration-policy.md")
 	if err := os.WriteFile(policy, []byte("custom\n"), 0o644); err != nil {
@@ -1737,6 +1753,85 @@ func TestInitCanWriteStarterTemplates(t *testing.T) {
 	if string(data) != "custom\n" {
 		t.Fatalf("expected template not to overwrite without force, got:\n%s", string(data))
 	}
+}
+
+func TestPackSpecEvalAndReconcileReportPackageReadiness(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/package-eval", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "PKG-EVAL-WORKER",
+		"--title", "Package eval worker",
+		"--package-id", "PKG-CHECKOUT",
+		"--worktree", worker,
+		"--branch", "codex/package-eval",
+		"--allowed", "README.md",
+		"--gate", "go test ./...",
+		"--gate", "npm run browser:smoke",
+		"--evidence-boundary", "local/static only; no direct runtime proof",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "README.md"), []byte("base\nworker\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "README.md")
+	git(t, worker, "commit", "-q", "-m", "package eval fixture")
+
+	specPath := filepath.Join(project, ".codex-orchestrator", "packages", "pkg-checkout", "spec.md")
+	if err := cmdPackSpec([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-CHECKOUT", "--write-template", specPath}); err != nil {
+		t.Fatal(err)
+	}
+	out := captureStdout(t, func() error {
+		return cmdPackSpec([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-CHECKOUT", "--spec", specPath, "--json"})
+	})
+	var spec PackageSpecReport
+	if err := json.Unmarshal([]byte(out), &spec); err != nil {
+		t.Fatalf("expected package spec JSON, got %q: %v", out, err)
+	}
+	if spec.Status != "passed" || len(spec.MissingSections) != 0 {
+		t.Fatalf("expected complete package spec, got %#v", spec)
+	}
+
+	out = captureStdout(t, func() error {
+		return cmdPackEval([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-CHECKOUT", "--json"})
+	})
+	var evaluation PackageEvaluationReport
+	if err := json.Unmarshal([]byte(out), &evaluation); err != nil {
+		t.Fatalf("expected package eval JSON, got %q: %v", out, err)
+	}
+	if evaluation.Status != "passed" || len(evaluation.MissingRequired) != 0 {
+		t.Fatalf("expected package evaluation to pass, got %#v", evaluation)
+	}
+	if !evaluationHasLayer(evaluation.Matrix, "package-integration", "passed") {
+		t.Fatalf("expected package integration layer to pass, got %#v", evaluation.Matrix)
+	}
+
+	out = captureStdout(t, func() error {
+		return cmdPackReconcile([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-CHECKOUT", "--spec", specPath, "--json"})
+	})
+	var reconcile PackageReconcileReport
+	if err := json.Unmarshal([]byte(out), &reconcile); err != nil {
+		t.Fatalf("expected package reconcile JSON, got %q: %v", out, err)
+	}
+	if reconcile.Status != "passed" || !reconcile.DispatchAllowed || len(reconcile.Diff) != 0 {
+		t.Fatalf("expected package reconcile to pass, got %#v", reconcile)
+	}
+}
+
+func evaluationHasLayer(items []EvaluationMatrixItem, layer string, status string) bool {
+	for _, item := range items {
+		if item.Layer == layer && item.Status == status {
+			return true
+		}
+	}
+	return false
 }
 
 func TestPackStatusReportsPackageCloseoutReadiness(t *testing.T) {

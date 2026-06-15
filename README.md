@@ -38,9 +38,9 @@ reviewable, and recoverable.
   Codex App as the orchestration runbook.
 - **Optional Go helper CLI**: `codex-orchestrator`, used for ledger, status,
   heartbeat reports, review packs, policy checks, and local update support.
-- **Docs and templates**: project maps, package plans, orchestration policy,
-  thread maps, concepts/inbox notes, pulse/inbox/router prompts, case studies,
-  and routine specs.
+- **Docs and templates**: project maps, package specs, evaluation matrices,
+  package plans, orchestration policy, thread maps, concepts/inbox notes,
+  pulse/inbox/router prompts, case studies, and routine specs.
 
 The helper now also tracks trust boundaries: it can record developer-agent
 misalignment events, snapshot each worker's constraint stack, verify completion

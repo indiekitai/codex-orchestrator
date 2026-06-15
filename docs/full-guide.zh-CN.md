@@ -596,6 +596,16 @@ post-cleanup 模式：把 terminal ledger state 和已记录 gates 当作 local/
 明确 fresh worktree diff proof 已不可用，并提示需要 fresh proof 时重跑 integration
 gate。已清理 worktree 不再单独导致 package acceptance failed。
 
+`pack spec`、`pack eval` 和 `pack reconcile` 在 package acceptance 之上补了一层很小的
+desired-state 机制。`pack spec --package-id PKG --write-template ...` 会生成一个功能包
+规格模板，包含 outcome、scope、non-goals、gates、evidence boundaries、evaluation
+matrix、exit condition、blocked condition 和 waivers。`pack eval --package-id PKG`
+会读取 ledger 和 git/worktree truth，生成 local/static 的评估矩阵，检查 task commit
+state、已记录 gates、证据边界，以及功能包级 integration proof。`pack reconcile
+--package-id PKG --spec ...` 会把目标规格、评估矩阵和 `pack status` 收口信号放在一起
+对账，指出哪里还有 drift。它们都不会派发、merge、push、cleanup、deploy，也不会声称
+direct proof；作用是防止统领把几个小切片误当成一个已经闭环的功能包。
+
 `misalignment record` 和 `misalignment report` 是 local/static 的信任循环工具。
 它们用于把开发者 pushback、setup failure、缺证据的完成声明、package drift、
 heartbeat gap 和统领自我纠偏记录进 ledger，而不是只留在聊天里。report 会按类别、

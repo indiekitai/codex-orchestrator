@@ -118,6 +118,8 @@ This adds non-overwriting templates under `.codex-orchestrator/`:
 .codex-orchestrator/pulse-threads.md
 .codex-orchestrator/concepts.md
 .codex-orchestrator/inbox.md
+.codex-orchestrator/packages/example-package/spec.md
+.codex-orchestrator/packages/example-package/evaluation.md
 ```
 
 Use them to record the current product lane, feature package outcome, safe
@@ -137,6 +139,12 @@ prior decisions, historical pitfalls, blocked concepts, and source docs.
 `inbox.md` is a local intake surface for issues, user feedback, external
 reviews, pulse outputs, and run observations before they become task contracts.
 They are not task ledgers, external knowledge-base sync, or direct proof.
+
+`packages/example-package/spec.md` and `evaluation.md` are starter shapes for a
+feature package's desired state and proof matrix. Use them when a run should
+advance one product/module lane instead of collecting unrelated small slices.
+They are local/static planning files; they do not prove runtime behavior or
+authorize dispatch by themselves.
 
 ## Record Dispatch Setup
 
@@ -325,6 +333,53 @@ looks active but has a clean commit after `baseCommit` is reported as
 is `blocked`; dirty uncommitted work stays separate from clean committed work.
 Git path commands are run with `core.quotePath=false` so non-ASCII paths remain
 human-readable for path-boundary checks and review reports.
+
+## Package Spec, Evaluation, And Reconcile
+
+Use these commands when a feature package needs a clearer "goal -> evidence ->
+closeout" shape than a pile of task rows.
+
+Generate a package spec template:
+
+```bash
+codex-orchestrator pack spec \
+  --package-id CHECKOUT-PACKAGE \
+  --write-template .codex-orchestrator/packages/checkout/spec.md
+```
+
+Inspect an existing spec for required sections:
+
+```bash
+codex-orchestrator pack spec \
+  --package-id CHECKOUT-PACKAGE \
+  --spec .codex-orchestrator/packages/checkout/spec.md \
+  --json
+```
+
+Build a local/static evaluation matrix from the package's ledger tasks:
+
+```bash
+codex-orchestrator pack eval --package-id CHECKOUT-PACKAGE --json
+```
+
+The matrix checks whether selected package tasks have reviewable/terminal task
+state, recorded gates, evidence boundaries, and package-level integration proof
+when the package spans multiple tasks. It treats `active` ledger tasks with a
+clean commit after `baseCommit` as reviewable by reading git/worktree truth.
+
+Compare desired package spec, evaluation matrix, and package closeout:
+
+```bash
+codex-orchestrator pack reconcile \
+  --package-id CHECKOUT-PACKAGE \
+  --spec .codex-orchestrator/packages/checkout/spec.md \
+  --json
+```
+
+`pack reconcile` is still local/static. It does not dispatch, merge, push,
+cleanup, deploy, or claim direct proof. It tells the Codex App orchestrator
+whether the package spec, evidence matrix, and `pack status` closeout signal are
+aligned enough to make a separate accept/reject/block/next-dispatch decision.
 
 ## Observe State
 

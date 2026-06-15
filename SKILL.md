@@ -869,6 +869,9 @@ Use helper reports when available:
 codex-orchestrator pack merge-readiness --task-id TASK --json
 codex-orchestrator pack consultation --task-id TASK --json
 codex-orchestrator pack review --package-id PKG --task-id TASK --json
+codex-orchestrator pack spec --package-id PKG --write-template .codex-orchestrator/packages/PKG/spec.md
+codex-orchestrator pack eval --package-id PKG --json
+codex-orchestrator pack reconcile --package-id PKG --spec .codex-orchestrator/packages/PKG/spec.md --json
 codex-orchestrator pack status --package-id PKG --json
 codex-orchestrator pack acceptance --package-id PKG --json
 codex-orchestrator review policy check --package-id PKG --risk medium --task-count 4 --json
@@ -930,6 +933,25 @@ Also check the package row in `status` / `observe`. Package rows now expose
 local/static review policy. If a package has enough related workers or matches a
 high-risk lane, generate/import the review evidence before calling the package
 fully closed.
+
+Use `pack spec` before or early in a feature-package run when the goal is more
+than one small worker. The spec is the desired state: outcome, scope, non-goals,
+allowed/forbidden paths, gates, evidence boundaries, evaluation matrix, exit
+condition, blocked condition, and waivers. If the spec is missing or incomplete,
+do not pretend the package is well-defined just because tasks can be dispatched.
+
+Use `pack eval` after one or more related workers have produced evidence. It
+builds a local/static evaluation matrix from ledger and git/worktree truth:
+task commit state, recorded gates, evidence boundaries, and package-level
+integration proof. A worker whose ledger status is still `active` but whose
+worktree has a clean commit after `baseCommit` should be treated as reviewable,
+not ignored until the ledger catches up.
+
+Use `pack reconcile` before package closeout or before deciding to dispatch the
+next same-package worker. It compares desired spec, evaluation matrix, and
+`pack status` closeout. Drift means the package is not done yet; either dispatch
+a bounded same-package worker, record an explicit blocked/waiver decision, or
+run the missing gates/reviews.
 
 Use `pack status` as the package closeout checkpoint after related workers have
 clean commits and before the orchestrator claims the feature package is done. It
