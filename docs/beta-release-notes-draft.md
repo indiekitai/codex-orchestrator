@@ -1,89 +1,95 @@
-# v0.3.7 Release Notes
+# v0.3.8 Release Notes
 
-`v0.3.7` is a real-run reliability release for the Codex App-first
-orchestration workflow. It focuses on the problems found while running
-long-lived project orchestration loops: stale ledger state, heartbeat deletion
-while the queue is still active, path-matcher false positives, and noisy
-evidence scans.
+`v0.3.8` is a review-hardening release for the Codex App-first orchestration
+workflow. It backports lessons from the related Claude Code orchestration
+workflow without changing the core Codex App model: Codex App still owns worker
+sessions, and the helper remains a local/static ledger, status, and review aid.
 
 ## Highlights
 
-- Added deterministic ledger catch-up:
-  - `codex-orchestrator observe --reconcile --write --json`.
-  - Records resolved worktree/branch and moves clean task commits to
-    `completed-unreviewed`.
-- Added a policy/eval guard against deleting or stopping the heartbeat while
-  durable run-mode or `dispatchMode` remains active.
-- Improved allowed/forbidden path matching:
-  - `**` now matches across repository directory segments.
-  - review reports show `path <= pattern` for matched rules.
-- Strengthened worker self-review guidance for cleanup, retry, event/outbox,
-  lifecycle API, migration, aggregate-version, and unique-constraint changes.
-- Tightened evidence-scan guidance so reviewers check changed diff/added lines
-  first and separate positive proof claims from negative boundary statements.
-- Updated the installed skill and v2 docs with the new reconciliation workflow
-  and active heartbeat guard.
+- Added reviewer finding counts to `review import`:
+  - `--p0`, `--p1`, `--p2`, `--p3`, and `--other-findings`.
+  - Imported external review output remains `proxy/advisory` evidence.
+- Added a package-level `findingTracker` to `pack acceptance`.
+  - Open P0/P1 findings block package acceptance until fixed or explicitly
+    waived.
+  - P2 findings stay visible as review debt and should be escalated if they
+    survive later package batches.
+- Added a package-level `integrationGate` to `pack acceptance`.
+  - Multi-task packages now surface missing package-level integration,
+    end-to-end, smoke, build, or post-merge gate evidence.
+- Added roadmap scorer hints for shared resources:
+  - route/navigation registries;
+  - localization/copy resources;
+  - protocol/API contracts;
+  - database schema/migrations;
+  - dependency injection or service registries;
+  - shared config/feature flags.
+- Added roadmap scorer hints for common P1 review patterns:
+  - DTO/serialization field drift;
+  - state-machine transition coverage;
+  - tenant/store scoping filters;
+  - integer cents and currency rounding;
+  - nullable external/provider fields;
+  - idempotency and unique-constraint handling.
+- Updated the Codex skill so worker self-review explicitly covers those common
+  risk patterns before handoff.
 
 ## Why This Release
 
-Real orchestration runs exposed a practical gap: the Git worktree can already
-contain a clean task commit while the durable ledger still says the task is
-active. Without a safe reconciliation command, the orchestrator has to remember
-to manually repair state before review.
+Real multi-session orchestration is weakest at feature-package boundaries:
+small worker branches can each look clean while the package still has open
+review findings, shared-resource risk, or no integration proof.
 
-Another real issue was heartbeat lifecycle control. A continuous queue should
-not silently stop just because the current child batch is empty when the ledger
-or latest user instruction still says the run should continue unattended.
-
-`v0.3.7` turns those lessons into helper behavior, skill rules, and regression
-fixtures.
+`v0.3.8` makes those risks visible in the local/static review layer. It does
+not automate the final engineering decision. It gives the orchestrator better
+evidence before deciding whether to accept, reject for fixup, or block a
+package.
 
 ## New / Changed Commands
 
-Reconcile deterministic local git truth into the ledger:
+Import external reviewer output with finding counts:
 
 ```bash
-codex-orchestrator observe --reconcile --write --json
+codex-orchestrator review import --package-id PKG --reviewer pi \
+  --file /tmp/pi-review.md --status passed --p1 0 --p2 2 --p3 1
 ```
 
-This can record:
+Generate package acceptance with finding and integration summaries:
 
-- the real worktree path for a pending/active task;
-- the real branch;
-- `completed-unreviewed` when a clean task commit exists after `baseCommit`.
+```bash
+codex-orchestrator pack acceptance --package-id PKG --json
+```
 
-It does not accept work, merge, push, cleanup, deploy, or prove runtime
-behavior.
+Score roadmap candidates with shared-resource and common-risk hints:
 
-`policy check` now includes the active heartbeat deletion regression fixture.
+```bash
+codex-orchestrator roadmap score --repo . --json
+```
 
 ## Evidence Boundary
 
-All new surfaces are `local/static` evidence. They are state-management and
-review-assistance controls, not direct runtime proof.
-
-Use `observe --reconcile --write` only after read-only observe/git truth shows
-a deterministic ledger gap. After reconciliation, still run normal review:
-diff, allowed/forbidden paths, self-review, docs/reviews, gates, evidence
-labels, and `git diff --check`.
+All new helper outputs are `local/static` review aids. External reviewer output
+is still `proxy/advisory`. These reports do not authorize implementation,
+merge, push, cleanup, release, deploy, external-service mutation, or direct
+runtime/device/provider proof.
 
 ## Verification Before Publishing
 
 Checks used for this release:
 
 - `go test ./...`
-- `go run ./cmd/codex-orchestrator policy check --repo .`
-- `go run ./cmd/codex-orchestrator validate-routines --json`
-- `go run ./cmd/codex-orchestrator run-routine docs-drift-checker --repo . --json`
+- `go run ./cmd/codex-orchestrator policy check --repo . --json`
+- `go run ./cmd/codex-orchestrator validate-routines --dir routines --json`
 - `go run ./cmd/codex-orchestrator run-routine evidence-label-auditor --repo . --json`
-- `/Users/tf/.local/bin/codex-orchestrator policy check --repo .`
+- `go run ./cmd/codex-orchestrator run-routine docs-drift-checker --repo . --json`
+- `go run ./cmd/codex-orchestrator run-routine orchestration-policy-auditor --repo . --json`
+- `go run ./cmd/codex-orchestrator roadmap score --repo . --json`
+- `/Users/tf/.local/bin/codex-orchestrator --help`
 - `git diff --check`
-
-The local helper was rebuilt and the installed Codex skill was synced before
-publishing.
 
 ## Suggested Announcement
 
-`codex-orchestrator v0.3.7` hardens real Codex App orchestration loops: ledger
-state reconciliation, active heartbeat deletion guards, better path matching,
-and stronger review guidance for idempotency and evidence claims.
+`codex-orchestrator v0.3.8` adds package review hardening: reviewer finding
+counts, package acceptance finding tracking, integration-gate reminders, and
+roadmap risk hints for shared resources and common P1 failure modes.
