@@ -20,34 +20,45 @@
     <text x="0" y="164" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="24" fill="#475569">Plan feature packages, dispatch bounded workers, keep a ledger,</text>
     <text x="0" y="198" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="24" fill="#475569">review evidence, merge accepted branches, and clean up.</text>
   </g>
-  <g transform="translate(78 326)" filter="url(#shadow)">
-    <rect x="0" y="0" width="1044" height="184" rx="28" fill="#ffffff" opacity="0.92"/>
-    <g transform="translate(42 45)">
-      <text x="0" y="0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22" font-weight="700" fill="#334155">1. Package</text>
-      <text x="0" y="42" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">Choose one coherent lane</text>
+  <g transform="translate(78 316)" filter="url(#shadow)">
+    <rect x="0" y="0" width="1044" height="190" rx="26" fill="#ffffff" opacity="0.94"/>
+    <g transform="translate(48 48)">
+      <text x="0" y="0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22" font-weight="750" fill="#334155">1. Package</text>
+      <text x="0" y="42" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">Pick one lane</text>
+      <text x="0" y="72" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">before tasks</text>
     </g>
-    <path d="M240 91h70" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/>
-    <path d="M300 81l12 10-12 10" fill="none" stroke="#94a3b8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-    <g transform="translate(334 45)">
-      <text x="0" y="0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22" font-weight="700" fill="#334155">2. Worktree</text>
-      <text x="0" y="42" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">Run isolated Codex workers</text>
+    <path d="M222 98h56" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/>
+    <path d="M268 88l12 10-12 10" fill="none" stroke="#94a3b8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <g transform="translate(306 48)">
+      <text x="0" y="0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22" font-weight="750" fill="#334155">2. Worktree</text>
+      <text x="0" y="42" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">Run isolated</text>
+      <text x="0" y="72" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">Codex workers</text>
     </g>
-    <path d="M536 91h70" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/>
-    <path d="M596 81l12 10-12 10" fill="none" stroke="#94a3b8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-    <g transform="translate(630 45)">
-      <text x="0" y="0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22" font-weight="700" fill="#334155">3. Ledger</text>
-      <text x="0" y="42" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">Track state and heartbeat gaps</text>
+    <path d="M482 98h56" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/>
+    <path d="M528 88l12 10-12 10" fill="none" stroke="#94a3b8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <g transform="translate(566 48)">
+      <text x="0" y="0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22" font-weight="750" fill="#334155">3. Ledger</text>
+      <text x="0" y="42" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">Track state</text>
+      <text x="0" y="72" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">and heartbeat</text>
     </g>
-    <path d="M825 91h70" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/>
-    <path d="M885 81l12 10-12 10" fill="none" stroke="#94a3b8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-    <g transform="translate(920 45)">
-      <text x="0" y="0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22" font-weight="700" fill="#334155">4. Review</text>
-      <text x="0" y="42" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">Merge only accepted work</text>
+    <path d="M742 98h56" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/>
+    <path d="M788 88l12 10-12 10" fill="none" stroke="#94a3b8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <g transform="translate(826 48)">
+      <text x="0" y="0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22" font-weight="750" fill="#334155">4. Review</text>
+      <text x="0" y="42" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">Merge only</text>
+      <text x="0" y="72" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#64748b">accepted work</text>
     </g>
   </g>
   <g transform="translate(78 552)">
-    <rect x="0" y="-28" width="232" height="48" rx="24" fill="#172033"/>
-    <text x="24" y="3" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="700" fill="#ffffff">local / proxy / direct / blocked</text>
-    <text x="265" y="3" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#475569">Evidence labels stay separate. Workers make; orchestrators verify.</text>
+    <text x="0" y="0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="700" fill="#334155">Evidence:</text>
+    <rect x="98" y="-29" width="64" height="42" rx="21" fill="#172033"/>
+    <text x="130" y="-2" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="16" font-weight="700" fill="#ffffff">local</text>
+    <rect x="170" y="-29" width="66" height="42" rx="21" fill="#172033"/>
+    <text x="203" y="-2" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="16" font-weight="700" fill="#ffffff">proxy</text>
+    <rect x="244" y="-29" width="66" height="42" rx="21" fill="#172033"/>
+    <text x="277" y="-2" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="16" font-weight="700" fill="#ffffff">direct</text>
+    <rect x="318" y="-29" width="78" height="42" rx="21" fill="#172033"/>
+    <text x="357" y="-2" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="16" font-weight="700" fill="#ffffff">blocked</text>
+    <text x="424" y="0" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" fill="#475569">Workers make; orchestrators verify.</text>
   </g>
 </svg>
