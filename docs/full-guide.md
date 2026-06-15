@@ -134,6 +134,13 @@ Codex App skill name, and helper CLI name.
 The goal is not to own the whole agent runtime. The goal is to make Codex App
 orchestration repeatable, inspectable, and safe enough for real project work.
 
+## Related Projects
+
+- [indiekitai/claude-orchestrator](https://github.com/indiekitai/claude-orchestrator):
+  a sibling project for Claude Code users. It adapts the same Loop Engineering
+  harness idea to Claude Code's terminal-first workflow and Claude-specific
+  skill/runtime conventions.
+
 ## Which Codex Orchestrator Is This?
 
 There are other useful projects with similar names. This one is intentionally

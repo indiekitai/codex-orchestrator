@@ -175,6 +175,13 @@ feedback, external reviews, and pulse outputs before they become tasks.
 - [Distribution package](docs/distribution-package.md): release assets and
   helper packaging details.
 
+## Related Projects
+
+- [indiekitai/claude-orchestrator](https://github.com/indiekitai/claude-orchestrator):
+  a sibling project for Claude Code users. It adapts the same Loop Engineering
+  harness idea to Claude Code's terminal-first workflow and Claude-specific
+  skill/runtime conventions.
+
 ## Name Collision
 
 There are other useful projects named `codex-orchestrator`. This one is the

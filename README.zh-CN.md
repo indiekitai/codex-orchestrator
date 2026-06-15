@@ -154,6 +154,12 @@ flowchart LR
   为什么工具需要记录约束、完成声明和信任风险。
 - [分发包说明](docs/distribution-package.md)：release 资产和辅助命令打包细节。
 
+## 相关项目
+
+- [indiekitai/claude-orchestrator](https://github.com/indiekitai/claude-orchestrator)：
+  面向 Claude Code 用户的兄弟项目。它把同一套 Loop Engineering 工程控制层思路，
+  适配到 Claude Code 的终端优先工作流和 Claude 侧的 skill / runtime 习惯。
+
 ## 同名项目说明
 
 现在已经有其他项目也叫 `codex-orchestrator`。这个仓库专注于 Codex App 优先的
