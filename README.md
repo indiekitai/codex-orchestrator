@@ -15,7 +15,7 @@ through a roadmap.
 The point is not to let agents write forever. The point is to make every worker
 branch reviewable, rejectable, mergeable, and cleanable.
 
-![codex-orchestrator overview](docs/assets/codex-orchestrator-social-card.svg)
+<img src="docs/assets/codex-orchestrator-social-card.svg" alt="codex-orchestrator overview">
 
 ## Why It Exists
 

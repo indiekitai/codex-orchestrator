@@ -13,7 +13,7 @@ worktree，并继续推进路线图。
 它的目标不是“让 Agent 一直自动写代码”，而是让每一个 worker 分支都能被审查、拒绝、
 合并和清理。
 
-![codex-orchestrator overview](docs/assets/codex-orchestrator-social-card.svg)
+<img src="docs/assets/codex-orchestrator-social-card.svg" alt="codex-orchestrator overview">
 
 ## 为什么需要它
 
