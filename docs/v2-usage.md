@@ -471,6 +471,23 @@ decisions remain with the Codex App orchestrator and human reviewer.
 
 ## macOS External Watchdog
 
+Use `health` when you want one compact local/static snapshot that wraps the
+same surfaces people usually check by hand:
+
+```bash
+codex-orchestrator health --repo /path/to/project
+codex-orchestrator health --repo /path/to/project \
+  --write-report .codex-orchestrator/health.json \
+  --write-summary .codex-orchestrator/health.md
+```
+
+`health` aggregates repo cleanliness, runtime queue pressure, dispatch
+recommendation, preflight, watchdog, project map, thread map, concepts, inbox,
+and trust-risk state. It is intentionally read-only: it does not dispatch
+Codex App sessions, mutate project ledgers, merge, push, deploy, cleanup, or
+prove App wake delivery. Use `--fail-on-warning` only when you want a shell
+gate; warnings remain `local/static` evidence.
+
 Before leaving a project unattended, run the one-shot local/static preflight:
 
 ```bash

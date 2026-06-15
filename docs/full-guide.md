@@ -485,6 +485,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
+./codex-orchestrator health --repo . --write-summary .codex-orchestrator/health.md
 ./codex-orchestrator preflight --repo . --write-summary .codex-orchestrator/preflight.md
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md --write-report .codex-orchestrator/status.json
@@ -600,6 +601,10 @@ files instead of the automation prompt, and run the helper heartbeat with
 missed-run detection on every wakeup:
 
 ```bash
+./codex-orchestrator health --repo . \
+  --write-summary .codex-orchestrator/health.md \
+  --write-report .codex-orchestrator/health.json
+
 ./codex-orchestrator preflight --repo . \
   --write-summary .codex-orchestrator/preflight.md \
   --write-report .codex-orchestrator/preflight.json
@@ -608,6 +613,12 @@ missed-run detection on every wakeup:
   --write-report .codex-orchestrator/heartbeat-report.json \
   --write-summary .codex-orchestrator/heartbeat-summary.md
 ```
+
+`health` is the compact local/static overview. It wraps the checks people
+usually run manually: integration cleanliness, runtime queue pressure,
+dispatch recommendation, preflight, watchdog, project/thread/concepts/inbox
+surfaces, and trust risk. It does not dispatch sessions, mutate ledgers,
+merge, push, deploy, cleanup, or prove that Codex App wakeups were delivered.
 
 `preflight` is the one-shot "can I leave this running?" check. It inspects
 repo cleanliness, ledger shape, dispatch mode, last heartbeat gap, macOS

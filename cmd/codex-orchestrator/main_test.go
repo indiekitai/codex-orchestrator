@@ -169,6 +169,7 @@ func TestCompletionScriptsMentionCoreCommands(t *testing.T) {
 				"rules",
 				"misalignment",
 				"watchdog",
+				"health",
 				"self-update",
 				"completion",
 			} {
@@ -1830,6 +1831,63 @@ func TestPreflightReportsHandsOffReadinessWarnings(t *testing.T) {
 		t.Fatal("expected --fail-on-warning to fail on warning status")
 	}
 	if err := cmdPreflight([]string{"--ledger", ledger, "--stale-after", "-1s"}); err == nil {
+		t.Fatal("expected negative --stale-after to fail")
+	}
+}
+
+func TestHealthAggregatesPreflightAndWatchdog(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStdout(t, func() error {
+		return cmdHealth([]string{"--repo", project, "--ledger", ledger, "--json"})
+	})
+	var report HealthReport
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatalf("expected health JSON, got %q: %v", out, err)
+	}
+	if report.Status != "warning" || report.EvidenceLabel != "local/static" {
+		t.Fatalf("expected local/static warning health, got %#v", report)
+	}
+	if report.Preflight == nil || report.Watchdog == nil {
+		t.Fatalf("expected health to embed preflight and watchdog, got %#v", report)
+	}
+	checks := map[string]PreflightCheck{}
+	for _, check := range report.Checks {
+		checks[check.Name] = check
+	}
+	for _, name := range []string{"integration", "runtime-queue", "dispatch", "preflight", "watchdog", "project-map", "thread-map", "concepts", "inbox", "trust-risk"} {
+		if _, ok := checks[name]; !ok {
+			t.Fatalf("expected health check %q in %#v", name, report.Checks)
+		}
+	}
+	if checks["watchdog"].Status != "warning" {
+		t.Fatalf("expected missing watchdog warning, got %#v", checks["watchdog"])
+	}
+
+	reportPath := filepath.Join(root, "health.json")
+	summaryPath := filepath.Join(root, "health.md")
+	if err := cmdHealth([]string{"--repo", project, "--ledger", ledger, "--write-report", reportPath, "--write-summary", summaryPath}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(reportPath); err != nil {
+		t.Fatalf("expected health JSON report: %v", err)
+	}
+	data, err := os.ReadFile(summaryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "codex-orchestrator health") || !strings.Contains(string(data), "watchdog") {
+		t.Fatalf("expected health summary, got:\n%s", string(data))
+	}
+	if err := cmdHealth([]string{"--repo", project, "--ledger", ledger, "--fail-on-warning"}); err == nil {
+		t.Fatal("expected --fail-on-warning to fail on warning status")
+	}
+	if err := cmdHealth([]string{"--repo", project, "--ledger", ledger, "--stale-after", "-1s"}); err == nil {
 		t.Fatal("expected negative --stale-after to fail")
 	}
 }

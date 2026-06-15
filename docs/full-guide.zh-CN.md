@@ -421,6 +421,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator observe
 ./codex-orchestrator heartbeat --count 1 --write-report .codex-orchestrator/heartbeat-report.json
 ./codex-orchestrator status
+./codex-orchestrator health --repo . --write-summary .codex-orchestrator/health.md
 ./codex-orchestrator preflight --repo . --write-summary .codex-orchestrator/preflight.md
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md --write-report .codex-orchestrator/status.json
@@ -504,6 +505,10 @@ thread/repo/ledger；动态 worker 状态写进 ledger/status 文件，不写进
 每次唤醒都跑一次带 missed-run 检测的辅助心跳：
 
 ```bash
+./codex-orchestrator health --repo . \
+  --write-summary .codex-orchestrator/health.md \
+  --write-report .codex-orchestrator/health.json
+
 ./codex-orchestrator preflight --repo . \
   --write-summary .codex-orchestrator/preflight.md \
   --write-report .codex-orchestrator/preflight.json
@@ -512,6 +517,11 @@ thread/repo/ledger；动态 worker 状态写进 ledger/status 文件，不写进
   --write-report .codex-orchestrator/heartbeat-report.json \
   --write-summary .codex-orchestrator/heartbeat-summary.md
 ```
+
+`health` 是一个更短的本地静态总览。它把平时人工会检查的 integration 是否干净、
+runtime queue 压力、dispatch recommendation、preflight、watchdog、project/thread/
+concepts/inbox 表面，以及 trust risk 汇总在一起。它不会派发会话、不会修改 ledger、
+不会 merge/push/deploy/cleanup，也不能证明 Codex App 的唤醒一定投递成功。
 
 `preflight` 是一次性的“我能不能把它放着跑”检查。它会检查 repo 是否干净、ledger 是否可用、
 dispatch mode、最近 heartbeat gap、macOS watchdog 状态、project map、package lane 健康度、

@@ -393,6 +393,26 @@ type PreflightCheck struct {
 	Action        string `json:"action,omitempty"`
 }
 
+type HealthReport struct {
+	SchemaVersion       int                    `json:"schemaVersion"`
+	Command             string                 `json:"command"`
+	GeneratedAt         string                 `json:"generatedAt"`
+	Status              string                 `json:"status"`
+	EvidenceLabel       string                 `json:"evidenceLabel"`
+	Boundary            string                 `json:"boundary"`
+	RepoPath            string                 `json:"repoPath"`
+	LedgerPath          string                 `json:"ledgerPath"`
+	Summary             string                 `json:"summary"`
+	Checks              []PreflightCheck       `json:"checks"`
+	RecommendedActions  []string               `json:"recommendedActions,omitempty"`
+	NextSuggestedAction string                 `json:"nextSuggestedAction"`
+	Preflight           *PreflightReport       `json:"preflight,omitempty"`
+	Watchdog            *WatchdogStatusReport  `json:"watchdog,omitempty"`
+	Dispatch            DispatchRecommendation `json:"dispatchRecommendation"`
+	PackageLaneGuard    PackageLaneGuard       `json:"packageLaneGuard"`
+	TrustRisk           TrustRiskReport        `json:"trustRisk"`
+}
+
 type PackageLaneGuard struct {
 	EvidenceLabel       string   `json:"evidenceLabel"`
 	Status              string   `json:"status"`
@@ -1120,6 +1140,8 @@ func run(args []string) error {
 		return cmdStatus(args[1:])
 	case "preflight":
 		return cmdPreflight(args[1:])
+	case "health":
+		return cmdHealth(args[1:])
 	case "watchdog":
 		return cmdWatchdog(args[1:])
 	case "pack":
@@ -1171,6 +1193,7 @@ func usage() {
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--missed-after 15m] [--count 0] [--check-only] [--write-report PATH]
   codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--write-html PATH] [--write-summary PATH] [--write-report PATH] [--stale-after 15m]
   codex-orchestrator preflight [--repo PATH] [--ledger PATH] [--interval 20m] [--missed-after 45m] [--stale-after 15m] [--fail-on-warning] [--json] [--write-report PATH] [--write-summary PATH]
+  codex-orchestrator health [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH] [--fail-on-warning]
   codex-orchestrator watchdog status [--repo PATH] [--label-suffix SUFFIX] [--json]
   codex-orchestrator pack merge-readiness --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
   codex-orchestrator pack consultation --task-id TASK [--repo PATH] [--ledger PATH] [--write-report PATH] [--json]
@@ -1445,7 +1468,7 @@ _codex_orchestrator()
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  commands="init dispatch run-mode record-task append-event observe heartbeat status preflight watchdog pack review validate-routines run-routine roadmap policy eval rules misalignment record-routine-run self-update completion version help"
+  commands="init dispatch run-mode record-task append-event observe heartbeat status preflight health watchdog pack review validate-routines run-routine roadmap policy eval rules misalignment record-routine-run self-update completion version help"
   routines="pr-reviewer stale-task-rescuer ci-fixer release-verifier docs-drift-checker evidence-label-auditor orchestration-policy-auditor roadmap-next-task-suggester budget-policy-report"
 
   case "$prev" in
@@ -1633,6 +1656,7 @@ commands=(
   'heartbeat:run observe on an interval and write reports'
   'status:print ledger status'
   'preflight:check hands-off readiness before walking away'
+  'health:audit local orchestrator installation and project state'
   'watchdog:inspect macOS external watchdog status'
   'pack:generate local/static handoff artifacts'
   'review:run or import external model reviewer reports'
@@ -1815,6 +1839,7 @@ complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'observe' -d 'Inspe
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'heartbeat' -d 'Run observe on an interval and write reports'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'status' -d 'Print ledger status'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'preflight' -d 'Check hands-off readiness before walking away'
+complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'health' -d 'Audit local orchestrator installation and project state'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'watchdog' -d 'Inspect macOS external watchdog status'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'pack' -d 'Generate local/static handoff artifacts'
 complete -c codex-orchestrator -n '__fish_use_subcommand' -a 'review' -d 'Run or import external model reviewer reports'
@@ -3293,6 +3318,364 @@ func cmdPreflight(args []string) error {
 		return errors.New("preflight warning")
 	}
 	return nil
+}
+
+func cmdHealth(args []string) error {
+	fs := flag.NewFlagSet("health", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	writeReport := fs.String("write-report", "", "write JSON health report")
+	writeSummary := fs.String("write-summary", "", "write Markdown health summary")
+	interval := fs.Duration("interval", 20*time.Minute, "expected App heartbeat interval")
+	missedAfter := fs.Duration("missed-after", 45*time.Minute, "missed heartbeat threshold")
+	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale task threshold")
+	failOnWarning := fs.Bool("fail-on-warning", false, "return an error when health status is warning")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *interval < 0 {
+		return errors.New("health --interval cannot be negative")
+	}
+	if *missedAfter < 0 {
+		return errors.New("health --missed-after cannot be negative")
+	}
+	if *staleAfter < 0 {
+		return errors.New("health --stale-after cannot be negative")
+	}
+	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
+	report, err := buildHealthReport(*repo, resolvedLedger, *staleAfter, *interval, *missedAfter)
+	if err != nil {
+		return err
+	}
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *writeSummary != "" {
+		if err := writeText(*writeSummary, renderHealthMarkdown(*report)); err != nil {
+			return err
+		}
+	}
+	if *jsonOut {
+		return printJSON(report)
+	}
+	printHealthReport(report)
+	if *writeReport != "" {
+		fmt.Printf("Health JSON: %s\n", *writeReport)
+	}
+	if *writeSummary != "" {
+		fmt.Printf("Health summary: %s\n", *writeSummary)
+	}
+	if report.Status == "blocked" {
+		return errors.New("health blocked")
+	}
+	if report.Status == "warning" && *failOnWarning {
+		return errors.New("health warning")
+	}
+	return nil
+}
+
+func buildHealthReport(repo string, ledgerPath string, staleAfter time.Duration, interval time.Duration, missedAfter time.Duration) (*HealthReport, error) {
+	ledger, err := loadLedger(ledgerPath)
+	if err != nil {
+		return nil, err
+	}
+	summary, err := observeWithOptions(ledgerPath, staleAfter)
+	if err != nil {
+		return nil, err
+	}
+	eventsPath := eventsPathForLedger(ledgerPath)
+	preflight := buildPreflightReportFromSummary(ledgerPath, eventsPath, ledger, summary, interval, missedAfter)
+	watchdog, err := inspectWatchdogStatus(repo, "")
+	if err != nil {
+		return nil, err
+	}
+	checks := []PreflightCheck{
+		healthIntegrationCheck(summary),
+		healthRuntimeQueueCheck(summary),
+		healthDispatchCheck(summary),
+		healthWrappedCheck("preflight", preflight.Status, preflight.Summary, preflight.NextSuggestedAction),
+		healthWatchdogCheck(watchdog),
+		healthSurfaceCheck("project-map", summary.ProjectMap.Status, summary.ProjectMap.RecommendedAction),
+		healthSurfaceCheck("thread-map", summary.ThreadMap.Status, summary.ThreadMap.RecommendedAction),
+		healthSurfaceCheck("concepts", summary.Concepts.Status, summary.Concepts.RecommendedAction),
+		healthSurfaceCheck("inbox", summary.Inbox.Status, summary.Inbox.RecommendedAction),
+		healthTrustRiskCheck(summary.TrustRisk),
+	}
+	status := aggregateCheckStatus(checks)
+	report := &HealthReport{
+		SchemaVersion:       1,
+		Command:             "health",
+		GeneratedAt:         nowISO(),
+		Status:              status,
+		EvidenceLabel:       "local/static",
+		Boundary:            "Local/static health only. This command does not dispatch sessions, mutate ledgers, merge, push, deploy, or prove Codex App wake delivery.",
+		RepoPath:            summary.ProjectRoot,
+		LedgerPath:          ledgerPath,
+		Summary:             healthSummary(status, checks),
+		Checks:              checks,
+		RecommendedActions:  healthRecommendedActions(checks, preflight, watchdog, summary),
+		NextSuggestedAction: healthNextSuggestedAction(status, summary),
+		Preflight:           preflight,
+		Watchdog:            &watchdog,
+		Dispatch:            summary.DispatchRecommendation,
+		PackageLaneGuard:    summary.PackageLaneGuard,
+		TrustRisk:           summary.TrustRisk,
+	}
+	return report, nil
+}
+
+func healthIntegrationCheck(summary ObserveSummary) PreflightCheck {
+	check := PreflightCheck{Name: "integration", Status: "passed", EvidenceLabel: "local/static", Detail: "integration checkout is clean for business code"}
+	if summary.Integration.Error != "" {
+		check.Status = "blocked"
+		check.Detail = "git status failed: " + summary.Integration.Error
+		check.Action = "Fix the local git inspection failure before dispatching, merging, or pushing."
+		return check
+	}
+	if summary.Integration.Dirty {
+		check.Status = "warning"
+		check.Detail = "integration checkout has uncommitted changes"
+		if summary.Integration.StateDirOnly {
+			check.Detail = "only " + defaultStateDir + "/ local orchestration state appears dirty"
+			check.Action = "Do not treat state-dir-only changes as business code dirty; keep them local or classify them before committing."
+		} else {
+			check.Action = "Classify local changes before dispatching new workers or merging task branches."
+		}
+	}
+	return check
+}
+
+func healthRuntimeQueueCheck(summary ObserveSummary) PreflightCheck {
+	check := PreflightCheck{Name: "runtime-queue", Status: "passed", EvidenceLabel: "local/static", Detail: "no active, pending, review, blocked, stale, or cleanup-needed workers"}
+	pressure := summary.ReviewPressure
+	if pressure.Blocked > 0 {
+		check.Status = "blocked"
+		check.Detail = fmt.Sprintf("%d blocked worker(s) need attention", pressure.Blocked)
+		check.Action = "Resolve or record the blocker before dispatching unrelated work."
+		return check
+	}
+	if pressure.ReviewNeeded > 0 || pressure.CleanupNeeded > 0 || pressure.Stale > 0 {
+		check.Status = "warning"
+		check.Detail = fmt.Sprintf("review=%d cleanup=%d stale=%d", pressure.ReviewNeeded, pressure.CleanupNeeded, pressure.Stale)
+		check.Action = "Review/merge/cleanup or inspect stale workers before starting more work."
+		return check
+	}
+	if pressure.Active > 0 || pressure.PendingSetup > 0 {
+		check.Status = "warning"
+		check.Detail = fmt.Sprintf("active=%d pendingSetup=%d", pressure.Active, pressure.PendingSetup)
+		check.Action = "Wait for current package workers or reconcile setup truth; do not fill spare slots with unrelated work."
+	}
+	return check
+}
+
+func healthDispatchCheck(summary ObserveSummary) PreflightCheck {
+	check := PreflightCheck{Name: "dispatch", Status: "passed", EvidenceLabel: "local/static", Detail: summary.DispatchRecommendation.Reason}
+	mode := normalizedDispatchMode(summary.DispatchMode)
+	if mode == "drain" || mode == "paused" {
+		check.Status = "warning"
+		check.Detail = "run-mode=" + mode + "; dispatch should not continue even if capacity exists"
+		check.Action = "Switch run-mode to active only when the user explicitly resumes unattended dispatch."
+		return check
+	}
+	if summary.DispatchRecommendation.CapacityOnly {
+		check.Status = "warning"
+		check.Detail = summary.DispatchRecommendation.CapacityWarning
+		check.Action = "Treat availableSlots as capacity only; dispatch only inside the current package lane or after package closeout."
+		return check
+	}
+	if !summary.DispatchRecommendation.Recommended {
+		check.Status = "warning"
+		check.Action = summary.DispatchRecommendation.NextAction
+	}
+	return check
+}
+
+func healthWrappedCheck(name string, status string, detail string, action string) PreflightCheck {
+	check := PreflightCheck{Name: name, Status: healthCheckStatus(status), EvidenceLabel: "local/static", Detail: detail}
+	if check.Detail == "" {
+		check.Detail = status
+	}
+	check.Action = action
+	return check
+}
+
+func healthWatchdogCheck(report WatchdogStatusReport) PreflightCheck {
+	check := PreflightCheck{Name: "watchdog", Status: "passed", EvidenceLabel: report.EvidenceLabel, Detail: "external watchdog local/static status has no immediate warning"}
+	if !report.Installed {
+		check.Status = "warning"
+		check.Detail = "macOS external watchdog is not installed for this repository"
+		check.Action = "For hands-off runs where missed wakeups matter, install or document an external watchdog; this remains local/static evidence."
+		return check
+	}
+	if report.HeartbeatStatus != nil && report.HeartbeatStatus.Status == "missed" {
+		check.Status = "warning"
+		check.Detail = "watchdog heartbeat report indicates a missed App heartbeat gap"
+		check.Action = "Report the missed gap as local/static evidence and keep the root cause blocked unless App/OS evidence exists."
+		return check
+	}
+	if report.LastErrorExists {
+		check.Status = "warning"
+		check.Detail = "watchdog last-error log exists"
+		check.Action = "Inspect " + report.LastErrorPath + "."
+	}
+	return check
+}
+
+func healthSurfaceCheck(name string, status string, action string) PreflightCheck {
+	check := PreflightCheck{Name: name, Status: "passed", EvidenceLabel: "local/static", Detail: status}
+	switch status {
+	case "present", "ready", "passed":
+		check.Status = "passed"
+	case "missing", "warning", "unknown":
+		check.Status = "warning"
+		if action == "" {
+			action = "Add or refresh this local/static coordination surface when long-running orchestration needs it."
+		}
+	case "blocked", "error":
+		check.Status = "blocked"
+	default:
+		if status == "" {
+			check.Status = "warning"
+			check.Detail = "status unknown"
+		}
+	}
+	check.Action = action
+	return check
+}
+
+func healthTrustRiskCheck(report TrustRiskReport) PreflightCheck {
+	check := PreflightCheck{Name: "trust-risk", Status: healthCheckStatus(report.Status), EvidenceLabel: firstNonEmpty(report.EvidenceLabel, "local/static"), Detail: report.Summary}
+	if check.Detail == "" {
+		check.Detail = report.Status
+	}
+	if len(report.RecommendedActions) > 0 {
+		check.Action = report.RecommendedActions[0]
+	}
+	return check
+}
+
+func healthCheckStatus(status string) string {
+	switch status {
+	case "ready", "passed", "ok", "clean":
+		return "passed"
+	case "blocked", "failed", "error":
+		return "blocked"
+	case "warning", "missed", "unknown", "not-installed", "missing":
+		return "warning"
+	default:
+		if status == "" {
+			return "warning"
+		}
+		return status
+	}
+}
+
+func aggregateCheckStatus(checks []PreflightCheck) string {
+	status := "ready"
+	for _, check := range checks {
+		switch check.Status {
+		case "blocked":
+			return "blocked"
+		case "warning", "unknown":
+			status = "warning"
+		}
+	}
+	return status
+}
+
+func healthSummary(status string, checks []PreflightCheck) string {
+	counts := map[string]int{}
+	for _, check := range checks {
+		counts[check.Status]++
+	}
+	switch status {
+	case "blocked":
+		return fmt.Sprintf("blocked: %d blocked check(s), %d warning(s).", counts["blocked"], counts["warning"])
+	case "warning":
+		return fmt.Sprintf("warning: %d warning(s), no blocked checks.", counts["warning"])
+	default:
+		return "ready: local/static orchestrator health checks passed."
+	}
+}
+
+func healthRecommendedActions(checks []PreflightCheck, preflight *PreflightReport, watchdog WatchdogStatusReport, summary ObserveSummary) []string {
+	actions := []string{}
+	for _, check := range checks {
+		if check.Status != "passed" && check.Action != "" {
+			actions = append(actions, check.Name+": "+check.Action)
+		}
+	}
+	actions = append(actions, preflight.RecommendedActions...)
+	actions = append(actions, watchdog.RecommendedActions...)
+	if summary.DispatchRecommendation.NextAction != "" && !summary.DispatchRecommendation.Recommended {
+		actions = append(actions, "dispatch: "+summary.DispatchRecommendation.NextAction)
+	}
+	return uniqueSortedStrings(actions)
+}
+
+func healthNextSuggestedAction(status string, summary ObserveSummary) string {
+	switch status {
+	case "blocked":
+		return "Resolve blocked health checks before dispatching, merging, pushing, or leaving the orchestrator unattended."
+	case "warning":
+		return "Review warnings, then proceed only if the remaining risk is acceptable and evidence remains labeled local/static."
+	default:
+		if summary.DispatchRecommendation.Recommended {
+			return "Health is locally ready; use package-scoped roadmap selection before dispatching new workers."
+		}
+		return "Health is locally ready; continue with observe/status and package-scoped orchestration."
+	}
+}
+
+func renderHealthMarkdown(report HealthReport) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# codex-orchestrator health\n\n")
+	fmt.Fprintf(&b, "- generatedAt: `%s`\n", report.GeneratedAt)
+	fmt.Fprintf(&b, "- status: `%s`\n", report.Status)
+	fmt.Fprintf(&b, "- evidenceLabel: `%s`\n", report.EvidenceLabel)
+	fmt.Fprintf(&b, "- repoPath: `%s`\n", report.RepoPath)
+	fmt.Fprintf(&b, "- ledgerPath: `%s`\n", report.LedgerPath)
+	fmt.Fprintf(&b, "- summary: %s\n", report.Summary)
+	fmt.Fprintf(&b, "- boundary: %s\n", report.Boundary)
+	fmt.Fprintf(&b, "\n## Checks\n\n")
+	for _, check := range report.Checks {
+		fmt.Fprintf(&b, "- `%s`: `%s` (%s) - %s\n", check.Name, check.Status, check.EvidenceLabel, check.Detail)
+		if check.Action != "" {
+			fmt.Fprintf(&b, "  - action: %s\n", check.Action)
+		}
+	}
+	if len(report.RecommendedActions) > 0 {
+		fmt.Fprintf(&b, "\n## Recommended Actions\n\n")
+		for _, action := range report.RecommendedActions {
+			fmt.Fprintf(&b, "- %s\n", action)
+		}
+	}
+	fmt.Fprintf(&b, "\n## Next\n\n%s\n", report.NextSuggestedAction)
+	return b.String()
+}
+
+func printHealthReport(report *HealthReport) {
+	fmt.Printf("Health: %s (%s)\n", report.Status, report.Summary)
+	fmt.Printf("Evidence: %s\n", report.EvidenceLabel)
+	fmt.Printf("Boundary: %s\n", report.Boundary)
+	fmt.Printf("Repo: %s\n", report.RepoPath)
+	fmt.Printf("Ledger: %s\n", report.LedgerPath)
+	for _, check := range report.Checks {
+		fmt.Printf("- %s: %s - %s\n", check.Name, check.Status, check.Detail)
+		if check.Action != "" {
+			fmt.Printf("  action: %s\n", check.Action)
+		}
+	}
+	if len(report.RecommendedActions) > 0 {
+		fmt.Println("Recommended actions:")
+		for _, action := range report.RecommendedActions {
+			fmt.Printf("- %s\n", action)
+		}
+	}
+	fmt.Printf("Next: %s\n", report.NextSuggestedAction)
 }
 
 func cmdWatchdog(args []string) error {

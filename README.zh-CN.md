@@ -13,6 +13,8 @@ worktree，并继续推进路线图。
 它的目标不是“让 Agent 一直自动写代码”，而是让每一个 worker 分支都能被审查、拒绝、
 合并和清理。
 
+![codex-orchestrator overview](docs/assets/codex-orchestrator-social-card.svg)
+
 ## 为什么需要它
 
 一个 Codex 聊天处理小改动通常够用。任务变大以后，麻烦会集中出现：
@@ -41,6 +43,16 @@ fixture”的草案供审查，并在状态页里显示 `trustRisk` 风险块。
 
 它不是后台守护进程，不是以包管理器为中心的产品，也不是完整的 Agent 操作系统；更不是
 不经审查就自动写代码的机器人。Codex App 仍然负责创建和运行 worker 会话。
+
+## 适用位置
+
+| 入口 | 怎么用 |
+|---|---|
+| **Codex App** | 主入口。让 Codex App 阅读本仓库，安装/更新 skill，并先给出只读计划。只有用户明确批准后，才创建隔离的 worktree 会话，或验收、合并、清理已接受的分支。 |
+| **Go 辅助命令** | 可选的本地静态状态层，用来维护 ledger、状态页、health 检查、review pack、routine 和 self-update。它不会创建 Codex App 会话，也不能替代统领判断。 |
+| **Codex CLI** | 可以读取已安装 skill、运行辅助命令，但不能自己创建 Codex App worktree session。 |
+| **Claude Code** | 使用兄弟项目 [claude-orchestrator](https://github.com/indiekitai/claude-orchestrator)，它把同一套 Loop Engineering 思路适配到 Claude Code 的终端优先工作流。 |
+| **其他审查模型** | Pi、DeepSeek、Claude 或其他模型可以通过 review pack 参与，作为 proxy/advisory 证据，而不是自动 merge 授权。 |
 
 ## 快速开始
 
@@ -142,6 +154,8 @@ flowchart LR
   配置和示例。
 - [v2 辅助命令用法](docs/v2-usage.md)：账本、状态、心跳、审查包、self-update
   和 CLI 细节。
+- [Router 指南](docs/router.zh-CN.md)：如何拆分 Project Orchestrator、Pulse、
+  Inbox、Router 和 Log 线程，同时避免让 Router 下场实现。
 - [Routine 库](docs/routines/README.md)：包括 `pr-reviewer`、
   `stale-task-rescuer`、`ci-fixer`、`release-verifier`、
   `docs-drift-checker`、`evidence-label-auditor`、

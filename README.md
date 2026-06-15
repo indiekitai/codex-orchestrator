@@ -15,6 +15,8 @@ through a roadmap.
 The point is not to let agents write forever. The point is to make every worker
 branch reviewable, rejectable, mergeable, and cleanable.
 
+![codex-orchestrator overview](docs/assets/codex-orchestrator-social-card.svg)
+
 ## Why It Exists
 
 One Codex chat is enough for small edits. Larger work gets messy:
@@ -48,6 +50,16 @@ and surface a `trustRisk` block in status pages.
 It is not a daemon, a package-manager-first product, a full agent operating
 system, or an unreviewed autonomous coding bot. Codex App still creates and
 runs the worker sessions.
+
+## Where It Fits
+
+| Surface | Use |
+|---|---|
+| **Codex App** | Primary surface. Ask Codex App to read this repo, install/update the skill, and produce a read-only plan first. Only after explicit approval should it create isolated worktree sessions or review/merge/cleanup accepted branches. |
+| **Go helper CLI** | Optional local/static support for ledgers, status pages, health checks, review packs, routines, and self-update. It does not create App sessions or replace the orchestrator. |
+| **Codex CLI** | Can read the installed skill and run helper commands, but it cannot create Codex App worktree sessions by itself. |
+| **Claude Code** | Use the sibling [claude-orchestrator](https://github.com/indiekitai/claude-orchestrator), which adapts the same Loop Engineering idea to Claude Code's terminal-first workflow. |
+| **Other reviewers** | Pi, DeepSeek, Claude, or other model reviewers can be attached through review packs as proxy/advisory evidence, not as automatic merge authority. |
 
 ## Quick Start
 
@@ -160,6 +172,8 @@ feedback, external reviews, and pulse outputs before they become tasks.
   workflow, routines, configuration, and examples.
 - [v2 helper usage](docs/v2-usage.md): ledger, status, heartbeat, review packs,
   self-update, and CLI details.
+- [Router guide](docs/router.md): how to split Project Orchestrator, Pulse,
+  Inbox, Router, and Log threads without turning routing into implementation.
 - [Routine library](docs/routines/README.md): includes `pr-reviewer`,
   `stale-task-rescuer`, `ci-fixer`, `release-verifier`,
   `docs-drift-checker`, `evidence-label-auditor`,

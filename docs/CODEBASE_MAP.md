@@ -10,11 +10,12 @@ orchestration work in this repository.
 | `SKILL.md` | Codex App skill entrypoint and orchestration runbook. Keep runtime behavior and safety rules here when Codex should follow them during work. |
 | `README.md` / `README.zh-CN.md` | Human-facing project homepage. Keep concise and link to deeper docs. |
 | `docs/full-guide.md` / `docs/full-guide.zh-CN.md` | Detailed guide split out from the old long README. Put deep workflow/reference material here instead of growing the root README. |
+| `docs/router.md` / `docs/router.zh-CN.md` | Thread topology and routing guide. Update when Project Orchestrator, Pulse, Inbox, Router, Log, or consultation thread behavior changes. |
 | `cmd/codex-orchestrator/main.go` | Go helper CLI. Contains ledger commands, observe/status/heartbeat reports, routine runners, policy/eval helpers, and release verification helpers. |
 | `cmd/codex-orchestrator/main_test.go` | Go test coverage for ledger lifecycle, observe/status state, routines, policy/eval fixtures, release checks, and CLI behavior. |
 | `routines/*.json` | Routine contracts: inputs, allowed/forbidden actions, gates, evidence labels, and budget metadata. |
 | `docs/routines/README.md` | Human-facing routine library documentation. Update when routine behavior or command surface changes. |
-| `docs/v2-usage.md` | Practical helper CLI usage for App-first orchestration. Update when `observe`, `status`, `heartbeat`, ledger, or routine workflows change. |
+| `docs/v2-usage.md` | Practical helper CLI usage for App-first orchestration. Update when `observe`, `status`, `health`, `heartbeat`, ledger, or routine workflows change. |
 | `docs/v2-persistent-ledger-and-heartbeat.md` | Durable ledger and heartbeat design. Update when state schema or heartbeat semantics change. |
 | `docs/roadmap.md` | Current roadmap and phase status. Update when a feature slice completes or a route is intentionally de-scoped. |
 | `docs/reviews/` | Review and proof notes. Add a dated note for non-trivial changes, especially CLI behavior, release, policy/eval, or safety changes. |
@@ -51,7 +52,7 @@ Use the narrowest credible gate for a change:
 | Change | Usually edit | Usually verify |
 |---|---|---|
 | App skill behavior | `SKILL.md`, maybe README/docs | `policy check`, `evidence-label-auditor`, `git diff --check` |
-| CLI observe/status/heartbeat | `cmd/codex-orchestrator/main.go`, tests, `docs/v2-usage.md`, roadmap | `go test ./...`, docs drift, policy check |
+| CLI observe/status/health/heartbeat | `cmd/codex-orchestrator/main.go`, tests, `docs/v2-usage.md`, roadmap | `go test ./...`, docs drift, policy check |
 | macOS external watchdog | `scripts/macos-watchdog-run.sh`, `scripts/install-macos-watchdog.sh`, `SKILL.md`, README/docs | `bash -n scripts/*.sh`, one-shot local watchdog smoke, evidence-label auditor |
 | Routine behavior | `cmd/codex-orchestrator/main.go`, `routines/*.json`, `docs/routines/README.md`, tests | `go test ./...`, `validate-routines`, docs drift |
 | Policy/eval rule | `cmd/codex-orchestrator/main.go`, `eval/`, review doc | `policy check`, `eval run`, `go test ./...` |

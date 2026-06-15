@@ -184,6 +184,13 @@ Before dispatching hands-off work:
   list as persistent prompt state;
 - refresh fixed status artifacts before leaving and on every later wakeup:
   `.codex-orchestrator/status.html` and `.codex-orchestrator/status.md`;
+- run a compact helper health check when you need one local/static summary of
+  installation, ledger, queue, preflight, watchdog, thread-map, inbox, and
+  trust-risk state:
+  `codex-orchestrator health --repo . --write-report .codex-orchestrator/health.json
+  --write-summary .codex-orchestrator/health.md`. Treat it as local/static
+  evidence only; it does not dispatch sessions, mutate ledgers, merge, push,
+  deploy, or prove Codex App wake delivery;
 - run a one-shot helper preflight before leaving and surface warnings:
   `codex-orchestrator preflight --repo . --write-report .codex-orchestrator/preflight.json
   --write-summary .codex-orchestrator/preflight.md`. Treat it as local/static
@@ -232,6 +239,7 @@ codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch c
 codex-orchestrator observe --json
 codex-orchestrator observe --reconcile --write --json
 codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md --write-report .codex-orchestrator/status.json
+codex-orchestrator health --repo . --write-report .codex-orchestrator/health.json --write-summary .codex-orchestrator/health.md
 codex-orchestrator preflight --repo . --write-report .codex-orchestrator/preflight.json --write-summary .codex-orchestrator/preflight.md
 codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch; do not dispatch new workers"
 codex-orchestrator heartbeat --count 1 --interval 20m --missed-after 45m --write-report .codex-orchestrator/heartbeat-report.json --write-summary .codex-orchestrator/heartbeat-summary.md
