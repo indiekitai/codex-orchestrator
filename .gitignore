@@ -47,5 +47,6 @@ temp/
 /codex-orchestrator
 /codex-orchestrator.exe
 
-# Local orchestration state created by helper smoke runs.
+# Local orchestration state created by helper smoke runs. Commit curated
+# project-level summaries separately when review evidence must be durable.
 .codex-orchestrator/

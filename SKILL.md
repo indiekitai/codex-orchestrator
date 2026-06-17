@@ -914,6 +914,17 @@ all external review output as `proxy/advisory`: it can block acceptance or infor
 the orchestrator, but it cannot authorize implementation, merge, push, cleanup,
 release, deploy, or direct runtime/device/provider proof.
 
+For important hands-off runs and package closeouts, do not leave external
+review evidence only in a local `.codex-orchestrator/` review pack or raw
+reviewer transcript. If the review influenced acceptance, rejection, a waiver,
+or a "package closed" claim, write a short committed project-level summary in
+the project's durable review/progress surface, such as `docs/reviews/`, before
+or as part of closeout. The summary should name the reviewer(s), review status,
+P0/P1/P2/P3 counts when known, accepted fixes or waivers, remaining advisory
+risks, and the exact evidence label (`proxy/advisory`). Raw local packs may
+remain untracked, but the closeout reason must survive worktree cleanup,
+context compaction, and a fresh orchestrator session.
+
 If `review run` times out, treat it as a recorded reviewer timeout, not as a
 reason to wait forever. The helper marks the run `blocked` with timeout evidence
 and can record it in the ledger. The orchestrator may rerun with a larger

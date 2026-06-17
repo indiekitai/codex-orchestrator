@@ -770,6 +770,16 @@ authorizes implementation, merge, push, cleanup, release, deploy, or direct
 runtime/device/provider proof by itself. For the design rationale, see
 [docs/research/package-review-policy.md](research/package-review-policy.md).
 
+For hands-off runs and feature-package closeout, a local review pack is not a
+durable project record by itself. If an external reviewer result affects the
+orchestrator's accept/reject/waive/close decision, commit a short project-level
+summary in the target repository's durable review surface, such as
+`docs/reviews/`. Include the reviewer name, status, finding counts when known,
+accepted fixes or waivers, residual risks, and the `proxy/advisory` evidence
+label. Keep raw `.codex-orchestrator/` packs local when appropriate, but do not
+let the only explanation for a package closeout disappear with local state or
+worktree cleanup.
+
 Reviewer timeouts are explicit state, not hidden waiting. `review run` supports
 `--timeout-minutes` for normal reviewer runs and `--timeout-seconds` for short
 local smoke tests. A timeout is recorded as a `blocked` reviewer timeout with
