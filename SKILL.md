@@ -269,6 +269,18 @@ current helper exposes `packageSummary`, `packageLaneGuard`, `preflight`, and
 feature package, to explain recent progress in human language, and to avoid
 filling spare concurrency slots with unrelated safe tasks.
 
+For long-running orchestrator threads, do not treat the full chat transcript as
+the model's working context. Treat the ledger, status reports, package plan,
+thread map, inbox, and recent git/worktree truth as durable sources, then
+project a small model-visible view before deciding the next action. A good
+context projection includes: current repo status, run-mode, active package lane,
+latest user override, worker counts/IDs, fresh evidence since the last wakeup,
+summarized or hidden old logs, and the next action with the reason it still
+belongs to the current package. Large command output, grep results, browser
+logs, and generated artifacts should enter the prompt as previews with stable
+file paths, not as unbounded transcript append. If an idle gap or context
+compaction happened, say so explicitly in the status or handoff.
+
 When `observe` reports a deterministic gap between ledger state and git truth,
 such as a recorded branch whose real worktree now exists or an active worker
 with a clean task commit after `baseCommit`, run

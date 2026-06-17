@@ -19,6 +19,7 @@ more features.
 - Thoughtworks, [Harness engineering and agent feedback: Exploring AI coding sensors](https://www.thoughtworks.com/en-us/insights/blog/generative-ai/harness-engineering-agent-feedback-exploring-ai-coding-sensors)
 - The Pragmatic Engineer, [The creator of Clawd: "I ship code I don't read"](https://newsletter.pragmaticengineer.com/p/the-creator-of-clawd-i-ship-code)
 - WyeWorks, [The Workflow Is the Product](https://www.wyeworks.com/es/blog/2026/05/13/custom-agentic-workflows-for-coding-agents/)
+- 马东锡 NLP, [Context Is A Projection](https://x.com/dongxi_nlp/status/2066991890348572950)
 - Lower-weight trend scans from Reddit, Substack, MindStudio, DX, and X search
   results around "loop engineering", used only to check terminology drift.
 - User-provided Grok/X synthesis covering recent Loop Engineering discussions,
@@ -148,6 +149,35 @@ runtime sensing. It knows whether a worker branch exists, whether a worktree is
 dirty, and whether a commit needs review. It does not yet know whether the
 feature actually worked in a browser, mobile app, terminal, database, API,
 device, or CI system unless the delegated task manually reports that evidence.
+
+## What Context Projection Adds
+
+"Context Is A Projection" is useful because it names a problem real
+orchestrator sessions hit quickly: a transcript records what happened, but the
+next model call needs a selected view of what matters now.
+
+The practical split matches this project:
+
+- durable log: ledger, events, review reports, artifacts, status snapshots;
+- model-visible context: a small current-action view for the next Codex turn;
+- structured app state: package lane, run-mode, worker states, gates, evidence
+  labels, heartbeat gaps, and latest user override.
+
+The implication is not to append more and more chat history. A mature
+orchestrator should project the durable state into a short context block before
+each heartbeat/resume:
+
+- current package lane and why it remains the lane;
+- active/pending/review/blocked/cleanup counts and concrete IDs;
+- fresh evidence since the last wakeup;
+- old logs and completed spans collapsed into summaries with artifact paths;
+- the next action and the reason it is safe or blocked.
+
+This is mostly aligned with existing `status --write-summary`, `status.html`,
+`health`, `preflight`, `thread-map`, `inbox`, and `concepts`. The remaining gap
+is product shape: the helper should make the "model-visible projection" a first
+class artifact or at least clearly label which status lines are meant for the
+next model call versus audit-only machine detail.
 
 ## What Peter Steinberger / Closed-Loop Workflows Add
 
