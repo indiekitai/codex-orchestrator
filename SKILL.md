@@ -78,6 +78,12 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
    - Only dispatch a tiny task when it removes a named blocker, proves a needed
      runtime surface, or safely lands a shared contract needed by the larger
      milestone.
+   - For multi-worker or important packages, write the package intent and gates
+     before dispatching builders. Prefer `pack spec` or an equivalent project
+     doc that names the outcome, non-goals, allowed/forbidden paths, gates,
+     evidence boundaries, and exit/block conditions. Gates are acceptance
+     contracts, not convenient implementation files; a worker should not edit
+     them unless its explicit task is to revise the spec/gates.
    - Do not fill idle slots by grabbing two unrelated "safe" tasks from the
      global backlog merely because their write sets do not conflict. Use an
      unrelated safe task only as a clearly labeled auxiliary maintenance or
@@ -734,6 +740,22 @@ domain, reject or rewrite it unless it clearly removes a named blocker. The task
 prompt must answer: what complete feature path does this advance, what previous
 partial closure does it build on, and what will still remain after this slice.
 
+Before dispatching implementation, also apply a minimum-change gate. The
+orchestrator or worker contract must answer:
+
+- Can this outcome be achieved without code, by deleting code, changing config,
+  updating docs/tests, or using an existing command/API?
+- Is there already a local helper, standard-library feature, framework primitive,
+  route/client/model, or platform capability that solves it?
+- If code is needed, what is the smallest coherent change that advances the
+  package outcome without adding another speculative abstraction, shell, or
+  readiness surface?
+- What should explicitly not be built yet?
+
+If the answer is "we do not know", dispatch a short read-only discovery or
+contract-clarification task before implementation. Do not let workers write
+new code merely because there is a plausible place to add it.
+
 For domains with several partial closures, prefer fewer larger vertical tasks
 over many small horizontal tasks. It is acceptable for a vertical task to remain
 local/proxy when hardware, live provider, or production is unavailable, but it
@@ -776,7 +798,10 @@ Each delegated session prompt should include:
 - Anti-shallow-slice classification: `vertical-completion`,
   `runtime-proof`, `blocked-removal`, or `owner-gated`.
 - Explanation of why this is not repeating an already-completed first slice.
+- Minimum-change rationale: why this cannot be solved by reuse, deletion,
+  configuration, existing APIs, or a smaller docs/test-only change.
 - Requirement to self-review before handoff.
+- Requirement to challenge the task contract before implementation.
 - Final handoff format: branch, commit, changed files, gates, evidence, risks.
 
 Always include:
@@ -786,8 +811,14 @@ Use a separate isolated worktree/session for this task unless the orchestrator e
 Start by running git status --short --branch. If you are not on the task branch, create or switch to codex/<task-slug>.
 Do not start subagents, do not use another orchestrator, and do not create second-level delegation.
 You are not alone in the codebase. Do not revert unrelated work; adapt to current changes.
+Before editing, challenge the task contract. If the outcome, allowed paths,
+forbidden paths, gates, evidence labels, package lane, or minimum-change
+rationale are unclear, risky, or too broad, report the issue first and ask for
+a narrowed contract or record a blocker. If the contract is sound, write a
+brief "contract accepted" note explaining why the task is still necessary and
+why the planned change is the smallest coherent change.
 If the run needs a human physical/device/payment/deploy action, proactively notify the user in their preferred language using the project's available notification mechanism; do not require the user to remember any skill name or command. Pause at the checkpoint, say the exact action, device/resource, what not to do, and what the user should reply; continue only after confirmation and record it in artifacts.
-Before handoff, review your own diff as a reviewer: check boundaries, forbidden paths, shared contracts, docs drift, evidence strength, gates, anti-shallow-slice classification, and residual risks. Fix scoped issues you find before committing.
+Before handoff, review your own diff as a reviewer: check boundaries, forbidden paths, shared contracts, docs drift, evidence strength, gates, anti-shallow-slice classification, minimum-change rationale, and residual risks. Fix scoped issues you find before committing.
 If the task changes cleanup, retry, event/outbox writes, lifecycle APIs, migrations, aggregate/versioning, or unique constraints, explicitly self-review repeated execution and idempotency: running the action twice must either be safe or produce a documented blocked/product decision.
 If the task touches DTO/serialization fields, state machines, tenant/store scoping, money/cents arithmetic, nullable external-provider fields, shared route/navigation registries, localization strings, shared config, protocol/API contracts, or migrations, call that out in self-review and explain how the diff avoids the common P1 failure mode.
 Commit to the task branch, but do not merge, push the integration branch, delete the worktree, or delete the branch unless the orchestrator explicitly asks you to.
@@ -818,6 +849,10 @@ Before dispatching, answer these questions in the orchestrator thread:
   are disjoint?
 - What evidence will prove the package, and what remains `blocked`,
   `owner-gated`, or `runtime-proof` after the package lands?
+- What package spec and gates exist before workers start, and which files are
+  frozen acceptance contracts that workers must not edit?
+- For each worker, what is the minimum-change rationale and what explicitly
+  should not be built?
 
 Prefer package-sized outcomes such as:
 

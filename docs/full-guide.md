@@ -214,9 +214,11 @@ flowchart TD
 | **Configurable heartbeat** | Periodic check reconciles thread status with actual git state — no silent overnight stalls; the interval is project-specific |
 | **Stuck session recovery** | If a session is idle >15 min: has a clean commit → review and merge directly; has uncommitted useful changes → send a targeted nudge to continue; no useful diff → mark abandoned |
 | **Anti-shallow-slice gate** | Rejects "another placeholder page" tasks. Forces vertical completion, runtime proof, or blocker removal |
+| **Minimum-change gate** | Asks whether code is needed at all before a worker starts: reuse, delete, configure, document, or test first; write only the smallest coherent change |
 | **Evidence discipline** | Labels proof as `direct`, `proxy`, `local`, or `blocked`. No upgrading unit tests into production proof |
 | **Self-review enforcement** | Every session must review its own diff before handoff. The orchestrator re-reviews before merging |
 | **Feature-package planning** | When a domain has multiple partial closures, promotes work to a coherent milestone instead of more tiny slices |
+| **Spec and gates first** | Important packages define the outcome, non-goals, gates, evidence boundaries, and frozen acceptance files before worker dispatch |
 | **Package continuity for unattended runs** | Keeps overnight/continuous dispatch focused on one product module instead of filling slots with unrelated safe backlog items |
 | **Package closeout status** | `pack status` combines package summary and acceptance inputs so the orchestrator can tell whether a package is ready, blocked, still active, or waiting for external review |
 | **Legacy ledger noise control** | Old cleaned/merged ungrouped tasks stay auditable in JSON but no longer make the current status page look scattered |
@@ -709,6 +711,11 @@ still require a separate orchestrator closeout decision.
 above package acceptance. `pack spec --package-id PKG --write-template ...`
 creates a feature-package spec with outcome, scope, non-goals, gates, evidence
 boundaries, evaluation matrix, exit condition, blocked condition, and waivers.
+For important packages, create or refresh this spec before dispatching workers.
+Treat gates and spec files as acceptance contracts: workers should not edit them
+unless the task explicitly says to revise the spec/gates. Each worker contract
+should include a short challenge step and minimum-change rationale before
+implementation begins.
 `pack eval --package-id PKG` reads the ledger and git/worktree truth to build a
 local/static matrix for task commit state, recorded gates, evidence boundaries,
 and package-level integration proof. `pack reconcile --package-id PKG --spec
@@ -1042,6 +1049,8 @@ dispatch → active → completed-unreviewed → merged
 - **Heartbeat Loop**: At the configured interval, reconciles Codex thread status with actual git state
 - **Review Pipeline**: Diff boundary check, self-review verification, contract conflict detection, evidence label validation
 - **Anti-Shallow-Slice Gate**: Classifies every task as `vertical-completion`, `runtime-proof`, `blocked-removal`, or `owner-gated`
+- **Minimum-Change Gate**: Checks whether the worker can reuse, delete, configure, document, or test before writing new code
+- **Spec/Gates-First Gate**: Keeps package outcomes and acceptance gates explicit before parallel worker dispatch
 
 ## ⚖️ vs Manual Orchestration
 

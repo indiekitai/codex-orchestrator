@@ -190,9 +190,11 @@ flowchart TD
 | **可配置心跳** | 定期巡检，将 Codex 线程状态与实际 git 状态对账，减少过夜静默卡死 |
 | **卡住会话恢复** | 会话空转超过 15 分钟时：有干净提交就直接审查；有未提交但有价值的改动就让同一个会话继续；没有可用 diff 就标记放弃 |
 | **反浅切片门禁** | 拒绝“又一个占位页面”式任务。任务必须推进纵向闭环、运行时证明，或移除明确阻断点 |
+| **最小改动门禁** | worker 动手前先问是否真的需要写代码：能复用、删除、改配置、补文档或测试就不要新增实现；必须写时也只写最小闭环改动 |
 | **证据纪律** | 证明标签分为 `direct`（直接）、`proxy`（代理）、`local`（本地）和 `blocked`（阻断）。不许把单元测试说成生产证明 |
 | **强制自审查** | 每个会话交付前必须先审自己的 diff；编排器合并前再审一遍 |
 | **功能包规划** | 某个领域已经有多个局部闭合后，升级为完整里程碑，而不是继续堆小切片 |
+| **先规格和门禁** | 重要功能包先写清 outcome、non-goals、gates、证据边界和冻结的验收文件，再派 worker |
 | **无人值守主线连续性** | 过夜或连续编排时围绕一个产品模块推进，不为了填满并发槽去抓无关的安全任务 |
 | **功能包收口状态** | `pack status` 汇总功能包状态和验收输入，判断它是可验收、被阻塞、仍在运行，还是缺少外部审查 |
 | **旧账本降噪** | 老的 cleaned/merged 未分包任务仍保留在 JSON 里，但不会再让当前状态页看起来像任务散乱 |
@@ -599,7 +601,10 @@ gate。已清理 worktree 不再单独导致 package acceptance failed。
 `pack spec`、`pack eval` 和 `pack reconcile` 在 package acceptance 之上补了一层很小的
 desired-state 机制。`pack spec --package-id PKG --write-template ...` 会生成一个功能包
 规格模板，包含 outcome、scope、non-goals、gates、evidence boundaries、evaluation
-matrix、exit condition、blocked condition 和 waivers。`pack eval --package-id PKG`
+matrix、exit condition、blocked condition 和 waivers。重要功能包派 worker 前应该先创建
+或刷新这份 spec。spec 和 gates 是验收契约，不是 worker 觉得方便就能改的实现文件；
+除非任务明确要求修订 spec/gates，否则 worker 不应修改它们。每个 worker contract 还应先
+包含 challenge 步骤和最小改动理由，再进入实现。`pack eval --package-id PKG`
 会读取 ledger 和 git/worktree truth，生成 local/static 的评估矩阵，检查 task commit
 state、已记录 gates、证据边界，以及功能包级 integration proof。`pack reconcile
 --package-id PKG --spec ...` 会把目标规格、评估矩阵和 `pack status` 收口信号放在一起
@@ -851,6 +856,8 @@ automation truth，不能只信 create 返回。
 - **心跳循环**：按项目配置的间隔对账 Codex 线程状态与实际 git 状态
 - **审查流水线**：diff 边界检查、自审查验证、契约冲突检测、证据标签验证
 - **反浅切片门禁**：每个任务必须分类为 `vertical-completion`、`runtime-proof`、`blocked-removal` 或 `owner-gated`
+- **最小改动门禁**：先检查复用、删除、配置、文档或测试是否足够，再允许新增代码
+- **先规格和门禁**：并行派发前先明确功能包 outcome 和验收 gate，避免 worker 各自发散
 
 ## ⚖️ 对比手动编排
 
