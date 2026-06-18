@@ -32,6 +32,24 @@ One Codex chat is enough for small edits. Larger work gets messy:
 idea itself, but the practical harness that keeps the loop observable,
 reviewable, and recoverable.
 
+## When To Use It
+
+Use it when a feature or project needs more than one ordinary Codex chat:
+
+- a large repository with several modules or apps;
+- a feature package that can be split into related worktree sessions;
+- unattended work where the next morning needs an auditable handoff;
+- evidence-sensitive work where `local`, `proxy`, `direct`, and `blocked`
+  claims must stay separate;
+- branches that should be reviewed, merged, pushed, and cleaned by a supervising
+  orchestrator instead of by individual workers.
+
+Do not use the full workflow for a small copy edit, a one-file bug fix, or a
+vague "make this better" request. If the work needs live payment/provider,
+production, hardware, or owner authorization, codex-orchestrator can prepare and
+track the safe parts, but it should stop at the boundary instead of pretending
+to have authority.
+
 ## What It Includes
 
 - **Codex skill**: installed into `~/.codex/skills/codex-orchestrator`, used by

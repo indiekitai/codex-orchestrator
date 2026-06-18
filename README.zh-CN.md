@@ -28,6 +28,20 @@ worktree，并继续推进路线图。
 `codex-orchestrator` 解决的是这层控制系统：它不是 Loop Engineering 这个概念本身，
 而是让循环变得可观察、可验收、可恢复的一套实践工具。
 
+## 什么时候适合用
+
+适合用在超过一个普通 Codex 聊天能稳妥处理的工作：
+
+- 一个大仓里有多个模块或应用；
+- 一个功能包可以拆成几条相关的 worktree 会话；
+- 需要无人值守跑一段时间，第二天还能审计和交接；
+- 对证据边界敏感，必须区分 `local`、`proxy`、`direct` 和 `blocked`；
+- worker 只负责提交分支，最终由统领统一审查、合并、推送和清理。
+
+不适合小 copy、单文件 bugfix，或“随便优化一下”这种成功条件模糊的请求。如果任务涉及真实
+支付、provider、生产环境、硬件或 owner 授权，codex-orchestrator 可以准备和跟踪安全部分，
+但应该在边界处停下，而不是假装自己有授权。
+
 ## 它包含什么
 
 - **Codex skill**：安装到 `~/.codex/skills/codex-orchestrator`，作为 Codex App 的
