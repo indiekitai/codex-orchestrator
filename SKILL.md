@@ -39,6 +39,14 @@ operating system, or a replacement for engineering judgment. Worker sessions
 still run their own edit/test/fix inner loops; this skill manages the
 project-level control layer around those workers.
 
+Treat "harness" as the executable form of a project's judgment about what
+counts as correct. Tools, MCP servers, schemas, skills, ledgers, and status
+pages are useful only when they encode project rules: source-of-truth context,
+allowed actions, forbidden boundaries, output shape, evidence labels, gates,
+review feedback, and stop conditions. If those rules are absent, the model will
+fill gaps with generic defaults. The orchestrator's job is to make the
+project-specific rules visible, checkable, and revisable.
+
 This works best in early development or large-module buildout where many slices can move in parallel. It works poorly for hardware-heavy acceptance, production deploys, payment tests, or steps requiring frequent human observation; keep those serialized and explicit.
 
 Treat this skill as a living runbook, not a frozen policy. When orchestration reveals a better rule, a repeated mistake, a misleading prompt pattern, or a new safety constraint, update the skill or the active automation promptly so future sessions inherit the correction. Do not only mention the improvement in chat and then keep operating from stale instructions.
@@ -813,6 +821,8 @@ The orchestrator owns the lifecycle: create the worktree/session, record the thr
 Each delegated session prompt should include:
 
 - Task ID and plain-language outcome.
+- Acceptance definition: what must be true for this task to count as correct,
+  and which result would be a real blocker rather than a partial success.
 - Dependency/base commit or branch.
 - Worktree and branch requirement.
 - Allowed paths.
@@ -822,6 +832,8 @@ Each delegated session prompt should include:
 - Acceptance commands.
 - Required docs/review/artifact updates.
 - Evidence labels: `direct`, `proxy`, `local`, `blocked`.
+- Source-of-truth context: the docs, source files, specs, prior decisions, or
+  package plan the worker must use instead of inventing project rules.
 - Anti-shallow-slice classification: `vertical-completion`,
   `runtime-proof`, `blocked-removal`, or `owner-gated`.
 - Explanation of why this is not repeating an already-completed first slice.
@@ -840,6 +852,10 @@ Use a separate isolated worktree/session for this task unless the orchestrator e
 Start by running git status --short --branch. If you are not on the task branch, create or switch to codex/<task-slug>.
 Do not start subagents, do not use another orchestrator, and do not create second-level delegation.
 You are not alone in the codebase. Do not revert unrelated work; adapt to current changes.
+Use the task's named source-of-truth files and acceptance definition as the law
+for this task. Do not replace them with a keyword summary, a generic pattern, or
+an invented checklist. If the source-of-truth files conflict or do not define
+what counts as correct, stop with a blocker instead of guessing.
 Before editing, challenge the task contract. If the outcome, allowed paths,
 forbidden paths, gates, evidence labels, package lane, or minimum-change
 rationale are unclear, risky, or too broad, report the issue first and ask for
@@ -969,6 +985,7 @@ blocker. Produce a decision-ready consultation brief:
 When a worker appears merge-ready, separate these decisions:
 
 - review evidence exists;
+- the work satisfies the task's acceptance definition;
 - merge is accepted;
 - push is allowed as closeout;
 - worktree/branch cleanup is safe;

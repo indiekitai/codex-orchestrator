@@ -32,6 +32,26 @@ One Codex chat is enough for small edits. Larger work gets messy:
 idea itself, but the practical harness that keeps the loop observable,
 reviewable, and recoverable.
 
+## What "Harness" Means Here
+
+In this project, a harness is not just a bundle of MCP servers, skills, schemas,
+or helper commands. Those pieces are useful, but they are only local
+capabilities.
+
+The harness is the layer that makes a project's definition of "correct"
+executable:
+
+- which source files, docs, and prior decisions count as context;
+- which tools and paths a worker may touch;
+- what output shape, gates, evidence labels, and review artifacts are required;
+- when a task must stop as `blocked` instead of guessing;
+- how review feedback becomes a rule, fixture, spec, or status improvement.
+
+If those rules are not written down, an agent will borrow generic defaults from
+its training data and produce work that may look polished but not match the
+project. `codex-orchestrator` exists to put those project-specific judgments
+into the loop.
+
 ## When To Use It
 
 Use it when a feature or project needs more than one ordinary Codex chat:

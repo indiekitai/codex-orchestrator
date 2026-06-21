@@ -25,6 +25,33 @@ That maps directly to Loop Engineering: the engineer is not only prompting an
 agent, but designing the loop that prompts, observes, verifies, recovers, and
 learns.
 
+## Later Note: Harness As Executable Judgment
+
+A useful refinement from later Harness / AI-first organization discussions is
+that a harness is not just a toolkit around an agent. MCP servers, skills,
+schemas, sandboxes, logs, traces, and local CLIs are all useful, but they are
+not enough by themselves.
+
+The missing layer is the project's own definition of "what counts as right":
+
+- which sources are authoritative;
+- which boundaries the agent may cross;
+- which output shape is machine-checkable;
+- which evidence is strong enough for a claim;
+- which ambiguous cases require a human or owner decision;
+- how review feedback becomes a rule, fixture, spec, or status improvement.
+
+For `codex-orchestrator`, this means worker contracts must carry an acceptance
+definition, source-of-truth context, allowed/forbidden paths, gates, evidence
+labels, and blocked conditions. Acceptance reports must explain why the task
+meets that definition; they should not rely on task count, clean git status, or
+the worker's self-report alone.
+
+If these judgments are not written into the harness, an agent tends to borrow
+generic defaults. The result can be polished, structured, and still wrong for
+the project. The product should keep optimizing for making project-specific
+judgment visible, executable, checkable, and revisable.
+
 ## Book 1: Claude Code / Harness Engineering
 
 The first book reinforces a practical point: the agent's reliability is mostly
