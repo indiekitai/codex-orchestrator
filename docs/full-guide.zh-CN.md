@@ -468,6 +468,11 @@ payment、provider、hardware、pre/prod 等高风险关键词时，状态输出
 `observe`、`status` 和心跳摘要还会展示 `packageLaneGuard`，提醒是否存在未归包 worker、
 多个 package lane 并行，或者空闲槽位只能补同一 lane 的任务；同时输出简短
 `timeline`，让人不用读原始 ledger events，也能看到最近的 task/routine 顺序。
+派发一组 package worker 之前，统领还应该做一次“派发前拆解审查”：写清楚准备派
+哪些 worker、依赖顺序、为什么都属于同一个 package、哪些共享 contract 必须串行、
+最多能并发几个、各自 gates / 证据标签是什么，以及什么情况下应该 drain 或切换
+package。如果这组拆解只是因为还有空闲槽位，或者不能用一句话说明它推进了同一个功能
+闭环，就先重写计划，不要创建 worker。
 `observe`、`status` 和心跳摘要也会展示只读 `projectMap` 信号。辅助命令会检查常见项目地图文件，例如
 `docs/CODEBASE_MAP.md`；如果不存在，会提示让 Codex App 在首次编排前生成或读取一份
 简洁 project map。
@@ -858,6 +863,7 @@ automation truth，不能只信 create 返回。
 - **反浅切片门禁**：每个任务必须分类为 `vertical-completion`、`runtime-proof`、`blocked-removal` 或 `owner-gated`
 - **最小改动门禁**：先检查复用、删除、配置、文档或测试是否足够，再允许新增代码
 - **先规格和门禁**：并行派发前先明确功能包 outcome 和验收 gate，避免 worker 各自发散
+- **派发前拆解审查**：先审 worker 列表、依赖顺序、同包理由和停机条件，再创建 session
 
 ## ⚖️ 对比手动编排
 

@@ -109,6 +109,10 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
      active/pending package worker、reconcile setup、review/cleanup，还是可以继续同一
      package lane。后续真实项目反馈又补强为 `capacityOnly` / `capacityWarning` 字段，
      让机器和人都明确 raw slot 不是派发许可。
+     最新补强：派发前必须做 decomposition review / 拆解审查，先说明 worker 列表、
+     依赖顺序、同一 package 理由、串行/并发边界、gates、证据标签和 stop/drain
+     条件，再创建 Codex App worker。这样把“不要乱填 availableSlots”前移到派发前，
+     而不是等 worker 自己挑战任务合同。
    - 边界：local/static closeout guidance；不自动 merge/push/cleanup，不产生直接
      runtime/device/provider proof。
 
@@ -259,6 +263,8 @@ Future daemon/UI
 - 已补 minimum-change gate、spec/gates-first 和 worker contract challenge 规则：借鉴
   Ponytail 的“最好代码是没写的代码”和 architect-loop 的“先规格/门禁、builder 先质疑
   合同”做法，但保持 Codex App-first harness 定位，不转向固定跨供应商架构。
+- 已补派发前拆解审查规则：统领在开 worker 之前先审 worker 拆法、依赖顺序、同包理由、
+  串行/并发边界、gates 和 drain 条件，避免把“还有空槽”误用成“可以抓一个无关安全任务”。
 
 仍需改进：
 

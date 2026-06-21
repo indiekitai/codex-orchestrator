@@ -89,6 +89,13 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
      unrelated safe task only as a clearly labeled auxiliary maintenance or
      blocker-removal task, and record why it is allowed to run outside the main
      package.
+   - Before creating workers, run a decomposition review in the orchestrator
+     thread or package ledger. Name the proposed worker list, dependency order,
+     same-package rationale, serial/shared-contract boundaries, allowed
+     parallelism, gates, evidence labels, and stop/drain conditions. If the
+     proposed split exists mainly because `availableSlots` is non-zero, mixes
+     unrelated product lanes, or cannot be summarized as one package advance,
+     rewrite the plan before dispatching.
    - Keep a short package ledger: milestone outcome, dependency graph, active
      worker contracts, merge order, gates, and what evidence remains blocked.
 4. Choose at most two active sessions by default, with a narrow option to raise
@@ -770,6 +777,15 @@ it coherent, and define the merge order. A package may still use small worker
 branches internally, but each branch must be tied to the package outcome and
 must not exist merely to add another page, shell, fixture, or checklist.
 
+Before dispatching those branches, run a decomposition review from the
+orchestrator side. This is different from a worker contract challenge: the
+worker can reject a bad task, but the orchestrator must first reject a bad split.
+The review should answer whether the worker list is the smallest coherent set,
+which worker must land first, which shared surfaces force serialization, what
+can genuinely run in parallel, and what condition should make the orchestrator
+drain or switch packages. If the review cannot distinguish the package outcome
+from a collection of convenient safe tasks, do not dispatch.
+
 Each delegated session should:
 
 - start from the current accepted base commit or branch,
@@ -798,6 +814,8 @@ Each delegated session prompt should include:
 - Anti-shallow-slice classification: `vertical-completion`,
   `runtime-proof`, `blocked-removal`, or `owner-gated`.
 - Explanation of why this is not repeating an already-completed first slice.
+- Decomposition-review link: which package item this worker satisfies, what it
+  depends on, and why it is allowed to run now.
 - Minimum-change rationale: why this cannot be solved by reuse, deletion,
   configuration, existing APIs, or a smaller docs/test-only change.
 - Requirement to self-review before handoff.
@@ -847,6 +865,9 @@ Before dispatching, answer these questions in the orchestrator thread:
   APIs, command/event handlers, or runtime ownership?
 - Which work can run in parallel because the write sets and evidence surfaces
   are disjoint?
+- What is the decomposition review: proposed workers, dependency order,
+  same-package rationale, serial boundaries, parallelism limit, and stop/drain
+  condition?
 - What evidence will prove the package, and what remains `blocked`,
   `owner-gated`, or `runtime-proof` after the package lands?
 - What package spec and gates exist before workers start, and which files are

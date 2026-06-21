@@ -544,6 +544,13 @@ should only be filled with work from the current lane. Reports also include a
 action signal and treat raw slots as capacity only. If one package worker is
 active or pending, `recommended=false`
 keeps the orchestrator from filling the free slot with unrelated safe work.
+Before dispatching a package batch, run a decomposition review in the
+orchestrator thread, package plan, or ledger note: list the proposed workers,
+dependency order, same-package rationale, serial/shared-contract boundaries,
+parallelism limit, gates, evidence labels, and stop/drain condition. If the
+split only exists because capacity is available, or if it cannot be explained
+as one coherent feature-package advance, rewrite the plan before creating
+worker sessions.
 The compact `timeline` shows the recent task/routine sequence without reading
 raw ledger events. `observe`, `status`, and heartbeat summaries also expose a read-only
 `projectMap` signal. The helper checks for common project-map files such as
@@ -716,6 +723,11 @@ Treat gates and spec files as acceptance contracts: workers should not edit them
 unless the task explicitly says to revise the spec/gates. Each worker contract
 should include a short challenge step and minimum-change rationale before
 implementation begins.
+The orchestrator should also keep a short decomposition review beside the spec:
+which worker satisfies which package item, what must land first, what can run in
+parallel, and what should make the run drain or switch package lanes. This is
+the coordinator-side guard against turning `availableSlots` into unrelated
+work.
 `pack eval --package-id PKG` reads the ledger and git/worktree truth to build a
 local/static matrix for task commit state, recorded gates, evidence boundaries,
 and package-level integration proof. `pack reconcile --package-id PKG --spec
