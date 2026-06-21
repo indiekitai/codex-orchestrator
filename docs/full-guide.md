@@ -1111,6 +1111,13 @@ template, or recurring check no longer helps an orchestrator decide whether to
 dispatch, review, merge, block, or stop, remove it, hide it, or demote it to a
 secondary artifact. Do not keep workflow tax just because it was once useful.
 
+For incident or production-like bugfix packages, keep the default AI loop before
+the release boundary: collect structured logs, reconstruct reproduction steps,
+add a failing test or fixture when practical, prepare a bounded fix branch, and
+run regression gates. Do not let the orchestrator or worker mutate production
+data, deploy, roll back, toggle provider/payment behavior, or run destructive
+remediation unless the project grants explicit authority for that exact action.
+
 ## 📂 File Structure
 
 ```

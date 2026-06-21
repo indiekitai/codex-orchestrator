@@ -1209,6 +1209,13 @@ For hardware, payment, deploy, and environment work:
 - Record owner, start/end time, device/env facts, install/clear-data/reboot/config changes.
 - Label proof as `direct`, `proxy`, `local`, or `blocked`.
 - Do not upgrade `SENT`, local unit tests, TCP reachability, screenshots, or proxy services into direct proof.
+- For incidents or production-like bugs, keep the AI loop on the safe side of
+  the release boundary by default: collect structured logs, reconstruct
+  reproduction steps, create a failing test or fixture when possible, propose a
+  bounded fix branch, and run regression gates. Do not let an orchestrator or
+  worker mutate production data, deploy, roll back, toggle provider/payment
+  behavior, or run destructive remediation unless the project has explicit
+  incident authority for that exact action.
 - If human action is needed, pause at a safe checkpoint and use the available
   notification/voice mechanism for the environment. The prompt must state the
   exact action, device/resource, what not to do, and what the user should reply.

@@ -213,6 +213,15 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
    - 边界：这是 orchestration discipline，不是新 helper runtime、后台 daemon 或
      自动产品管理系统。
 
+11. Incident / production bugfix boundary：已完成。
+   - 目标：吸收“AI 辅助少写 bug，不幻想全自动修线上 bug”的工程边界。
+   - 当前落地：SKILL 和中英文 full guide 明确要求 incident / production-like bugfix
+     默认停在 release boundary 前：收集结构化日志、复现步骤、failing test/fixture、
+     有界修复分支和回归 gate。生产数据修改、deploy、rollback、provider/payment
+     toggle 或破坏性 remediation 需要项目对具体动作明确授权。
+   - 边界：这是安全/授权规则，不是 incident daemon、自动线上修复系统或 production
+     proof。
+
 ## 分层架构
 
 推荐长期结构：
