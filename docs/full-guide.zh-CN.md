@@ -254,7 +254,10 @@ codex-orchestrator init --write-templates
 
 生成的 `.codex-orchestrator/concepts.md` 和 `.codex-orchestrator/inbox.md`
 是本地知识层：concepts 记录术语、稳定规则、历史决策和踩坑记录；inbox 收集 issue、
-用户反馈、外部 review、Pulse 输出和运行观察，先归类，再变成任务合同。
+用户反馈、外部 review、Pulse 输出和运行观察，先归类，再变成任务合同。Inbox 是
+分拣层，不是派发队列：每条输入先分成产品包输入、编排质量信号、文档/流程清理、
+policy/eval 候选，或暂不行动的背景信息，再决定要不要创建任务。不要把社交媒体观点、
+夜跑复盘、helper 误报和 reviewer 备注直接变成随机 worker。
 
 也可以直接下载预构建的 `codex-orchestrator_<os>_<arch>` 二进制文件并放到
 `PATH` 里，但这是高级/辅助路径，不是包管理器分发渠道。多数用户应该先让
@@ -473,6 +476,13 @@ payment、provider、hardware、pre/prod 等高风险关键词时，状态输出
 最多能并发几个、各自 gates / 证据标签是什么，以及什么情况下应该 drain 或切换
 package。如果这组拆解只是因为还有空闲槽位，或者不能用一句话说明它推进了同一个功能
 闭环，就先重写计划，不要创建 worker。
+状态和 review 里也应该使用简单的质量词汇：`bad` 表示严重、很难恢复的编排失败，
+例如错误合并、越界路径、证据升级、setup 失败被伪装成 pending，或已验收提交没有
+push/cleanup 且没有 blocker；`sad` 表示可恢复但影响体验的摩擦，例如 stale 状态快照、
+helper 误报、派发槽位提示不清、reviewer 超时、package 行混淆。重复出现的 `sad`
+不应只当小问题，应升级成规则、helper 修复或 eval fixture。
+不要把动作当进展：task 数量、worker 数量、token 用量、命令数量和 cleaned 数量，
+都不如 package outcome、blocker removal、证据等级提升、验收通过和干净收口重要。
 `observe`、`status` 和心跳摘要也会展示只读 `projectMap` 信号。辅助命令会检查常见项目地图文件，例如
 `docs/CODEBASE_MAP.md`；如果不存在，会提示让 Codex App 在首次编排前生成或读取一份
 简洁 project map。
@@ -890,6 +900,12 @@ automation truth，不能只信 create 返回。
 | Push 策略 | 项目自定 | 仅在项目正常流程或用户明确要求时 push |
 | 证据标签 | `direct`, `proxy`, `local`, `blocked` | 本地、硬件、部署或支付证明的必填分类 |
 | 反浅切片 | 强制 | 任务派发前必须分类 |
+| 质量信号 | `bad`, `sad` | 区分严重编排事故和可恢复摩擦 |
+| 进展信号 | 功能包 outcome | 优先看功能包收口、blocker 移除和证据等级提升 |
+
+流程本身也要接受审查。如果某个状态字段、报告、routine、模板或定时检查已经不再帮助
+统领判断是否派发、验收、合并、阻断或停止，就删除、隐藏或降级成次要 artifact。
+不要因为它曾经有用，就长期保留成流程税。
 
 ## 📂 文件结构
 

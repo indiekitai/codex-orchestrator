@@ -121,6 +121,10 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
    - live proof gate reviewed: if the task changes a runtime, production,
      device, payment, hardware, provider, or external-service boundary, direct
      proof or an explicit item-specific waiver is required before landing
+   - quality signal classified: mark severe unrecoverable orchestration failures
+     as `bad`, recoverable friction as `sad`, and do not treat task count,
+     token use, worker count, or `cleaned` count as progress unless a package
+     outcome, blocker removal, or evidence-level advance is visible.
 8. If accepted, merge to the default integration branch, push if requested or
    normal for this project, clean the worktree, and delete the local branch.
    In an already-authorized continuous orchestration loop, an integration
@@ -372,6 +376,13 @@ exist. `concepts.md` is for stable project terms, rules, prior decisions, and
 historical pitfalls. `inbox.md` is for untriaged issues, user feedback, external
 reviews, pulse outputs, and run observations before they become bounded tasks.
 Both are local/static coordination evidence, not direct proof.
+
+Treat Inbox as a triage layer, not a dispatch queue. New feedback, social
+posts, night-run retrospectives, helper false positives, missed heartbeats, and
+external review notes should first be classified as: product-package input,
+orchestration quality signal, docs/process cleanup, policy/eval candidate, or
+not-actionable context. Do not turn every interesting observation directly into
+a worker task.
 
 Treat the thread map as local/static coordination state. Verify live thread ids,
 automation bindings, and recent messages before taking irreversible action.
@@ -909,6 +920,38 @@ them as a guardrail against filling slots. If a current package worker is
 active, pending setup, dirty, or waiting for the next heartbeat, do not fill the
 free slot with an unrelated "safe" task. Wait, reconcile setup truth, review, or
 dispatch only a task that clearly belongs to the same package lane.
+
+Do not confuse motion with progress. A good monitor report should foreground
+package outcome, blocker removed, evidence level improved, accepted review,
+merge/push/cleanup closeout, or a clearly recorded `blocked` decision. It should
+de-emphasize raw task count, worker count, token use, command volume, and
+`availableSlots`. A run with fewer workers and a stronger package closeout is
+better than a busier run that produces unrelated cleaned tasks.
+
+## Quality Signals And Process Hygiene
+
+Use a simple quality vocabulary for orchestration outcomes:
+
+- `bad`: severe or hard-to-recover orchestration failures, such as forbidden
+  paths merged, local/proxy evidence promoted to direct/pre/prod/device proof,
+  delegated setup errors hidden as pending work, isolation bypass that lets
+  worker edits land outside the verified worker checkout, duplicate heartbeat
+  churn that masks the real monitor, or reviewed commits left
+  unpushed/uncleaned without a recorded blocker.
+- `sad`: recoverable friction that still hurts the operator experience, such as
+  stale status snapshots, noisy helper false positives, confusing
+  `availableSlots`, unreadable status pages, reviewer timeout without clear
+  fallback, or package rows that mix current lane with historical review debt.
+
+`sad` signals are not cosmetic. If they repeat or cause a wrong dispatch,
+upgrade them to a rule, helper fix, or eval fixture. Record the classification
+in a status note, review note, inbox item, or misalignment event when it changes
+the orchestration decision.
+
+Process is also subject to review. If a report, status field, routine, template,
+or recurring check no longer helps an orchestrator decide whether to dispatch,
+review, merge, block, or stop, remove it, hide it, or demote it to a secondary
+artifact. Do not preserve workflow tax just because it was once useful.
 
 ## Decision Brief / Authorization / Live Proof Discipline
 

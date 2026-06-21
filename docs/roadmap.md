@@ -29,6 +29,12 @@ Loop Engineering 控制面。
   最值得产品化处理的不只是代码错误，而是违反约束、越界行动、错误汇报完成、
   stale state 和缺乏证据的信任损耗。下一阶段应该把这些失败类型变成本地
   event、claim verifier、policy/eval fixture 和状态页 trust-risk 信号。
+- AI-native team operating notes from Claude Code/Cowork reinforced the same
+  direction: coding throughput is no longer the only bottleneck; validation,
+  quality semantics, feedback intake, and process deletion matter more. The
+  project now records this as bad/sad orchestration quality signals,
+  progress-not-motion discipline, Inbox triage before dispatch, and a rule that
+  obsolete workflow surfaces should be removed or demoted.
 
 ## 当前定位
 
@@ -196,6 +202,16 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
      idempotency 等常见风险加 hint；SKILL 要求 worker 在自审里显式覆盖这些高风险模式。
    - 边界：这些都是 local/static review aids。它们不会自动授权 merge/push/cleanup，也不会
      把外部 reviewer 输出升级成 direct proof。
+
+10. AI-native operating discipline package：已完成。
+   - 目标：把 Claude Code / Cowork 团队运行经验里真正适合本项目的部分落成规则，而不是
+     留成 backlog：验证比编码更容易成为瓶颈、质量需要语义层、反馈要先进入 inbox
+     归类、流程本身也可以被删除。
+   - 当前落地：SKILL 和中英文 full guide 已补 `bad` / `sad` 质量信号、
+     progress-not-motion 规则、Inbox triage-before-dispatch 规则，以及 process
+     kill / demote rule。
+   - 边界：这是 orchestration discipline，不是新 helper runtime、后台 daemon 或
+     自动产品管理系统。
 
 ## 分层架构
 

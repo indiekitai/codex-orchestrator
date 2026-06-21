@@ -294,7 +294,12 @@ The generated `.codex-orchestrator/concepts.md` and
 `.codex-orchestrator/inbox.md` are the local knowledge layer: concepts records
 glossary terms, stable rules, prior decisions, and pitfalls; inbox collects
 issues, user feedback, external reviews, pulse outputs, and run observations
-before they become task contracts.
+before they become task contracts. Treat Inbox as a triage layer, not a
+dispatch queue: classify each item as product-package input, orchestration
+quality signal, docs/process cleanup, policy/eval candidate, or not-actionable
+context before creating tasks. This keeps social posts, night-run
+retrospectives, helper false positives, and reviewer notes from turning
+directly into random worker dispatch.
 
 You can also download a prebuilt `codex-orchestrator_<os>_<arch>` binary from
 the Releases page and put it on your `PATH`, but that is an advanced/helper
@@ -551,6 +556,15 @@ parallelism limit, gates, evidence labels, and stop/drain condition. If the
 split only exists because capacity is available, or if it cannot be explained
 as one coherent feature-package advance, rewrite the plan before creating
 worker sessions.
+Use a small quality vocabulary in status and review notes: `bad` for severe
+hard-to-recover orchestration failures such as wrong merges, forbidden paths,
+evidence promotion, hidden setup failures, or unpushed reviewed commits; `sad`
+for recoverable friction such as stale status snapshots, noisy helper false
+positives, unclear dispatch slots, reviewer timeouts, or confusing package
+rows. Repeated `sad` signals should become a rule, helper fix, or eval fixture.
+Do not confuse motion with progress: task count, worker count, token use,
+command volume, and `cleaned` count matter less than package outcome, blocker
+removal, evidence-level advance, accepted review, and clean closeout.
 The compact `timeline` shows the recent task/routine sequence without reading
 raw ledger events. `observe`, `status`, and heartbeat summaries also expose a read-only
 `projectMap` signal. The helper checks for common project-map files such as
@@ -1089,6 +1103,13 @@ These parameters are tunable in the skill or per-dispatch:
 | Push policy | Project-specific | Push only when normal for the repository or explicitly requested |
 | Evidence labels | `direct`, `proxy`, `local`, `blocked` | Required classification for local, hardware, deploy, or payment proof |
 | Anti-shallow-slice | Enforced | Tasks must be classified before dispatch |
+| Quality signals | `bad`, `sad` | Separate severe orchestration failures from recoverable friction |
+| Progress signal | Package outcome | Prefer package closeout, blocker removal, and evidence advance over activity volume |
+
+Process is also subject to review. If a status field, report, routine,
+template, or recurring check no longer helps an orchestrator decide whether to
+dispatch, review, merge, block, or stop, remove it, hide it, or demote it to a
+secondary artifact. Do not keep workflow tax just because it was once useful.
 
 ## 📂 File Structure
 
