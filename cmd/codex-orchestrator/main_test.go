@@ -1441,8 +1441,15 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 	if len(report.RecentMergedOrCleaned) != 1 || report.RecentMergedOrCleaned[0].ID != "DONE" || report.RecentMergedOrCleaned[0].ObservedStatus != "cleaned" {
 		t.Fatalf("expected DONE in recentMergedOrCleaned, got %#v", report.RecentMergedOrCleaned)
 	}
+	if summary.JobSummary.Acceptance.Accepted != 1 ||
+		summary.JobSummary.Acceptance.Blocked != 1 ||
+		summary.JobSummary.Acceptance.Reviewable != 1 ||
+		summary.JobSummary.Acceptance.CleanupNeeded != 1 ||
+		summary.JobSummary.Acceptance.AcceptedChangeRate != "100%" {
+		t.Fatalf("expected acceptance summary to foreground accepted/reviewable/blocked work, got %#v", summary.JobSummary.Acceptance)
+	}
 	rendered := renderSummary(summary)
-	for _, want := range []string{"## Runtime Status", "### Active Workers", "### Recent Merged Or Cleaned"} {
+	for _, want := range []string{"## Runtime Status", "### Active Workers", "### Recent Merged Or Cleaned", "acceptedChangeRate: `100%`"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected rendered summary to include %q:\n%s", want, rendered)
 		}
@@ -1454,12 +1461,16 @@ func TestObserveRuntimeStatusReportCategories(t *testing.T) {
 	var statusPayload struct {
 		RuntimeStatus          RuntimeStatusReport    `json:"runtimeStatus"`
 		DispatchRecommendation DispatchRecommendation `json:"dispatchRecommendation"`
+		JobSummary             JobSummary             `json:"jobSummary"`
 	}
 	if err := json.Unmarshal([]byte(statusJSON), &statusPayload); err != nil {
 		t.Fatalf("expected status JSON, got %q: %v", statusJSON, err)
 	}
 	if len(statusPayload.RuntimeStatus.CleanupNeeded) != 1 || len(statusPayload.RuntimeStatus.RecentMergedOrCleaned) != 1 {
 		t.Fatalf("expected status JSON runtime categories, got %#v", statusPayload.RuntimeStatus)
+	}
+	if statusPayload.JobSummary.Acceptance.Accepted != 1 || statusPayload.JobSummary.Acceptance.AcceptedChangeRate != "100%" {
+		t.Fatalf("expected status JSON acceptance summary, got %#v", statusPayload.JobSummary.Acceptance)
 	}
 	if !statusPayload.DispatchRecommendation.CapacityOnly || statusPayload.DispatchRecommendation.CapacityWarning == "" {
 		t.Fatalf("expected dispatch capacity warning in status JSON, got %#v", statusPayload.DispatchRecommendation)

@@ -20,6 +20,7 @@ more features.
 - The Pragmatic Engineer, [The creator of Clawd: "I ship code I don't read"](https://newsletter.pragmaticengineer.com/p/the-creator-of-clawd-i-ship-code)
 - WyeWorks, [The Workflow Is the Product](https://www.wyeworks.com/es/blog/2026/05/13/custom-agentic-workflows-for-coding-agents/)
 - 马东锡 NLP, [Context Is A Projection](https://x.com/dongxi_nlp/status/2066991890348572950)
+- Anatoli Kopadze, [Loops explained: Claude, GPT, Mira and what actually works](https://x.com/AnatoliKopadze/status/2068328135611822149)
 - Lower-weight trend scans from Reddit, Substack, MindStudio, DX, and X search
   results around "loop engineering", used only to check terminology drift.
 - User-provided Grok/X synthesis covering recent Loop Engineering discussions,
@@ -222,6 +223,29 @@ specific task family:
 
 That suggests the routine library should be written as workflow contracts, not
 just command aliases.
+
+## What Practical Loop Explainers Add
+
+Anatoli Kopadze's public X Article is more consumer-facing and partly promotes
+Mira, so it should not drive product positioning. The useful engineering
+content is still aligned with this project:
+
+- verification is the heart of a loop;
+- state must live outside the transient chat;
+- every loop needs a stop condition;
+- tasks that cannot automatically reject bad output should stay manual;
+- the useful efficiency metric is cost per accepted change, not prompts,
+  workers, or loop iterations.
+
+For `codex-orchestrator`, the actionable translation is conservative:
+
+- do not dispatch a worker unless the contract names a credible verifier or a
+  blocker condition;
+- keep ledger/status/package/review artifacts as the durable loop state;
+- require package closeout to explain why the loop accepted, rejected, blocked,
+  drained, or handed off the work;
+- surface accepted/rejected/blocked/reviewable counts in status, while treating
+  them as local/static evidence rather than runtime proof.
 
 ## What The X/Grok Trend Scan Adds
 

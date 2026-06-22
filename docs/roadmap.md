@@ -35,6 +35,11 @@ Loop Engineering 控制面。
   project now records this as bad/sad orchestration quality signals,
   progress-not-motion discipline, Inbox triage before dispatch, and a rule that
   obsolete workflow surfaces should be removed or demoted.
+- Practical loop explainers reinforced a narrower operational metric:
+  optimize for accepted change, not loop iterations or worker count. The helper
+  now exposes a local/static `acceptance` summary under job status so operators
+  can see accepted, rejected, abandoned, blocked, reviewable, and in-progress
+  work before deciding whether a loop is worth continuing.
 
 ## 当前定位
 

@@ -283,14 +283,29 @@ type RuntimeStatusReport struct {
 }
 
 type JobSummary struct {
-	EvidenceLabel            string          `json:"evidenceLabel"`
-	Total                    int             `json:"total"`
-	Counts                   map[string]int  `json:"counts"`
-	LegacyTerminalUngrouped  int             `json:"legacyTerminalUngrouped,omitempty"`
-	UngroupedNonTerminal     int             `json:"ungroupedNonTerminal,omitempty"`
-	Rows                     []JobStatusItem `json:"rows,omitempty"`
-	VisibleRows              []JobStatusItem `json:"visibleRows,omitempty"`
-	LegacyTerminalHiddenRows []JobStatusItem `json:"legacyTerminalHiddenRows,omitempty"`
+	EvidenceLabel            string            `json:"evidenceLabel"`
+	Total                    int               `json:"total"`
+	Counts                   map[string]int    `json:"counts"`
+	Acceptance               AcceptanceSummary `json:"acceptance"`
+	LegacyTerminalUngrouped  int               `json:"legacyTerminalUngrouped,omitempty"`
+	UngroupedNonTerminal     int               `json:"ungroupedNonTerminal,omitempty"`
+	Rows                     []JobStatusItem   `json:"rows,omitempty"`
+	VisibleRows              []JobStatusItem   `json:"visibleRows,omitempty"`
+	LegacyTerminalHiddenRows []JobStatusItem   `json:"legacyTerminalHiddenRows,omitempty"`
+}
+
+type AcceptanceSummary struct {
+	EvidenceLabel      string `json:"evidenceLabel"`
+	Accepted           int    `json:"accepted"`
+	Rejected           int    `json:"rejected"`
+	Abandoned          int    `json:"abandoned"`
+	Blocked            int    `json:"blocked"`
+	Reviewable         int    `json:"reviewable"`
+	InProgress         int    `json:"inProgress"`
+	CleanupNeeded      int    `json:"cleanupNeeded"`
+	TerminalDecisions  int    `json:"terminalDecisions"`
+	AcceptedChangeRate string `json:"acceptedChangeRate,omitempty"`
+	Interpretation     string `json:"interpretation"`
 }
 
 type PackageSummary struct {
@@ -3279,6 +3294,16 @@ func cmdStatus(args []string) error {
 		fmt.Printf("Dispatch capacity warning: %s\n", summary.DispatchRecommendation.CapacityWarning)
 	}
 	fmt.Printf("Jobs: total=%d counts=%s\n", summary.JobSummary.Total, formatIntMap(summary.JobSummary.Counts))
+	fmt.Printf("Acceptance (%s): accepted=%d rejected=%d abandoned=%d blocked=%d reviewable=%d inProgress=%d rate=%s\n",
+		summary.JobSummary.Acceptance.EvidenceLabel,
+		summary.JobSummary.Acceptance.Accepted,
+		summary.JobSummary.Acceptance.Rejected,
+		summary.JobSummary.Acceptance.Abandoned,
+		summary.JobSummary.Acceptance.Blocked,
+		summary.JobSummary.Acceptance.Reviewable,
+		summary.JobSummary.Acceptance.InProgress,
+		summary.JobSummary.Acceptance.AcceptedChangeRate,
+	)
 	fmt.Printf("Packages: total=%d\n", summary.PackageSummary.Total)
 	fmt.Printf("Lane guard (%s): %s", summary.PackageLaneGuard.EvidenceLabel, summary.PackageLaneGuard.Status)
 	if summary.PackageLaneGuard.CurrentPackageID != "" {
@@ -4565,6 +4590,8 @@ func renderStatusHTML(summary ObserveSummary, ledger Ledger, ledgerPath string) 
 	renderMetricHTML(&b, "活跃", fmt.Sprint(summary.ReviewPressure.Active), "")
 	renderMetricHTML(&b, "待 setup", fmt.Sprint(summary.ReviewPressure.PendingSetup), pressureClass(summary.ReviewPressure.PendingSetup, 0))
 	renderMetricHTML(&b, "脏进度", fmt.Sprint(len(summary.RuntimeStatus.DirtyUncommitted)), pressureClass(len(summary.RuntimeStatus.DirtyUncommitted), 0))
+	renderMetricHTML(&b, "已接受", fmt.Sprint(summary.JobSummary.Acceptance.Accepted), "")
+	renderMetricHTML(&b, "接受率", summary.JobSummary.Acceptance.AcceptedChangeRate, "")
 	renderMetricHTML(&b, "待清理", fmt.Sprint(summary.ReviewPressure.CleanupNeeded), pressureClass(summary.ReviewPressure.CleanupNeeded, 0))
 	renderMetricHTML(&b, "预算缺失", fmt.Sprint(summary.BudgetPressure.TasksMissingBudget), pressureClass(summary.BudgetPressure.TasksMissingBudget, 0))
 	renderMetricHTML(&b, "预算接近/超限", fmt.Sprintf("%d / %d", summary.BudgetPressure.TasksNearLimit, summary.BudgetPressure.TasksExceeded), pressureClass(summary.BudgetPressure.TasksExceeded, summary.BudgetPressure.TasksNearLimit))
@@ -11960,12 +11987,37 @@ func buildJobSummary(tasks []Task, observations []Observation, counts map[string
 		EvidenceLabel:            "local/static",
 		Total:                    len(observations),
 		Counts:                   copyStringIntMap(counts),
+		Acceptance:               buildAcceptanceSummary(counts),
 		LegacyTerminalUngrouped:  len(legacyRows),
 		UngroupedNonTerminal:     ungroupedNonTerminal,
 		Rows:                     rows,
 		VisibleRows:              visibleRows,
 		LegacyTerminalHiddenRows: legacyRows,
 	}
+}
+
+func buildAcceptanceSummary(counts map[string]int) AcceptanceSummary {
+	accepted := counts["merged"] + counts["released"] + counts["cleaned"]
+	rejected := counts["rejected"]
+	abandoned := counts["abandoned"]
+	terminalDecisions := accepted + rejected + abandoned
+	summary := AcceptanceSummary{
+		EvidenceLabel:      "local/static",
+		Accepted:           accepted,
+		Rejected:           rejected,
+		Abandoned:          abandoned,
+		Blocked:            counts["blocked"],
+		Reviewable:         counts["completed-unreviewed"],
+		InProgress:         counts["active"] + counts["pending-setup"] + counts["stale-needs-inspection"],
+		CleanupNeeded:      counts["cleanup-needed"],
+		TerminalDecisions:  terminalDecisions,
+		AcceptedChangeRate: "n/a",
+		Interpretation:     "acceptedChangeRate is accepted / (accepted + rejected + abandoned), excluding active, reviewable, cleanup-needed, and blocked tasks.",
+	}
+	if terminalDecisions > 0 {
+		summary.AcceptedChangeRate = fmt.Sprintf("%d%%", accepted*100/terminalDecisions)
+	}
+	return summary
 }
 
 func buildPackageSummary(tasks []Task, observations []Observation, routineRuns []RoutineRun) PackageSummary {
@@ -14468,6 +14520,14 @@ func renderJobSummaryMarkdown(b *strings.Builder, summary JobSummary) {
 	fmt.Fprintf(b, "- evidenceLabel: `%s`\n", summary.EvidenceLabel)
 	fmt.Fprintf(b, "- total: `%d`\n", summary.Total)
 	fmt.Fprintf(b, "- counts: `%s`\n", formatIntMap(summary.Counts))
+	fmt.Fprintf(b, "- accepted: `%d`\n", summary.Acceptance.Accepted)
+	fmt.Fprintf(b, "- rejected: `%d`\n", summary.Acceptance.Rejected)
+	fmt.Fprintf(b, "- abandoned: `%d`\n", summary.Acceptance.Abandoned)
+	fmt.Fprintf(b, "- blocked: `%d`\n", summary.Acceptance.Blocked)
+	fmt.Fprintf(b, "- reviewable: `%d`\n", summary.Acceptance.Reviewable)
+	fmt.Fprintf(b, "- inProgress: `%d`\n", summary.Acceptance.InProgress)
+	fmt.Fprintf(b, "- acceptedChangeRate: `%s`\n", summary.Acceptance.AcceptedChangeRate)
+	fmt.Fprintf(b, "- acceptanceInterpretation: %s\n", summary.Acceptance.Interpretation)
 	if summary.LegacyTerminalUngrouped > 0 {
 		fmt.Fprintf(b, "- legacyTerminalUngrouped: `%d` hidden from current-action rows\n", summary.LegacyTerminalUngrouped)
 	}

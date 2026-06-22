@@ -156,6 +156,16 @@ flowchart LR
 - 有空闲并发槽，不代表要派无关任务；
 - worker 只提交自己的分支，统领负责审查和合并。
 
+真正有价值的指标不是“跑了多少 worker”，而是有多少改动被验收：
+
+- 每个任务都要有客观 verifier，例如测试、build、lint、浏览器/API 证明、
+  review pack，或者明确的 blocker；
+- 状态要落在聊天之外：ledger、状态页、功能包计划和 review artifact；
+- 每个功能包都要有停止条件：accepted、退回 fixup、blocked、drained，或明确交给人处理；
+- `status` 会输出 `acceptance` 摘要，让统领看到 accepted、rejected、
+  abandoned、blocked、reviewable 和 in-progress，而不是把任务数量或
+  `availableSlots` 当成进度。
+
 ## 线程布局
 
 长期使用 Codex App 时，一个线程通常不够。推荐把职责分开：

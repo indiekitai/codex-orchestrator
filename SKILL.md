@@ -133,6 +133,12 @@ Treat this skill as a living runbook, not a frozen policy. When orchestration re
      as `bad`, recoverable friction as `sad`, and do not treat task count,
      token use, worker count, or `cleaned` count as progress unless a package
      outcome, blocker removal, or evidence-level advance is visible.
+   - acceptance economics reviewed: the meaningful output of a loop is accepted
+     change, not loop iterations. Before continuing a package, check the local
+     `acceptance` summary when available: accepted, rejected, abandoned,
+     blocked, reviewable, in-progress, and acceptedChangeRate. Treat this as
+     local/static signal only, but use it to decide whether the loop is
+     producing useful work or accumulating review debt.
 8. If accepted, merge to the default integration branch, push if requested or
    normal for this project, clean the worktree, and delete the local branch.
    In an already-authorized continuous orchestration loop, an integration
@@ -943,6 +949,19 @@ merge/push/cleanup closeout, or a clearly recorded `blocked` decision. It should
 de-emphasize raw task count, worker count, token use, command volume, and
 `availableSlots`. A run with fewer workers and a stronger package closeout is
 better than a busier run that produces unrelated cleaned tasks.
+
+The verifier is the heart of a useful loop. Do not dispatch or continue a
+worker when the only success check is the worker saying it is done. Each task or
+package needs at least one objective gate, such as a test, build, lint, static
+policy check, browser/API proof, artifact readback, external review pack, or a
+source-backed blocker. If no credible verifier exists, keep the work as a
+manual prompt, ask for a decision brief, or stop as `blocked` instead of
+building a self-affirming loop.
+
+Every package loop also needs a stop condition. Record whether it stops because
+the work was accepted, rejected for fixup, abandoned, blocked by owner/runtime
+input, drained by user instruction, or handed to a human. A heartbeat without a
+stop condition is not reliability; it is uncontrolled spend and review debt.
 
 ## Quality Signals And Process Hygiene
 

@@ -179,6 +179,18 @@ The loop is intentionally conservative:
 - workers commit to their own branches, while the orchestrator reviews and
   merges.
 
+The useful metric is not "how many workers ran." It is accepted change:
+
+- a task needs an objective verifier, such as a test, build, lint, browser/API
+  proof, review pack, or explicit blocker;
+- state lives outside the chat in the ledger, status page, package plan, and
+  review artifacts;
+- every package needs a stop condition: accepted, rejected for fixup, blocked,
+  drained, or explicitly handed to a human;
+- `status` reports an `acceptance` summary so operators can see accepted,
+  rejected, abandoned, blocked, reviewable, and in-progress work without
+  treating raw task count or `availableSlots` as progress.
+
 ## Thread Layout
 
 For long-running Codex App work, one thread is rarely enough. A practical setup
