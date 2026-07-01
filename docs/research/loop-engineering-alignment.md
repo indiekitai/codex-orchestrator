@@ -21,6 +21,7 @@ more features.
 - WyeWorks, [The Workflow Is the Product](https://www.wyeworks.com/es/blog/2026/05/13/custom-agentic-workflows-for-coding-agents/)
 - 马东锡 NLP, [Context Is A Projection](https://x.com/dongxi_nlp/status/2066991890348572950)
 - Anatoli Kopadze, [Loops explained: Claude, GPT, Mira and what actually works](https://x.com/AnatoliKopadze/status/2068328135611822149)
+- Yage AI, [Loop Engineering: Senior Manager](https://yage.ai/share/loop-engineering-senior-manager-20260630.html)
 - Lower-weight trend scans from Reddit, Substack, MindStudio, DX, and X search
   results around "loop engineering", used only to check terminology drift.
 - User-provided Grok/X synthesis covering recent Loop Engineering discussions,
@@ -246,6 +247,27 @@ For `codex-orchestrator`, the actionable translation is conservative:
   drained, or handed off the work;
 - surface accepted/rejected/blocked/reviewable counts in status, while treating
   them as local/static evidence rather than runtime proof.
+
+## What Senior Manager Framing Adds
+
+The Yage "senior manager" framing is useful because it describes the human role
+inside a loop without changing the product positioning. The human does not
+manually manage every task forever, but also does not disappear from the
+system. The human designs the evaluation surface, traceability, operating
+rules, and stop conditions, then inspects exception reports and accepted-change
+evidence.
+
+For `codex-orchestrator`, that translates into three concrete product rules:
+
+- `pack eval` should not only list task status. It should explain whether the
+  loop should continue in the same package lane, stop for acceptance, or block
+  because verifier/evidence layers are missing.
+- Package specs should contain a decision trace and an SOP feedback section, so
+  a long-running package records why it continued, stopped, switched lanes, or
+  updated rules.
+- Task discovery should remain package/roadmap-owner constrained. The loop can
+  suggest the next bounded worker, but it should not treat empty concurrency as
+  permission to invent unrelated work.
 
 ## What The X/Grok Trend Scan Adds
 

@@ -972,10 +972,20 @@ type PackageEvaluationReport struct {
 	RepoPath            string                 `json:"repoPath"`
 	Matrix              []EvaluationMatrixItem `json:"matrix"`
 	MissingRequired     []string               `json:"missingRequired,omitempty"`
+	LoopControl         LoopControlReport      `json:"loopControl"`
 	NextSuggestedAction string                 `json:"nextSuggestedAction"`
 	NeedsHuman          bool                   `json:"needsHuman"`
 	Evidence            map[string][]string    `json:"evidence"`
 	ActionsTaken        []string               `json:"actionsTaken"`
+}
+
+type LoopControlReport struct {
+	EvidenceLabel       string   `json:"evidenceLabel"`
+	Decision            string   `json:"decision"`
+	ContinueRecommended bool     `json:"continueRecommended"`
+	Rationale           []string `json:"rationale,omitempty"`
+	StopConditions      []string `json:"stopConditions,omitempty"`
+	NextAction          string   `json:"nextAction"`
 }
 
 type EvaluationMatrixItem struct {
@@ -6972,6 +6982,7 @@ func buildPackageEvaluationReport(repoPath string, ledgerPath string, packageID 
 	}
 	report.Matrix = append(report.Matrix, buildEvaluationMatrixItems(tasks)...)
 	report.MissingRequired = missingRequiredEvaluationLayers(report.Matrix)
+	report.LoopControl = buildLoopControlReport(tasks, report.Matrix, report.MissingRequired)
 	if len(tasks) == 0 {
 		report.Status = "blocked"
 		report.NeedsHuman = true
@@ -6985,6 +6996,42 @@ func buildPackageEvaluationReport(repoPath string, ledgerPath string, packageID 
 	}
 	report.Evidence = normalizedEvidence(report.Evidence)
 	return report, nil
+}
+
+func buildLoopControlReport(tasks []Task, items []EvaluationMatrixItem, missing []string) LoopControlReport {
+	report := LoopControlReport{
+		EvidenceLabel: "local/static",
+		Decision:      "blocked",
+		NextAction:    "Record package tasks before deciding whether this loop should continue or stop.",
+		StopConditions: []string{
+			"accepted: required evaluation layers pass and orchestrator accepts package closeout",
+			"reject-for-fixup: review/eval finds a concrete issue for the same worker or same package",
+			"blocked: missing owner/runtime/provider/device/pre/prod input prevents defensible progress",
+			"drained: local/proxy scope is complete and no same-package safe next worker remains",
+		},
+	}
+	if len(tasks) == 0 {
+		report.Rationale = append(report.Rationale, "No package tasks are recorded in the ledger.")
+		return report
+	}
+	report.Rationale = append(report.Rationale, fmt.Sprintf("%d package task(s) selected from ledger.", len(tasks)))
+	for _, item := range items {
+		if item.Required {
+			report.Rationale = append(report.Rationale, fmt.Sprintf("%s=%s", item.Layer, item.Status))
+		}
+	}
+	if len(missing) > 0 {
+		report.Decision = "continue-same-package"
+		report.ContinueRecommended = true
+		report.Rationale = append(report.Rationale, "Missing required layer(s): "+strings.Join(missing, ", "))
+		report.NextAction = "Continue inside the same package lane to close missing verifier/evidence layers; do not switch lanes or dispatch filler work."
+		return report
+	}
+	report.Decision = "stop-for-acceptance"
+	report.ContinueRecommended = false
+	report.Rationale = append(report.Rationale, "All required local/static evaluation layers passed.")
+	report.NextAction = "Stop the implementation loop and run package acceptance/review closeout before dispatching more work."
+	return report
 }
 
 func buildPackageReconcileReport(repoPath string, ledgerPath string, packageID string, taskIDs []string, specPath string) (PackageReconcileReport, error) {
@@ -7098,6 +7145,8 @@ func packageSpecRequiredSections() []string {
 		"Gates",
 		"Evidence boundaries",
 		"Evaluation matrix",
+		"Decision trace",
+		"SOP feedback",
 		"Exit condition",
 		"Blocked condition",
 		"Waivers",
@@ -7165,6 +7214,16 @@ Evidence label: local/static until direct runtime proof is explicitly attached.
 | task-commit-state | yes | TBD | local/static | Ensure every worker has a reviewable terminal state. |
 | recorded-gates | yes | TBD | local/static | Record focused gates before closeout. |
 | package-integration | yes | TBD | local/static/proxy/direct | Prove the package as a coherent feature, not just isolated slices. |
+
+## Decision trace
+
+- Why the package continues, stops, switches lane, or blocks:
+- Latest verifier result and acceptance decision:
+
+## SOP feedback
+
+- Rule, checklist, eval fixture, or project doc to update after closeout:
+- Repeated failure pattern to preserve:
 
 ## Exit condition
 

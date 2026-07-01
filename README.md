@@ -190,6 +190,9 @@ The useful metric is not "how many workers ran." It is accepted change:
 - `status` reports an `acceptance` summary so operators can see accepted,
   rejected, abandoned, blocked, reviewable, and in-progress work without
   treating raw task count or `availableSlots` as progress.
+- `pack eval` reports `loopControl`, which says whether the loop should
+  continue in the same package, stop for acceptance, or block because evidence
+  or verifier layers are missing.
 
 ## Thread Layout
 

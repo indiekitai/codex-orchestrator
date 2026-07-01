@@ -165,6 +165,8 @@ flowchart LR
 - `status` 会输出 `acceptance` 摘要，让统领看到 accepted、rejected、
   abandoned、blocked、reviewable 和 in-progress，而不是把任务数量或
   `availableSlots` 当成进度。
+- `pack eval` 会输出 `loopControl`，告诉统领应该继续同一个功能包、停下来做
+  package acceptance，还是因为 verifier / evidence 层缺失而 blocked。
 
 ## 线程布局
 

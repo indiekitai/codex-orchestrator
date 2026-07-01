@@ -616,15 +616,18 @@ gate。已清理 worktree 不再单独导致 package acceptance failed。
 `pack spec`、`pack eval` 和 `pack reconcile` 在 package acceptance 之上补了一层很小的
 desired-state 机制。`pack spec --package-id PKG --write-template ...` 会生成一个功能包
 规格模板，包含 outcome、scope、non-goals、gates、evidence boundaries、evaluation
-matrix、exit condition、blocked condition 和 waivers。重要功能包派 worker 前应该先创建
+matrix、exit condition、blocked condition、waivers、decision trace 和 SOP
+feedback。重要功能包派 worker 前应该先创建
 或刷新这份 spec。spec 和 gates 是验收契约，不是 worker 觉得方便就能改的实现文件；
 除非任务明确要求修订 spec/gates，否则 worker 不应修改它们。每个 worker contract 还应先
 包含 challenge 步骤和最小改动理由，再进入实现。`pack eval --package-id PKG`
 会读取 ledger 和 git/worktree truth，生成 local/static 的评估矩阵，检查 task commit
-state、已记录 gates、证据边界，以及功能包级 integration proof。`pack reconcile
---package-id PKG --spec ...` 会把目标规格、评估矩阵和 `pack status` 收口信号放在一起
-对账，指出哪里还有 drift。它们都不会派发、merge、push、cleanup、deploy，也不会声称
-direct proof；作用是防止统领把几个小切片误当成一个已经闭环的功能包。
+state、已记录 gates、证据边界，以及功能包级 integration proof。它还会输出
+`loopControl`：这是 local/static 的下一步建议，用来判断应该继续同一 package lane、
+停下来做 package acceptance，还是因为 verifier / evidence 层缺失而 blocked。
+`pack reconcile --package-id PKG --spec ...` 会把目标规格、评估矩阵和 `pack status`
+收口信号放在一起对账，指出哪里还有 drift。它们都不会派发、merge、push、cleanup、
+deploy，也不会声称 direct proof；作用是防止统领把几个小切片误当成一个已经闭环的功能包。
 
 `misalignment record` 和 `misalignment report` 是 local/static 的信任循环工具。
 它们用于把开发者 pushback、setup failure、缺证据的完成声明、package drift、

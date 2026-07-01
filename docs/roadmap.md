@@ -108,6 +108,19 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
    - 边界：这是 context hygiene / local-static planning，不是 runtime proof、自动
      compact daemon 或长期记忆系统。
 
+2.2 Package loop-control evaluation：已补第一轮本地闭环。
+   - 目标：让功能包循环知道什么时候继续、什么时候停下来验收、什么时候因为证据或
+     verifier 缺失而 blocked，而不是只看 task 数量或 available slots。
+   - 当前落地：`pack eval` 输出 `loopControl`，包含 `decision`、
+     `continueRecommended`、`rationale` 和 `nextAction`。如果 required spec/gate 层缺失，
+     建议继续同一 package lane；如果 required local/static 层都通过，则建议
+     stop-for-acceptance；没有 task 时标 blocked。
+   - 同步落地：`pack spec` 模板增加 Decision trace 和 SOP feedback，让统领记录
+     为什么继续/停止/切 lane/block，以及哪些重复问题应该沉淀成规则、eval、文档或
+     no-op 决策。
+   - 边界：local/static orchestration guidance；不自动 dispatch、merge、push、
+     cleanup，不产生 direct runtime/device/provider proof。
+
 2.5 Package closeout / legacy ledger polish：已补第一轮本地闭环。
    - 目标：让功能包收口和旧 ledger 历史不再靠人读长 JSON 判断。
    - 当前落地：新增 `codex-orchestrator pack status --package-id PKG`，嵌入

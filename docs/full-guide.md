@@ -731,7 +731,8 @@ still require a separate orchestrator closeout decision.
 `pack spec`, `pack eval`, and `pack reconcile` add a small desired-state layer
 above package acceptance. `pack spec --package-id PKG --write-template ...`
 creates a feature-package spec with outcome, scope, non-goals, gates, evidence
-boundaries, evaluation matrix, exit condition, blocked condition, and waivers.
+boundaries, evaluation matrix, exit condition, blocked condition, waivers,
+decision trace, and SOP feedback.
 For important packages, create or refresh this spec before dispatching workers.
 Treat gates and spec files as acceptance contracts: workers should not edit them
 unless the task explicitly says to revise the spec/gates. Each worker contract
@@ -744,12 +745,15 @@ the coordinator-side guard against turning `availableSlots` into unrelated
 work.
 `pack eval --package-id PKG` reads the ledger and git/worktree truth to build a
 local/static matrix for task commit state, recorded gates, evidence boundaries,
-and package-level integration proof. `pack reconcile --package-id PKG --spec
-...` compares the desired spec, evaluation matrix, and `pack status` closeout
-signal, then reports drift and whether another same-package worker is locally
-reasonable. These commands do not dispatch, merge, push, cleanup, deploy, or
-claim direct proof; they help the orchestrator avoid mistaking several small
-slices for a finished feature package.
+and package-level integration proof. It also reports `loopControl`, a
+local/static next-step recommendation that says whether the loop should
+continue inside the same package lane, stop for package acceptance, or block
+because verifier/evidence layers are missing. `pack reconcile --package-id PKG
+--spec ...` compares the desired spec, evaluation matrix, and `pack status`
+closeout signal, then reports drift and whether another same-package worker is
+locally reasonable. These commands do not dispatch, merge, push, cleanup,
+deploy, or claim direct proof; they help the orchestrator avoid mistaking
+several small slices for a finished feature package.
 
 After a task has already been accepted and cleaned, its worker worktree may no
 longer exist. Package acceptance handles terminal `merged`, `released`, and

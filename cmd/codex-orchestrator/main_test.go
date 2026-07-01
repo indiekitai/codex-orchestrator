@@ -1823,6 +1823,9 @@ func TestPackSpecEvalAndReconcileReportPackageReadiness(t *testing.T) {
 	if !evaluationHasLayer(evaluation.Matrix, "package-integration", "passed") {
 		t.Fatalf("expected package integration layer to pass, got %#v", evaluation.Matrix)
 	}
+	if evaluation.LoopControl.Decision != "stop-for-acceptance" || evaluation.LoopControl.ContinueRecommended {
+		t.Fatalf("expected package eval to stop for acceptance, got %#v", evaluation.LoopControl)
+	}
 
 	out = captureStdout(t, func() error {
 		return cmdPackReconcile([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-CHECKOUT", "--spec", specPath, "--json"})
@@ -1843,6 +1846,45 @@ func evaluationHasLayer(items []EvaluationMatrixItem, layer string, status strin
 		}
 	}
 	return false
+}
+
+func TestPackEvalLoopControlContinuesSamePackageWhenVerifierMissing(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/no-gate", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "NO-GATE",
+		"--package-id", "PKG-NO-GATE",
+		"--worktree", worker,
+		"--branch", "codex/no-gate",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worker, "README.md"), []byte("no gate\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, worker, "add", "README.md")
+	git(t, worker, "commit", "-q", "-m", "no gate fixture")
+
+	out := captureStdout(t, func() error {
+		return cmdPackEval([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-NO-GATE", "--json"})
+	})
+	var evaluation PackageEvaluationReport
+	if err := json.Unmarshal([]byte(out), &evaluation); err != nil {
+		t.Fatalf("expected package eval JSON, got %q: %v", out, err)
+	}
+	if evaluation.Status != "warning" || evaluation.LoopControl.Decision != "continue-same-package" || !evaluation.LoopControl.ContinueRecommended {
+		t.Fatalf("expected missing verifier to continue same package, got %#v", evaluation)
+	}
+	if !strings.Contains(evaluation.LoopControl.NextAction, "same package lane") {
+		t.Fatalf("expected same-package next action, got %#v", evaluation.LoopControl)
+	}
 }
 
 func TestPackStatusReportsPackageCloseoutReadiness(t *testing.T) {

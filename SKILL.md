@@ -1118,6 +1118,12 @@ task commit state, recorded gates, evidence boundaries, and package-level
 integration proof. A worker whose ledger status is still `active` but whose
 worktree has a clean commit after `baseCommit` should be treated as reviewable,
 not ignored until the ledger catches up.
+The report also includes `loopControl`: a local/static recommendation to
+continue the same package, stop for acceptance, or block. Treat
+`continue-same-package` as a guard against lane switching: close the missing
+verifier/evidence layer before dispatching unrelated work. Treat
+`stop-for-acceptance` as a signal to stop implementation and run package
+acceptance/review closeout, not as automatic merge authority.
 
 Use `pack reconcile` before package closeout or before deciding to dispatch the
 next same-package worker. It compares desired spec, evaluation matrix, and
@@ -1146,6 +1152,12 @@ equivalent post-merge gate before calling the package complete. If a shared
 resource such as route registry, localized strings, protocol/API envelope,
 database migration, DI registry, or shared config was touched, serialize that
 work or keep it append-only until a package-level gate has passed.
+
+At the end of important loops, close the SOP feedback loop. If the package
+exposed a repeated failure, helper false positive, confusing status field,
+missing verifier, or operator workaround, record whether it should become a
+skill rule, package spec/gate, routine change, eval fixture, project doc, or
+no-op. Do not leave durable learning only in chat.
 
 ## Dynamic Heartbeat Prompt Pattern
 
