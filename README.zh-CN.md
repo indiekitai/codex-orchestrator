@@ -79,7 +79,7 @@ fixture”的草案供审查，并在状态页里显示 `trustRisk` 风险块。
 | 入口 | 怎么用 |
 |---|---|
 | **Codex App** | 主入口。让 Codex App 阅读本仓库，安装/更新 skill，并先给出只读计划。只有用户明确批准后，才创建隔离的 worktree 会话，或验收、合并、清理已接受的分支。 |
-| **Go 辅助命令** | 可选的本地静态状态层，用来维护 ledger、状态页、health 检查、review pack、routine 和 self-update。它不会创建 Codex App 会话，也不能替代统领判断。 |
+| **Go 辅助命令** | 可选的本地静态状态层，用来维护 ledger、状态页、context pack、health 检查、review pack、routine 和 self-update。它不会创建 Codex App 会话，也不能替代统领判断。 |
 | **Codex CLI** | 可以读取已安装 skill、运行辅助命令，但不能自己创建 Codex App worktree session。 |
 | **Claude Code** | 使用兄弟项目 [claude-orchestrator](https://github.com/indiekitai/claude-orchestrator)，它把同一套 Loop Engineering 思路适配到 Claude Code 的终端优先工作流。 |
 | **其他审查模型** | Pi、DeepSeek、Claude 或其他模型可以通过 review pack 参与，作为 proxy/advisory 证据，而不是自动 merge 授权。 |
@@ -167,6 +167,7 @@ flowchart LR
   `availableSlots` 当成进度。
 - `pack eval` 会输出 `loopControl`，告诉统领应该继续同一个功能包、停下来做
   package acceptance，还是因为 verifier / evidence 层缺失而 blocked。
+- `context` 会写出简短接手包，让新 session 读少数几个文件就能继续，而不是翻长聊天记录。
 
 ## 线程布局
 

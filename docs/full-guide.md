@@ -496,6 +496,7 @@ go build -o codex-orchestrator ./cmd/codex-orchestrator
 ./codex-orchestrator preflight --repo . --write-summary .codex-orchestrator/preflight.md
 ./codex-orchestrator status --html > /tmp/codex-orchestrator-status.html
 ./codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md --write-report .codex-orchestrator/status.json
+./codex-orchestrator context --write-file .codex-orchestrator/context.md --write-report .codex-orchestrator/context.json
 ./codex-orchestrator watchdog status --repo .
 ./codex-orchestrator pack merge-readiness --task-id TASK --write-report /tmp/merge-readiness-pack.json
 ./codex-orchestrator pack consultation --task-id TASK --write-report /tmp/consultation-request-pack.json
@@ -731,8 +732,9 @@ still require a separate orchestrator closeout decision.
 `pack spec`, `pack eval`, and `pack reconcile` add a small desired-state layer
 above package acceptance. `pack spec --package-id PKG --write-template ...`
 creates a feature-package spec with outcome, scope, non-goals, gates, evidence
-boundaries, evaluation matrix, exit condition, blocked condition, waivers,
-decision trace, and SOP feedback.
+boundaries, evaluation matrix, contract checklist, restart policy, subjective
+rubric, exit condition, blocked condition, waivers, decision trace, and SOP
+feedback.
 For important packages, create or refresh this spec before dispatching workers.
 Treat gates and spec files as acceptance contracts: workers should not edit them
 unless the task explicitly says to revise the spec/gates. Each worker contract
@@ -754,6 +756,14 @@ closeout signal, then reports drift and whether another same-package worker is
 locally reasonable. These commands do not dispatch, merge, push, cleanup,
 deploy, or claim direct proof; they help the orchestrator avoid mistaking
 several small slices for a finished feature package.
+
+`context --write-file .codex-orchestrator/context.md` projects the current
+ledger/status/package truth into a short resume pack for the next Codex turn or
+a fresh session. It names the files to read first, the current lane, counts,
+next action, restart policy, contract policy, and a default subjective rubric
+for UI/taste/parity work. It is deliberately smaller than the full status page:
+use it after context compaction, before handoff, or before a long `/goal` run.
+It is local/static evidence only and does not replace repo truth checks.
 
 After a task has already been accepted and cleaned, its worker worktree may no
 longer exist. Package acceptance handles terminal `merged`, `released`, and

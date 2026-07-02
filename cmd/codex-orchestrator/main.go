@@ -89,6 +89,30 @@ type MisalignmentEvent struct {
 	Resolution    string `json:"resolution,omitempty"`
 }
 
+type ContextPackReport struct {
+	SchemaVersion       int            `json:"schemaVersion"`
+	Command             string         `json:"command"`
+	GeneratedAt         string         `json:"generatedAt"`
+	Status              string         `json:"status"`
+	EvidenceLabel       string         `json:"evidenceLabel"`
+	Boundary            string         `json:"boundary"`
+	RepoPath            string         `json:"repoPath"`
+	LedgerPath          string         `json:"ledgerPath"`
+	CurrentLane         string         `json:"currentLane"`
+	DispatchMode        string         `json:"dispatchMode"`
+	Counts              map[string]int `json:"counts"`
+	ReadFirst           []string       `json:"readFirst"`
+	CurrentWork         []string       `json:"currentWork,omitempty"`
+	Completed           []string       `json:"completed,omitempty"`
+	Risks               []string       `json:"risks,omitempty"`
+	NextAction          string         `json:"nextAction"`
+	RestartPolicy       string         `json:"restartPolicy"`
+	ContractPolicy      string         `json:"contractPolicy"`
+	SubjectiveRubric    []string       `json:"subjectiveRubric,omitempty"`
+	ActionsTaken        []string       `json:"actionsTaken"`
+	NextSuggestedAction string         `json:"nextSuggestedAction"`
+}
+
 type BudgetMetadata struct {
 	MaxRuntimeMinutes   int    `json:"maxRuntimeMinutes,omitempty"`
 	ReviewBudgetMinutes int    `json:"reviewBudgetMinutes,omitempty"`
@@ -1239,6 +1263,8 @@ func run(args []string) error {
 		return cmdHeartbeat(args[1:])
 	case "status":
 		return cmdStatus(args[1:])
+	case "context":
+		return cmdContext(args[1:])
 	case "preflight":
 		return cmdPreflight(args[1:])
 	case "health":
@@ -1293,6 +1319,7 @@ func usage() {
   codex-orchestrator observe [--repo PATH] [--ledger PATH] [--json] [--reconcile --write] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator heartbeat [--repo PATH] [--ledger PATH] [--interval 5m] [--missed-after 15m] [--count 0] [--check-only] [--write-report PATH]
   codex-orchestrator status [--repo PATH] [--ledger PATH] [--json] [--html] [--write-html PATH] [--write-summary PATH] [--write-report PATH] [--stale-after 15m]
+  codex-orchestrator context [--repo PATH] [--ledger PATH] [--json] [--write-file PATH] [--write-report PATH] [--stale-after 15m]
   codex-orchestrator preflight [--repo PATH] [--ledger PATH] [--interval 20m] [--missed-after 45m] [--stale-after 15m] [--fail-on-warning] [--json] [--write-report PATH] [--write-summary PATH]
   codex-orchestrator health [--repo PATH] [--ledger PATH] [--json] [--write-report PATH] [--write-summary PATH] [--fail-on-warning]
   codex-orchestrator watchdog status [--repo PATH] [--label-suffix SUFFIX] [--json]
@@ -3360,6 +3387,179 @@ func cmdStatus(args []string) error {
 		fmt.Printf("Status JSON: %s\n", statusReportPath)
 	}
 	return nil
+}
+
+func cmdContext(args []string) error {
+	fs := flag.NewFlagSet("context", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository path used to resolve the default ledger")
+	ledgerPath := fs.String("ledger", defaultLedger, "ledger path")
+	jsonOut := fs.Bool("json", false, "print JSON")
+	writeFile := fs.String("write-file", "", "write Markdown resume/context pack")
+	writeReport := fs.String("write-report", "", "write JSON context report")
+	staleAfter := fs.Duration("stale-after", 15*time.Minute, "stale threshold")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	resolvedLedger := resolveDefaultLedgerPath(*repo, *ledgerPath, flagProvided(fs, "ledger"))
+	summary, err := observeWithOptions(resolvedLedger, *staleAfter)
+	if err != nil {
+		return err
+	}
+	report := buildContextPackReport(summary, resolvedLedger)
+	if *writeReport != "" {
+		if err := writeJSON(*writeReport, report); err != nil {
+			return err
+		}
+	}
+	if *writeFile != "" {
+		if err := writeText(*writeFile, renderContextPackMarkdown(report)); err != nil {
+			return err
+		}
+	}
+	if *jsonOut {
+		return printJSON(report)
+	}
+	fmt.Print(renderContextPackMarkdown(report))
+	if *writeFile != "" {
+		fmt.Printf("\nContext pack: %s\n", *writeFile)
+	}
+	if *writeReport != "" {
+		fmt.Printf("Context JSON: %s\n", *writeReport)
+	}
+	return nil
+}
+
+func buildContextPackReport(summary ObserveSummary, ledgerPath string) ContextPackReport {
+	progress := buildHumanProgressSummary(summary)
+	status := "passed"
+	if summary.ReviewPressure.Blocked > 0 || summary.Integration.Error != "" {
+		status = "blocked"
+	} else if summary.HeartbeatStatus != nil && summary.HeartbeatStatus.Status == "missed" ||
+		summary.ReviewPressure.ReviewNeeded > 0 ||
+		summary.ReviewPressure.Stale > 0 ||
+		summary.Integration.Dirty {
+		status = "warning"
+	}
+	currentPackageID := summary.PackageLaneGuard.CurrentPackageID
+	if currentPackageID == "" {
+		if row, ok := currentPackageLane(summary.PackageSummary); ok {
+			currentPackageID = row.ID
+		}
+	}
+	readFirst := []string{
+		ledgerPath,
+		filepath.Join(summary.ProjectRoot, defaultStateDir, "status.md"),
+		filepath.Join(summary.ProjectRoot, defaultStateDir, "context.md"),
+		filepath.Join(summary.ProjectRoot, "AGENTS.md"),
+		filepath.Join(summary.ProjectRoot, "CLAUDE.md"),
+	}
+	if currentPackageID != "" {
+		readFirst = append(readFirst, resolvePackageSpecPath(summary.ProjectRoot, currentPackageID, ""))
+	}
+	if summary.ProjectMap.Path != "" {
+		readFirst = append(readFirst, summary.ProjectMap.Path)
+	}
+	if summary.ThreadMap.Path != "" {
+		readFirst = append(readFirst, summary.ThreadMap.Path)
+	}
+	report := ContextPackReport{
+		SchemaVersion: 1,
+		Command:       "context",
+		GeneratedAt:   nowISO(),
+		Status:        status,
+		EvidenceLabel: "local/static",
+		Boundary:      "Context packs are local/static resume aids. They summarize ledger/status truth for the next Codex turn, but do not dispatch, merge, push, cleanup, deploy, or prove runtime behavior.",
+		RepoPath:      summary.ProjectRoot,
+		LedgerPath:    ledgerPath,
+		CurrentLane:   progress.CurrentLane,
+		DispatchMode:  summary.DispatchMode,
+		Counts: map[string]int{
+			"active":         summary.ReviewPressure.Active,
+			"pendingSetup":   summary.ReviewPressure.PendingSetup,
+			"reviewNeeded":   summary.ReviewPressure.ReviewNeeded,
+			"stale":          summary.ReviewPressure.Stale,
+			"blocked":        summary.ReviewPressure.Blocked,
+			"cleanupNeeded":  summary.ReviewPressure.CleanupNeeded,
+			"availableSlots": summary.ReviewPressure.AvailableSlots,
+			"tasks":          summary.JobSummary.Total,
+			"packages":       summary.PackageSummary.Total,
+		},
+		ReadFirst:      uniqueStringsPreserveOrder(readFirst),
+		CurrentWork:    append([]string(nil), progress.CurrentWork...),
+		Completed:      append([]string(nil), progress.Completed...),
+		Risks:          append([]string(nil), progress.Risks...),
+		NextAction:     progress.NextStep,
+		RestartPolicy:  "If a worker keeps patching around the same failure, violates the contract, accumulates noisy archaeology, or cannot produce clean verifier evidence, abandon that worker branch/worktree and restart from the package contract. Do not restart when the contract itself is wrong; revise the contract first.",
+		ContractPolicy: "Before dispatching a maker, write or refresh the package contract: outcome, testable checklist, allowed/forbidden paths, gates, evidence boundaries, subjective rubric when UI/taste is involved, exit condition, blocked condition, and restart policy.",
+		SubjectiveRubric: []string{
+			"functionality: does the flow complete the user/operator job?",
+			"legacy/parity: does it preserve the reference product behavior that still matters?",
+			"clarity: are labels, states, and errors understandable?",
+			"craft: does the UI feel coherent and non-janky?",
+			"evidence: is the score backed by browser/device/runtime proof or clearly labeled proxy/local?",
+		},
+		ActionsTaken:        []string{"Read local observe/status truth and projected a compact resume context."},
+		NextSuggestedAction: "Write this pack to .codex-orchestrator/context.md before long runs, context compaction, or handoff to a fresh session.",
+	}
+	if summary.DispatchRecommendation.Reason != "" {
+		report.Risks = append(report.Risks, "dispatch: "+summary.DispatchRecommendation.Reason)
+	}
+	if summary.HeartbeatStatus != nil && summary.HeartbeatStatus.Status == "missed" {
+		report.Risks = append(report.Risks, "missed heartbeat: "+summary.HeartbeatStatus.Note)
+	}
+	return report
+}
+
+func renderContextPackMarkdown(report ContextPackReport) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# codex-orchestrator context\n\n")
+	fmt.Fprintf(&b, "- generatedAt: `%s`\n", report.GeneratedAt)
+	fmt.Fprintf(&b, "- status: `%s`\n", report.Status)
+	fmt.Fprintf(&b, "- evidenceLabel: `%s`\n", report.EvidenceLabel)
+	fmt.Fprintf(&b, "- repoPath: `%s`\n", report.RepoPath)
+	fmt.Fprintf(&b, "- ledgerPath: `%s`\n", report.LedgerPath)
+	fmt.Fprintf(&b, "- currentLane: %s\n", report.CurrentLane)
+	fmt.Fprintf(&b, "- dispatchMode: `%s`\n", report.DispatchMode)
+	fmt.Fprintf(&b, "- nextAction: %s\n", report.NextAction)
+	fmt.Fprintf(&b, "- boundary: %s\n", report.Boundary)
+	fmt.Fprintf(&b, "\n## Counts\n\n")
+	for _, key := range []string{"active", "pendingSetup", "reviewNeeded", "stale", "blocked", "cleanupNeeded", "availableSlots", "tasks", "packages"} {
+		if value, ok := report.Counts[key]; ok {
+			fmt.Fprintf(&b, "- %s: `%d`\n", key, value)
+		}
+	}
+	fmt.Fprintf(&b, "\n## Read First\n\n")
+	for _, path := range report.ReadFirst {
+		fmt.Fprintf(&b, "- `%s`\n", path)
+	}
+	if len(report.CurrentWork) > 0 {
+		fmt.Fprintf(&b, "\n## Current Work\n\n")
+		for _, line := range report.CurrentWork {
+			fmt.Fprintf(&b, "- %s\n", line)
+		}
+	}
+	if len(report.Completed) > 0 {
+		fmt.Fprintf(&b, "\n## Recent Completed\n\n")
+		for _, line := range report.Completed {
+			fmt.Fprintf(&b, "- %s\n", line)
+		}
+	}
+	if len(report.Risks) > 0 {
+		fmt.Fprintf(&b, "\n## Risks / Boundaries\n\n")
+		for _, line := range report.Risks {
+			fmt.Fprintf(&b, "- %s\n", line)
+		}
+	}
+	fmt.Fprintf(&b, "\n## Contract Policy\n\n%s\n", report.ContractPolicy)
+	fmt.Fprintf(&b, "\n## Restart Policy\n\n%s\n", report.RestartPolicy)
+	if len(report.SubjectiveRubric) > 0 {
+		fmt.Fprintf(&b, "\n## Subjective Rubric\n\n")
+		for _, line := range report.SubjectiveRubric {
+			fmt.Fprintf(&b, "- %s\n", line)
+		}
+	}
+	fmt.Fprintf(&b, "\n## Next\n\n%s\n", report.NextSuggestedAction)
+	return b.String()
 }
 
 func defaultStatusReportPath(writeSummary string, writeHTML string) string {
@@ -7006,6 +7206,7 @@ func buildLoopControlReport(tasks []Task, items []EvaluationMatrixItem, missing 
 		StopConditions: []string{
 			"accepted: required evaluation layers pass and orchestrator accepts package closeout",
 			"reject-for-fixup: review/eval finds a concrete issue for the same worker or same package",
+			"restart: worker branch/worktree is noisy, repeatedly fails the same verifier, or drifts from the contract",
 			"blocked: missing owner/runtime/provider/device/pre/prod input prevents defensible progress",
 			"drained: local/proxy scope is complete and no same-package safe next worker remains",
 		},
@@ -7145,8 +7346,11 @@ func packageSpecRequiredSections() []string {
 		"Gates",
 		"Evidence boundaries",
 		"Evaluation matrix",
+		"Contract checklist",
 		"Decision trace",
 		"SOP feedback",
+		"Restart policy",
+		"Subjective rubric",
 		"Exit condition",
 		"Blocked condition",
 		"Waivers",
@@ -7215,6 +7419,12 @@ Evidence label: local/static until direct runtime proof is explicitly attached.
 | recorded-gates | yes | TBD | local/static | Record focused gates before closeout. |
 | package-integration | yes | TBD | local/static/proxy/direct | Prove the package as a coherent feature, not just isolated slices. |
 
+## Contract checklist
+
+- [ ] The worker can explain the exact definition of done before editing.
+- [ ] The evaluator can reject the work with objective evidence.
+- [ ] The package has at least one verifier or an explicit blocked condition.
+
 ## Decision trace
 
 - Why the package continues, stops, switches lane, or blocks:
@@ -7224,6 +7434,26 @@ Evidence label: local/static until direct runtime proof is explicitly attached.
 
 - Rule, checklist, eval fixture, or project doc to update after closeout:
 - Repeated failure pattern to preserve:
+
+## Restart policy
+
+- Restart the worker from a clean branch/worktree when:
+  - the same verifier fails repeatedly without a simpler path;
+  - the diff becomes noisy archaeology instead of a small contract change;
+  - the worker drifts from allowed paths, evidence boundaries, or the package outcome.
+- Do not restart when the contract itself is wrong; revise the contract first.
+
+## Subjective rubric
+
+Use this only when taste, UI, workflow quality, or legacy parity matters.
+
+| Axis | Weight | Score | Evidence |
+|---|---:|---:|---|
+| Functionality | 25 | TBD | Does the user/operator job complete? |
+| Legacy/parity | 20 | TBD | Does it preserve the reference behavior that still matters? |
+| Clarity | 20 | TBD | Are labels, states, and errors understandable? |
+| Craft | 20 | TBD | Does it feel coherent and non-janky? |
+| Evidence | 15 | TBD | Is the score backed by browser/device/runtime proof or clearly labeled proxy/local? |
 
 ## Exit condition
 
@@ -18018,6 +18248,20 @@ func uniqueSortedStrings(values []string) []string {
 		result = append(result, value)
 	}
 	sort.Strings(result)
+	return result
+}
+
+func uniqueStringsPreserveOrder(values []string) []string {
+	seen := map[string]bool{}
+	result := []string{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
 	return result
 }
 

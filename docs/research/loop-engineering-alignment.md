@@ -22,6 +22,11 @@ more features.
 - 马东锡 NLP, [Context Is A Projection](https://x.com/dongxi_nlp/status/2066991890348572950)
 - Anatoli Kopadze, [Loops explained: Claude, GPT, Mira and what actually works](https://x.com/AnatoliKopadze/status/2068328135611822149)
 - Yage AI, [Loop Engineering: Senior Manager](https://yage.ai/share/loop-engineering-senior-manager-20260630.html)
+- Circulating "LOOPS.md: Field Notes on Agents That Run for Days" image /
+  excerpts, treated as unverified-source field notes unless linked to an
+  original author publication. Useful confirmed secondary references:
+  [Tony Bai translation](https://tonybai.com/2026/07/02/loops-md-notes-on-agents-that-run-for-days/)
+  and a [Gist excerpt](https://gist.github.com/sanchez314c/a767997b030d2904c0d0f08fabae2d42).
 - Lower-weight trend scans from Reddit, Substack, MindStudio, DX, and X search
   results around "loop engineering", used only to check terminology drift.
 - User-provided Grok/X synthesis covering recent Loop Engineering discussions,
@@ -268,6 +273,32 @@ For `codex-orchestrator`, that translates into three concrete product rules:
 - Task discovery should remain package/roadmap-owner constrained. The loop can
   suggest the next bounded worker, but it should not treat empty concurrency as
   permission to invent unrelated work.
+
+## What LOOPS.md-Style Field Notes Add
+
+The circulating `LOOPS.md` field-note format matches this project's lived
+experience, even if the exact original-source chain should stay cautious in
+public docs. The useful claims are engineering claims, not branding claims:
+
+- Write the loop, not just the prompt. The procedure should survive a single
+  chat turn or model response.
+- Separate planner/maker/evaluator roles so the agent that writes code is not
+  the final grader of its own work.
+- Negotiate the contract before implementation; the evaluator should have
+  testable assertions before the maker starts editing.
+- Write state to disk, not only to context. A fresh session should be able to
+  resume from a small set of files.
+- Let the loop restart when a worker branch becomes noisy archaeology.
+- Score subjective product quality with an explicit rubric instead of relying
+  on vibe.
+- Read the traces when the loop drifts, then update the exact rule or contract
+  that failed.
+- Delete harness pieces that the model no longer needs.
+
+The direct implementation response in `codex-orchestrator` is intentionally
+small: package specs now carry contract checklist, restart policy, and
+subjective rubric sections; `pack eval` includes restart as a stop condition;
+and `context` writes a compact resume pack for handoff or long `/goal` runs.
 
 ## What The X/Grok Trend Scan Adds
 

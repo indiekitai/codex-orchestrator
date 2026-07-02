@@ -270,6 +270,7 @@ codex-orchestrator record-task --id TASK --worktree /path/to/worktree --branch c
 codex-orchestrator observe --json
 codex-orchestrator observe --reconcile --write --json
 codex-orchestrator status --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md --write-report .codex-orchestrator/status.json
+codex-orchestrator context --write-file .codex-orchestrator/context.md --write-report .codex-orchestrator/context.json
 codex-orchestrator health --repo . --write-report .codex-orchestrator/health.json --write-summary .codex-orchestrator/health.md
 codex-orchestrator preflight --repo . --write-report .codex-orchestrator/preflight.json --write-summary .codex-orchestrator/preflight.md
 codex-orchestrator run-mode set --dispatch-mode drain --note "finish current batch; do not dispatch new workers"
@@ -406,6 +407,7 @@ on every visible monitor, review, merge, cleanup, or dispatch turn:
 
 ```bash
 codex-orchestrator status --repo . --write-html .codex-orchestrator/status.html --write-summary .codex-orchestrator/status.md --write-report .codex-orchestrator/status.json
+codex-orchestrator context --repo . --write-file .codex-orchestrator/context.md --write-report .codex-orchestrator/context.json
 ```
 
 Include those paths in Chinese user-facing status updates and handoffs. The user
@@ -829,6 +831,8 @@ Each delegated session prompt should include:
 - Task ID and plain-language outcome.
 - Acceptance definition: what must be true for this task to count as correct,
   and which result would be a real blocker rather than a partial success.
+- Contract checklist: testable assertions the evaluator can use to reject the
+  work before any implementation starts.
 - Dependency/base commit or branch.
 - Worktree and branch requirement.
 - Allowed paths.
@@ -847,6 +851,10 @@ Each delegated session prompt should include:
   depends on, and why it is allowed to run now.
 - Minimum-change rationale: why this cannot be solved by reuse, deletion,
   configuration, existing APIs, or a smaller docs/test-only change.
+- Restart policy: when the worker should be abandoned and restarted from the
+  contract instead of repeatedly patching noisy work.
+- Subjective rubric when taste, UI, workflow quality, or legacy parity matters:
+  name the axes, weights, score scale, and evidence source.
 - Requirement to self-review before handoff.
 - Requirement to challenge the task contract before implementation.
 - Final handoff format: branch, commit, changed files, gates, evidence, risks.
@@ -872,6 +880,7 @@ If the run needs a human physical/device/payment/deploy action, proactively noti
 Before handoff, review your own diff as a reviewer: check boundaries, forbidden paths, shared contracts, docs drift, evidence strength, gates, anti-shallow-slice classification, minimum-change rationale, and residual risks. Fix scoped issues you find before committing.
 If the task changes cleanup, retry, event/outbox writes, lifecycle APIs, migrations, aggregate/versioning, or unique constraints, explicitly self-review repeated execution and idempotency: running the action twice must either be safe or produce a documented blocked/product decision.
 If the task touches DTO/serialization fields, state machines, tenant/store scoping, money/cents arithmetic, nullable external-provider fields, shared route/navigation registries, localization strings, shared config, protocol/API contracts, or migrations, call that out in self-review and explain how the diff avoids the common P1 failure mode.
+If you repeatedly fail the same verifier, drift from the accepted contract, or accumulate noisy archaeology, stop and recommend a clean restart from the package contract instead of continuing to patch.
 Commit to the task branch, but do not merge, push the integration branch, delete the worktree, or delete the branch unless the orchestrator explicitly asks you to.
 ```
 
@@ -1124,6 +1133,13 @@ continue the same package, stop for acceptance, or block. Treat
 verifier/evidence layer before dispatching unrelated work. Treat
 `stop-for-acceptance` as a signal to stop implementation and run package
 acceptance/review closeout, not as automatic merge authority.
+
+Use `context --write-file .codex-orchestrator/context.md` before handoff,
+context compaction, or a long `/goal` style single-lane run. The context pack is
+the deliberately short resume surface: current lane, dispatch mode, task counts,
+read-first files, next action, restart policy, contract policy, and subjective
+rubric. It is local/static state projection only; a new session must still check
+repo/worktree truth before editing.
 
 Use `pack reconcile` before package closeout or before deciding to dispatch the
 next same-package worker. It compares desired spec, evaluation matrix, and

@@ -289,6 +289,23 @@ long-lived Codex App threads, routers, inboxes, or pulse monitors. A thread map
 does not prove that a thread or automation is alive; it only keeps the intended
 topology out of chat memory.
 
+## Context Pack
+
+Use `context` when a long run, context compaction, handoff, or `/goal` style
+single-lane session needs a short resume surface:
+
+```bash
+codex-orchestrator context \
+  --write-file .codex-orchestrator/context.md \
+  --write-report .codex-orchestrator/context.json
+```
+
+The context pack is intentionally smaller than the status page. It records the
+current lane, dispatch mode, active/review/blocked/cleanup counts, read-first
+files, next action, restart policy, contract policy, and a default subjective
+rubric for UI/taste/parity work. It is local/static state projection only. A
+fresh session must still start by checking repo/worktree truth.
+
 Reports also include `concepts` and `inbox` blocks. The helper checks
 `.codex-orchestrator/concepts.md`, common docs glossary/concepts files,
 `.codex-orchestrator/inbox.md`, and common inbox files. Missing files are

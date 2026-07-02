@@ -96,15 +96,16 @@ git/worktree 观察、heartbeat report、routine/policy/eval 检查。
    - 边界：local/static orchestration state；不自动派发、不自动 merge；routine-run
      只有 `packageId` 而没有 task 时会显示 review-only 包状态。
 
-2.1 Context projection for long sessions：设计原则已补，暂不单独做大功能。
+2.1 Context projection for long sessions：已补第一轮 helper artifact。
    - 目标：把完整 transcript、ledger、events、status、review reports 和 artifacts
      投影成下一轮 model call 真正需要看的短上下文，而不是持续 append 全部历史。
-   - 当前落地：SKILL 已要求 heartbeat/resume 时优先使用 ledger/status/package/thread
-     map/inbox/git truth 生成 compact model-visible view；大日志和大输出应以 preview +
-     artifact path 进入上下文。
-   - 下一步：如果真实项目继续反馈“状态页能看懂但模型接手仍要读太多历史”，再考虑把
-     `context projection` 做成一等 helper artifact，例如
-     `.codex-orchestrator/context.md` 或 `status --write-context`。现在不硬加命令。
+   - 当前落地：新增 `codex-orchestrator context --write-file .codex-orchestrator/context.md`
+     和 JSON report。它输出 current lane、dispatch mode、active/review/blocked/cleanup
+     计数、优先阅读文件、下一步、restart policy、contract policy，以及 UI/体验/parity
+     任务的 subjective rubric。SKILL 要求 heartbeat/resume/long `/goal` 前刷新这份短
+     context pack。
+   - 同步落地：`pack spec` 模板新增 Contract checklist、Restart policy 和
+     Subjective rubric；`pack eval` 的 stop conditions 也加入 restart 语义。
    - 边界：这是 context hygiene / local-static planning，不是 runtime proof、自动
      compact daemon 或长期记忆系统。
 

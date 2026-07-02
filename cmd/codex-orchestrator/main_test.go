@@ -1809,6 +1809,11 @@ func TestPackSpecEvalAndReconcileReportPackageReadiness(t *testing.T) {
 	if spec.Status != "passed" || len(spec.MissingSections) != 0 {
 		t.Fatalf("expected complete package spec, got %#v", spec)
 	}
+	for _, section := range []string{"Contract checklist", "Restart policy", "Subjective rubric"} {
+		if !containsString(spec.RequiredSections, section) || !strings.Contains(spec.Template, "## "+section) {
+			t.Fatalf("expected package spec to require and render %q, got required=%#v", section, spec.RequiredSections)
+		}
+	}
 
 	out = captureStdout(t, func() error {
 		return cmdPackEval([]string{"--repo", project, "--ledger", ledger, "--package-id", "PKG-CHECKOUT", "--json"})
@@ -1884,6 +1889,56 @@ func TestPackEvalLoopControlContinuesSamePackageWhenVerifierMissing(t *testing.T
 	}
 	if !strings.Contains(evaluation.LoopControl.NextAction, "same package lane") {
 		t.Fatalf("expected same-package next action, got %#v", evaluation.LoopControl)
+	}
+}
+
+func TestContextPackWritesCompactResumeState(t *testing.T) {
+	root := t.TempDir()
+	project := createRepo(t, filepath.Join(root, "repo"))
+	worker := filepath.Join(root, "worker")
+	ledger := filepath.Join(project, ".codex-orchestrator", "ledger.json")
+	if err := cmdInit([]string{"--ledger", ledger, "--project-root", project, "--write-templates"}); err != nil {
+		t.Fatal(err)
+	}
+	git(t, project, "worktree", "add", "-q", "-b", "codex/context-worker", worker, "HEAD")
+	if err := cmdRecordTask([]string{
+		"--ledger", ledger,
+		"--id", "CTX-WORKER",
+		"--package-id", "PKG-CONTEXT",
+		"--worktree", worker,
+		"--branch", "codex/context-worker",
+		"--gate", "go test ./...",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	contextPath := filepath.Join(project, ".codex-orchestrator", "context.md")
+	reportPath := filepath.Join(project, ".codex-orchestrator", "context.json")
+	out := captureStdout(t, func() error {
+		return cmdContext([]string{"--repo", project, "--ledger", ledger, "--write-file", contextPath, "--write-report", reportPath})
+	})
+	if !strings.Contains(out, "Context pack:") {
+		t.Fatalf("expected context command to print written path, got %q", out)
+	}
+	data, err := os.ReadFile(contextPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"# codex-orchestrator context", "## Contract Policy", "## Restart Policy", "## Subjective Rubric", "PKG-CONTEXT"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("expected context markdown to contain %q, got:\n%s", want, text)
+		}
+	}
+	raw, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report ContextPackReport
+	if err := json.Unmarshal(raw, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.EvidenceLabel != "local/static" || report.Counts["active"] != 1 || len(report.SubjectiveRubric) == 0 {
+		t.Fatalf("unexpected context report: %#v", report)
 	}
 }
 

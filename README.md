@@ -75,7 +75,8 @@ to have authority.
 - **Codex skill**: installed into `~/.codex/skills/codex-orchestrator`, used by
   Codex App as the orchestration runbook.
 - **Optional Go helper CLI**: `codex-orchestrator`, used for ledger, status,
-  heartbeat reports, review packs, policy checks, and local update support.
+  heartbeat reports, context packs, review packs, policy checks, and local
+  update support.
 - **Docs and templates**: project maps, package specs, evaluation matrices,
   package plans, orchestration policy, thread maps, concepts/inbox notes,
   pulse/inbox/router prompts, case studies, and routine specs.
@@ -193,6 +194,8 @@ The useful metric is not "how many workers ran." It is accepted change:
 - `pack eval` reports `loopControl`, which says whether the loop should
   continue in the same package, stop for acceptance, or block because evidence
   or verifier layers are missing.
+- `context` writes a compact resume pack so a fresh session can continue from
+  a few files instead of a long chat transcript.
 
 ## Thread Layout
 
